@@ -1,68 +1,119 @@
-# https://docs.microsoft.com/azure/devops/pipelines
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
 
-pool:
-  vmImage: 'windows-2019'
+trigger:
+- staging
 
 variables:
-  solution: 'siteserver.sln'
-  buildPlatform: 'Any CPU'
+  netCoreSdkVersion: '3.1.201'
   buildConfiguration: 'Release'
-  version: 6.10.$(Build.BuildNumber)
+  productVersion: '7.0.0-preview7'
 
-steps:
-- task: DotNetCoreInstaller@0
-  displayName: install dotnet
-  inputs:
-    version: '3.0.100-preview5-011568'
+jobs:
 
-- task: NuGetToolInstaller@1
-  displayName: install nuget
-  inputs:
-    versionSpec: 
-    checkLatest: true
+- job: macOS
+  pool:
+    vmImage: 'macOS-10.15'
+  steps:
+  - task: UseDotNet@2
+    inputs:
+      version: $(netCoreSdkVersion)
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '12.x'
+  - script: npm install
+  - script: npm run build-osx-x64
+  - script: dotnet build ./build-osx-x64/build.sln -c $(buildConfiguration)
+  - script: dotnet publish ./build-osx-x64/src/SSCMS.Cli/SSCMS.Cli.csproj -r osx-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-osx-x64 /p:PublishTrimmed=true
+  - script: dotnet publish ./build-osx-x64/src/SSCMS.Web/SSCMS.Web.csproj -r osx-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-osx-x64 /p:PublishTrimmed=true
+  - script: npm run copy-osx-x64
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: './publish/sscms-$(productVersion)-osx-x64' 
+      archiveType: 'zip'
+      includeRootFolder: false
+      archiveFile: './publish/dist/sscms-$(productVersion)-osx-x64.zip'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: './publish/dist' 
+      artifactName: 'sscms-$(productVersion)-osx'
 
-- script: dotnet restore $(solution)
-  displayName: dotnet restore
+- job: Linux
+  pool:
+    vmImage: 'Ubuntu 16.04'
+  steps:
+  - task: UseDotNet@2
+    inputs:
+      version: $(netCoreSdkVersion)
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '12.x'
+  - script: npm install
+  - script: npm run build-linux-x64
+  - script: dotnet build ./build-linux-x64/build.sln -c $(buildConfiguration)
+  - script: dotnet publish ./build-linux-x64/src/SSCMS.Cli/SSCMS.Cli.csproj -r linux-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-linux-x64 /p:PublishTrimmed=true
+  - script: dotnet publish ./build-linux-x64/src/SSCMS.Web/SSCMS.Web.csproj -r linux-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-linux-x64 /p:PublishTrimmed=true
+  - script: npm run copy-linux-x64
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: './publish/sscms-$(productVersion)-linux-x64' 
+      archiveType: 'tar'
+      tarCompression: 'gz'
+      includeRootFolder: false
+      archiveFile: './publish/dist/sscms-$(productVersion)-linux-x64.tar.gz'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: './publish/dist' 
+      artifactName: 'sscms-$(productVersion)-linux'
 
-- script: nuget restore src/SiteServer.Cli/packages.config -PackagesDirectory ./packages
-  displayName: nuget restore SiteServer.Cli
+- job: Windows
+  pool:
+    vmImage: 'windows-2019'
+  steps:
+  - task: UseDotNet@2
+    inputs:
+      version: $(netCoreSdkVersion)
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '12.x'
+  - script: npm install
+  - script: npm run build-win-x64
+  - task: NuGetCommand@2
+    inputs:
+      command: 'restore'
+      restoreSolution: './build-win-x64/build.sln'
+      feedsToUse: 'select'
+  - script: dotnet build ./build-win-x64/build.sln -c $(buildConfiguration)
+  - script: dotnet publish ./build-win-x64/src/SSCMS.Cli/SSCMS.Cli.csproj -r win-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-win-x64 /p:PublishTrimmed=true
+  - script: dotnet publish ./build-win-x64/src/SSCMS.Web/SSCMS.Web.csproj -r win-x64 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-win-x64 /p:PublishTrimmed=true
+  - script: npm run copy-win-x64
 
-- script: nuget restore src/SiteServer.Web/packages.config -PackagesDirectory ./packages
-  displayName: nuget restore SiteServer.Web
-
-- task: DotNetCoreCLI@2
-  displayName: dotnet build
-  inputs:
-    command: 'build'
-    projects: '$(solution)'
-    arguments: '--configuration $(buildConfiguration)'
-
-- task: DotNetCoreCLI@2
-  displayName: dotnet test
-  inputs:
-    command: 'test'
-    projects: '**/*Tests/*.csproj'
-    arguments: '--configuration $(buildConfiguration) --collect "Code coverage"'
-
-- script: dotnet pack /p:PackageVersion=$(version)
-  displayName: dotnet pack
-
-- task: NodeTool@0
-  displayName: install node.js
-  inputs:
-    versionSpec: '8.x'
-
-- script: npm install gulp -g
-  displayName: install gulp
-
-- script: npm install
-  displayName: npm install
-
-- script: gulp build
-  displayName: gulp build
-
-- script: nuget pack build/SS.CMS.nuspec
-  displayName: nuget pack
-
-- script: gulp zip
-  displayName: gulp zip
+  - script: npm run build-win-x86
+  - task: NuGetCommand@2
+    inputs:
+      command: 'restore'
+      restoreSolution: './build-win-x86/build.sln'
+      feedsToUse: 'select'
+  - script: dotnet build ./build-win-x86/build.sln -c $(buildConfiguration)
+  - script: dotnet publish ./build-win-x86/src/SSCMS.Cli/SSCMS.Cli.csproj -r win-x86 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-win-x86 /p:PublishTrimmed=true
+  - script: dotnet publish ./build-win-x86/src/SSCMS.Web/SSCMS.Web.csproj -r win-x86 -c $(buildConfiguration) -o ./publish/sscms-$(productVersion)-win-x86 /p:PublishTrimmed=true
+  - script: npm run copy-win-x86
+  
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: './publish/sscms-$(productVersion)-win-x64' 
+      archiveType: 'zip'
+      includeRootFolder: false
+      archiveFile: './publish/dist/sscms-$(productVersion)-win-x64.zip'
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: './publish/sscms-$(productVersion)-win-x86' 
+      archiveType: 'zip'
+      includeRootFolder: false
+      archiveFile: './publish/dist/sscms-$(productVersion)-win-x86.zip'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: './publish/dist' 
+      artifactName: 'sscms-$(productVersion)-win'
