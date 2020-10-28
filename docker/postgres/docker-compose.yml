@@ -1,0 +1,44 @@
+version: "3.7"
+
+volumes:
+
+  volume-postgres:
+    driver: local
+
+  volume-sscms:
+    driver: local
+
+services:
+
+  sscms-postgres:
+    image: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres-password
+    volumes:
+      - volume-postgres:/var/lib/postgresql/data
+
+  sscms-core:
+    depends_on:
+      - sscms-postgres
+    image: "sscms/core"
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      SSCMS_SECURITY_KEY: e2a3d303-ac9b-41ff-9154-930710af0845
+      SSCMS_DATABASE_TYPE: PostgreSQL
+      SSCMS_DATABASE_HOST: sscms-postgres
+      SSCMS_DATABASE_USER: postgres
+      SSCMS_DATABASE_PASSWORD: postgres-password
+      SSCMS_DATABASE_NAME: postgres
+    volumes:
+      - volume-sscms:/app/wwwroot
+
+# docker-compose up -d
+# docker-compose down
+
+# Browse to: http://localhost/ss-admin/
