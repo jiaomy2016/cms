@@ -40,6 +40,7 @@ namespace SiteServer.Utils
         {
             public const string DirectoryName = "SiteFiles";
 
+            public const string Library = "Library";
             public const string BackupFiles = "BackupFiles";
             public const string TemporaryFiles = "TemporaryFiles";
             public const string Plugins = "Plugins";
@@ -167,6 +168,7 @@ namespace SiteServer.Utils
             }
 
             //如果目标目录不存在，则予以创建。 
+            CreateDirectoryIfNotExists(srcDirectoryPath);
             CreateDirectoryIfNotExists(destDirectoryPath);
 
             //从当前父目录中获取目录列表。 
@@ -182,7 +184,7 @@ namespace SiteServer.Utils
             }
 
             //从当前父目录中获取文件。
-            foreach (var srcFile in Directory.GetFiles(srcDirectoryPath))
+            foreach (var srcFile in GetFilePaths(srcDirectoryPath))
             {
                 var srcFileInfo = new FileInfo(srcFile);
                 var destFileInfo = new FileInfo(srcFile.Replace(srcDirectoryPath, destDirectoryPath));
@@ -206,6 +208,7 @@ namespace SiteServer.Utils
 
         public static string[] GetDirectoryNames(string directoryPath)
         {
+            CreateDirectoryIfNotExists(directoryPath);
             var directorys = Directory.GetDirectories(directoryPath);
             var retVal = new string[directorys.Length];
             var i = 0;
@@ -220,6 +223,7 @@ namespace SiteServer.Utils
         public static ArrayList GetLowerDirectoryNames(string directoryPath)
         {
             var arraylist = new ArrayList();
+            CreateDirectoryIfNotExists(directoryPath);
             var directorys = Directory.GetDirectories(directoryPath);
             foreach (var directory in directorys)
             {
@@ -231,7 +235,7 @@ namespace SiteServer.Utils
 
         public static string[] GetFileNames(string directoryPath)
         {
-            var filePaths = Directory.GetFiles(directoryPath);
+            var filePaths = GetFilePaths(directoryPath);
             var retVal = new string[filePaths.Length];
             var i = 0;
             foreach (var filePath in filePaths)
@@ -335,6 +339,7 @@ namespace SiteServer.Utils
 
         public static string[] GetFilePaths(string directoryPath)
         {
+            CreateDirectoryIfNotExists(directoryPath);
             return Directory.GetFiles(directoryPath);
         }
 

@@ -30,10 +30,23 @@ namespace SiteServer.API.Controllers.Pages.Cms
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
                 var page = request.GetQueryInt("page");
+                var type = request.GetQueryString("type");
+                var keyword = request.GetQueryString("keyword");
 
                 if (!request.IsAdminLoggin ||
                     !request.AdminPermissionsImpl.HasChannelPermissions(siteId, channelId,
-                        ConfigManager.ChannelPermissions.ContentView))
+                        ConfigManager.ChannelPermissions.ContentView, 
+                        ConfigManager.ChannelPermissions.ContentAdd,
+                        ConfigManager.ChannelPermissions.ContentEdit,
+                        ConfigManager.ChannelPermissions.ContentDelete,
+                        ConfigManager.ChannelPermissions.ContentTranslate,
+                        ConfigManager.ChannelPermissions.ContentArrange,
+                        ConfigManager.ChannelPermissions.ContentCheck,
+                        ConfigManager.ChannelPermissions.ContentCheckLevel1,
+                        ConfigManager.ChannelPermissions.ContentCheckLevel2,
+                        ConfigManager.ChannelPermissions.ContentCheckLevel3,
+                        ConfigManager.ChannelPermissions.ContentCheckLevel4,
+                        ConfigManager.ChannelPermissions.ContentCheckLevel5))
                 {
                     return Unauthorized();
                 }
@@ -55,7 +68,8 @@ namespace SiteServer.API.Controllers.Pages.Cms
                 var columns = ContentManager.GetContentColumns(siteInfo, channelInfo, false);
 
                 var pageContentInfoList = new List<ContentInfo>();
-                var ccIds = DataProvider.ContentDao.GetCacheChannelContentIdList(siteInfo, channelInfo, adminId, isAllContents);
+                //var ccIds = DataProvider.ContentDao.GetCacheChannelContentIdList(siteInfo, channelInfo, adminId, isAllContents, type, keyword);
+                var ccIds = ContentManager.GetChannelContentIdList(siteInfo, channelInfo, adminId, isAllContents);
                 var count = ccIds.Count;
                 var pages = Convert.ToInt32(Math.Ceiling((double)count / siteInfo.Additional.PageSize));
                 if (pages == 0) pages = 1;
@@ -88,8 +102,9 @@ namespace SiteServer.API.Controllers.Pages.Cms
                     IsDelete = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentDelete),
                     IsEdit = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentEdit),
                     IsTranslate = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentTranslate),
+                    IsArrange = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentArrange),
                     IsCheck = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentCheck),
-                    IsCreate = request.AdminPermissionsImpl.HasSitePermissions(siteInfo.Id, ConfigManager.WebSitePermissions.Create) || request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.CreatePage),
+                    IsCreate = request.AdminPermissionsImpl.HasSitePermissions(siteInfo.Id, ConfigManager.SitePermissions.CreateContents) || request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.CreatePage),
                     IsChannelEdit = request.AdminPermissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ChannelEdit)
                 };
 

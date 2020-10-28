@@ -27,7 +27,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }
@@ -102,7 +102,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }
@@ -112,7 +112,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
                     return Unauthorized();
                 }
 
-                var roles = DataProvider.RoleDao.GetRoleNameList();
+                var roles = DataProvider.RoleDao.GetRoleNameList().Where(x => !EPredefinedRoleUtils.IsPredefinedRole(x)).ToList();
                 var allSites = SiteManager.GetSiteInfoList();
 
                 var adminInfo = AdminManager.GetAdminInfoByUserId(adminId);
@@ -164,7 +164,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }
@@ -223,7 +223,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }
@@ -254,7 +254,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }
@@ -288,7 +288,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdmin))
                 {
                     return Unauthorized();
                 }

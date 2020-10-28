@@ -3,19 +3,75 @@ var $api = axios.create({
   withCredentials: true
 });
 
-var $urlCloud = 'https://api.siteserver.cn';
+var $urlCloud = 'https://sscms.com';
+var $urlCloudDl = 'https://dl.sscms.com';
+var $urlCloudDemo = 'https://demo.sscms.com';
+var $urlCloudApi = 'https://api.sscms.com';
 var $apiCloud = axios.create({
-  baseURL: $urlCloud + '/v1.2',
+  baseURL: $urlCloudApi + '/v6',
   withCredentials: true
 });
 
 var utils = {
+  alertDelete: function (config) {
+    if (!config) return false;
+
+    alert({
+        title: config.title,
+        text: config.text,
+        type: 'warning',
+        confirmButtonText: config.button || '删 除',
+        confirmButtonClass: 'btn btn-danger',
+        showCancelButton: true,
+        cancelButtonText: '取 消'
+      })
+      .then(function (result) {
+        if (result.value) {
+          config.callback();
+        }
+      });
+
+    return false;
+  },
+  
   getQueryString: function (name) {
     var result = location.search.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
     if (!result || result.length < 1) {
       return "";
     }
     return decodeURIComponent(result[1]);
+  },
+
+  notifyError: function (app, error) {
+    var message = error.message;
+    if (error.response && error.response.data) {
+      if (error.response.data.exceptionMessage) {
+        message = error.response.data.exceptionMessage;
+      } else if (error.response.data.message) {
+        message = error.response.data.message;
+      }
+    }
+
+    app.$notify.error({
+      title: '错误',
+      message: message
+    });
+  },
+
+  getQueryBoolean: function (name) {
+    var result = location.search.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
+    if (!result || result.length < 1) {
+      return false;
+    }
+    return result[1] === 'true' || result[1] === 'True';
+  },
+
+  getQueryInt: function (name) {
+    var result = location.search.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
+    if (!result || result.length < 1) {
+      return 0;
+    }
+    return parseInt(result[1]);
   },
 
   getPageAlert: function (error) {
@@ -64,7 +120,7 @@ var utils = {
       config.height = $(window).height() - 50;
     }
 
-    layer.open({
+    var index = layer.open({
       type: 2,
       btn: null,
       title: config.title,
@@ -74,6 +130,10 @@ var utils = {
       shadeClose: true,
       content: config.url
     });
+
+    if (config.max) {
+      layer.full(index);
+    }
 
     return false;
   }

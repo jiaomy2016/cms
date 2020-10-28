@@ -29,12 +29,10 @@ namespace SiteServer.BackgroundPages.Cms
         public AuxiliaryControl AcAttributes;
         public CheckBoxList CblContentAttributes;
         public CheckBoxList CblContentGroups;
-        public Button BtnContentGroupAdd;
         public RadioButtonList RblContentLevel;
         public TextBox TbTags;
         public Literal LtlTags;
         public PlaceHolder PhTranslate;
-        public Button BtnTranslate;
         public DropDownList DdlTranslateType;
         public PlaceHolder PhStatus;
         public TextBox TbLinkUrl;
@@ -112,7 +110,6 @@ namespace SiteServer.BackgroundPages.Cms
                 if (HasChannelPermissions(_channelInfo.Id, ConfigManager.ChannelPermissions.ContentTranslate))
                 {
                     PhTranslate.Visible = true;
-                    BtnTranslate.Attributes.Add("onclick", ModalChannelMultipleSelect.GetOpenWindowString(SiteId, true));
 
                     ETranslateContentTypeUtils.AddListItems(DdlTranslateType, true);
                     ControlUtils.SelectSingleItem(DdlTranslateType, ETranslateContentTypeUtils.GetValue(ETranslateContentType.Copy));
@@ -135,8 +132,6 @@ namespace SiteServer.BackgroundPages.Cms
                     var item = new ListItem(groupName, groupName);
                     CblContentGroups.Items.Add(item);
                 }
-                
-                BtnContentGroupAdd.Attributes.Add("onclick", ModalContentGroupAdd.GetOpenWindowString(SiteId));
 
                 LtlTags.Text = ContentUtility.GetTagsHtml(AjaxCmsService.GetTagsUrl(SiteId));
 
@@ -158,8 +153,9 @@ namespace SiteServer.BackgroundPages.Cms
                 }
 
                 BtnSubmit.Attributes.Add("onclick", InputParserUtils.GetValidateSubmitOnClickScript("myForm", true, "autoCheckKeywords()"));
-                //自动检测敏感词
-                ClientScriptRegisterStartupScript("autoCheckKeywords", WebUtils.GetAutoCheckKeywordsScript(SiteInfo));
+
+                var allTagNames = DataProvider.TagDao.GetTagNames(SiteId);
+                var tagNames = new List<string>();
 
                 if (contentId == 0)
                 {
@@ -191,6 +187,8 @@ namespace SiteServer.BackgroundPages.Cms
                     TbTitle.Text = contentInfo.Title;
 
                     TbTags.Text = contentInfo.Tags;
+
+                    tagNames = TranslateUtils.StringCollectionToStringList(contentInfo.Tags, ' ');
 
                     var list = new List<string>();
                     if (contentInfo.IsTop)
@@ -227,6 +225,9 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                     ControlUtils.SelectSingleItem(RblContentLevel, checkedLevel.ToString());
                 }
+
+                //自动检测敏感词
+                ClientScriptRegisterStartupScript("autoCheckKeywords", WebUtils.GetAutoCheckKeywordsScript(SiteInfo, allTagNames, tagNames));
             }
             else
             {

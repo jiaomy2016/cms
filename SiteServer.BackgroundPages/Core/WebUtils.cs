@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.Text;
 using SiteServer.Utils;
 using SiteServer.BackgroundPages.Ajax;
 using SiteServer.BackgroundPages.Cms;
@@ -28,8 +29,11 @@ namespace SiteServer.BackgroundPages.Core
             }
             else
             {
+                var layerUrl =
+                    $@"contentsLayerView.cshtml?siteId={siteInfo.Id}&channelId={-contentInfo.ChannelId}&contentId={contentInfo.Id}";
+                //ModalContentView.GetOpenWindowString(siteInfo.Id, contentInfo.ChannelId, contentInfo.Id, pageUrl)
                 url =
-                    $@"<a href=""javascript:;"" onclick=""{ModalContentView.GetOpenWindowString(siteInfo.Id, contentInfo.ChannelId, contentInfo.Id, pageUrl)}"">{displayString}</a>";
+                    $@"<a href=""javascript:;"" onclick=""{LayerUtils.GetOpenScript2("查看内容", layerUrl)}"">{displayString}</a>";
             }
 
             var image = string.Empty;
@@ -163,7 +167,7 @@ namespace SiteServer.BackgroundPages.Core
     审 核
 </a>");
                 }
-                if (permissionsImpl.HasSitePermissions(siteInfo.Id, ConfigManager.WebSitePermissions.Create) || permissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.CreatePage))
+                if (permissionsImpl.HasSitePermissions(siteInfo.Id, ConfigManager.SitePermissions.CreateContents) || permissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.CreatePage))
                 {
                     builder.Append($@"
 <a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalProgressBar.GetOpenWindowStringWithCreateContentsOneByOne(siteInfo.Id, channelInfo.Id)}"">
@@ -215,7 +219,7 @@ namespace SiteServer.BackgroundPages.Core
 <a class=""dropdown-item"" href=""javascript:;"" onclick=""{ModalContentExport.GetOpenWindowString(siteInfo.Id, channelInfo.Id)}"">
     导 出
 </a>");
-                if (permissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentOrder))
+                if (permissionsImpl.HasChannelPermissions(siteInfo.Id, channelInfo.Id, ConfigManager.ChannelPermissions.ContentArrange))
                 {
                     builder.Append($@"
 <a class=""dropdown-item"" href=""javascript:;"" onclick=""{ModalContentTidyUp.GetOpenWindowString(siteInfo.Id, channelInfo.Id, pageUrl)}"">
@@ -234,16 +238,22 @@ namespace SiteServer.BackgroundPages.Core
             return builder.ToString();
         }
 
-        public static string GetTextEditorCommands(SiteInfo siteInfo, string attributeName)
+        public static string GetTextEditorCommands(SiteInfo siteInfo, int channelId, string attributeName)
         {
+            var url = $"editorLayerImage.cshtml?siteId={siteInfo.Id}&channelId={channelId}&attributeName={attributeName}";
+            var insertImage = $@"utils.openLayer({{title: '插入图片', url: '{url}', width: 700, height: 500}});return false;";
+            url = $"editorLayerText.cshtml?siteId={siteInfo.Id}&channelId={channelId}&attributeName={attributeName}";
+            var insertText = $@"utils.openLayer({{title: '插入图文', url: '{url}', full: true}});return false;";
             return $@"
 <script type=""text/javascript"">
 function getWordSpliter(){{
     var pureText = {UEditorUtils.GetPureTextScript(attributeName)}
 	$.post('{AjaxCmsService.GetWordSpliterUrl(siteInfo.Id)}&r=' + Math.random(), {{content:pureText}}, function(data) {{
 		if(data !=''){{
-            $('.nav-pills').children('li').eq(1).find('a').click();
-			$('#TbTags').val(data).focus();
+            //$('.nav-pills').children('li').eq(1).find('a').click();
+			//$('#TbTags').val(data).focus();
+            $vue.tagNames = data.split(' ');
+            location.hash = '#tagNames';
 		}}else{{
             {AlertUtils.Error("提取关键字", "对不起，内容不足，无法提取关键字")}
         }}
@@ -273,16 +283,18 @@ function detection_{attributeName}(){{
 </script>
 <div class=""btn-group btn-group-sm"">
     <button class=""btn"" onclick=""{ModalTextEditorImportWord.GetOpenWindowString(siteInfo.Id, attributeName)}"">导入Word</button>
-    <button class=""btn"" onclick=""{ModalTextEditorInsertImage.GetOpenWindowString(siteInfo.Id, attributeName)}"">插入图片</button>
+    <button class=""btn"" onclick=""{insertImage}"">插入图片</button>
     <button class=""btn"" onclick=""{ModalTextEditorInsertVideo.GetOpenWindowString(siteInfo.Id, attributeName)}"">插入视频</button>
     <button class=""btn"" onclick=""{ModalTextEditorInsertAudio.GetOpenWindowString(siteInfo.Id, attributeName)}"">插入音频</button>
+    <button class=""btn"" onclick=""{insertText}"">插入图文</button>
     <button class=""btn"" onclick=""getWordSpliter();return false;"">提取关键字</button>
     <button class=""btn"" onclick=""detection_{attributeName}();return false;"">敏感词检测</button>
 </div>
 ";
+            //    <button class=""btn"" onclick=""{ModalTextEditorInsertImage.GetOpenWindowString(siteInfo.Id, attributeName)}"">插入图片</button>
         }
 
-        public static string GetAutoCheckKeywordsScript(SiteInfo siteInfo)
+        public static string GetAutoCheckKeywordsScript(SiteInfo siteInfo, List<string> allTagNames, List<string> tagNames)
         {
             var isAutoCheckKeywords = siteInfo.Additional.IsAutoCheckKeywords.ToString().ToLower();
             var url = AjaxCmsService.GetDetectionReplaceUrl(siteInfo.Id);
@@ -296,6 +308,7 @@ function detection_{attributeName}(){{
 <script type=""text/javascript"">
 var bairongKeywordArray;
 function autoCheckKeywords() {{
+    $('#TbTags').val($vue.tagNames);
     if({isAutoCheckKeywords}) {{
         var pureText = {getPureText}
         var htmlContent = {getContent}
@@ -339,11 +352,10 @@ function autoReplaceKeywords() {{
     {setContent}
     $('#BtnSubmit').attr('onclick', '').click();
 }}
+var allTagNames = {TranslateUtils.JsonSerialize(allTagNames)};
+var tagNames = {TranslateUtils.JsonSerialize(tagNames)};
 </script>
 ";
-            
-
-
             return command;
         }
 

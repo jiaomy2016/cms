@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Linq;
 using System.Web.Http;
 using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Pages.Settings
 {
@@ -19,7 +21,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdminRole))
                 {
                     return Unauthorized();
                 }
@@ -28,9 +30,11 @@ namespace SiteServer.API.Controllers.Pages.Settings
                     ? DataProvider.RoleDao.GetRoleInfoList()
                     : DataProvider.RoleDao.GetRoleInfoListByCreatorUserName(request.AdminName);
 
+                var roles = roleInfoList.Where(x => !EPredefinedRoleUtils.IsPredefinedRole(x.RoleName)).ToList();
+
                 return Ok(new
                 {
-                    Value = roleInfoList
+                    Value = roles
                 });
             }
             catch (Exception ex)
@@ -46,7 +50,7 @@ namespace SiteServer.API.Controllers.Pages.Settings
             {
                 var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.SettingsPermissions.Admin))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsAdminRole))
                 {
                     return Unauthorized();
                 }

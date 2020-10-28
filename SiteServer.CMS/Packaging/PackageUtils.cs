@@ -84,8 +84,7 @@ namespace SiteServer.CMS.Packaging
                 }
 
                 var localFilePath = PathUtils.Combine(directoryPath, idWithVersion + ".nupkg");
-                WebClientUtils.SaveRemoteFileToLocal(
-                    $"https://api.siteserver.cn/downloads/update/{version}", localFilePath);
+                WebClientUtils.SaveRemoteFileToLocal(CloudUtils.Dl.GetPackagesUrl(PackageIdSsCms, version), localFilePath);
 
                 ZipUtils.ExtractZip(localFilePath, directoryPath);
             }
@@ -98,8 +97,7 @@ namespace SiteServer.CMS.Packaging
 
                 var localFilePath = PathUtils.Combine(directoryPath, idWithVersion + ".nupkg");
 
-                WebClientUtils.SaveRemoteFileToLocal(
-                    $"https://api.siteserver.cn/downloads/package/{packageId}/{version}", localFilePath);
+                WebClientUtils.SaveRemoteFileToLocal(CloudUtils.Dl.GetPackagesUrl(packageId, version), localFilePath);
 
                 ZipUtils.ExtractZip(localFilePath, directoryPath);
 
@@ -160,7 +158,7 @@ namespace SiteServer.CMS.Packaging
                     }
 
                     WebConfigUtils.UpdateWebConfig(packageWebConfigPath, WebConfigUtils.IsProtectData,
-                        WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString, WebConfigUtils.ApiPrefix, WebConfigUtils.AdminDirectory, WebConfigUtils.HomeDirectory,
+                        WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString, WebConfigUtils.AdminDirectory, WebConfigUtils.HomeDirectory,
                         WebConfigUtils.SecretKey, WebConfigUtils.IsNightlyUpdate);
 
                     //DirectoryUtils.Copy(PathUtils.Combine(packagePath, DirectoryUtils.SiteFiles.DirectoryName),

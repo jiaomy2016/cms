@@ -16,6 +16,8 @@ namespace SiteServer.CMS.StlParser.StlElement
         private StlPlayer() { }
 		public const string ElementName = "stl:player";
 
+        public const string EditorPlaceHolder = @"src=""../assets/editor-images/player.png""";
+
         [StlAttribute(Title = "指定存储媒体的字段")]
         public const string Type = nameof(Type);
 
@@ -51,7 +53,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
             var type = BackgroundContentAttribute.VideoUrl;
-            var playUrl = string.Empty;
+            var playUrl = PlayByFlowPlayer;
             var imageUrl = string.Empty;
             var playBy = string.Empty;
             var width = 450;

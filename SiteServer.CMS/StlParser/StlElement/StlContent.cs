@@ -301,6 +301,8 @@ namespace SiteServer.CMS.StlParser.StlElement
                     {
                         parsedContent = string.Format(formatString, parsedContent);
                     }
+
+                    parsedContent = EditorUtility.Parse(pageInfo, parsedContent);
                 }
                 else if (ContentAttribute.PageContent.ToLower().Equals(type))
                 {
@@ -327,6 +329,8 @@ namespace SiteServer.CMS.StlParser.StlElement
                     {
                         parsedContent = string.Format(formatString, parsedContent);
                     }
+
+                    parsedContent = EditorUtility.Parse(pageInfo, parsedContent);
                 }
                 else if (ContentAttribute.AddDate.ToLower().Equals(type))
                 {

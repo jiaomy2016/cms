@@ -40,25 +40,42 @@
     </div>
     <ctrl:alerts runat="server" />
     <div class="card-box">
-      <div class="form-group">
-        <label class="col-form-label">API部署方式</label>
-        <asp:RadioButtonList id="RblIsSeparatedApi" RepeatDirection="Horizontal" AutoPostBack="true"
-          OnSelectedIndexChanged="RblIsSeparatedApi_SelectedIndexChanged" class="radio radio-primary" runat="server"></asp:RadioButtonList>
-        <small class="form-text text-muted">设置API服务器部署方式</small>
-      </div>
-      <asp:PlaceHolder ID="PhSeparatedApi" runat="server">
-        <div class="form-group">
-          <label class="col-form-label">独立部署API访问地址
-            <asp:RequiredFieldValidator ControlToValidate="TbSeparatedApiUrl" ErrorMessage=" *" ForeColor="red" Display="Dynamic"
-              runat="server" />
-            <asp:RegularExpressionValidator runat="server" ControlToValidate="TbSeparatedApiUrl" ValidationExpression="[^']+"
-              ErrorMessage=" *" ForeColor="red" Display="Dynamic" />
-          </label>
-          <asp:TextBox id="TbSeparatedApiUrl" class="form-control" runat="server"></asp:TextBox>
+      <div class="panel panel-default">
+        <div class="panel-body p-0">
+          <div class="table-responsive">
+            <table id="contents" class="table tablesaw table-hover m-0">
+              <thead>
+                <tr class="thead">
+                  <th>站点名称</th>
+                  <th>文件夹</th>
+                  <th>Api访问地址</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <asp:Repeater ID="RptContents" runat="server">
+                  <ItemTemplate>
+                    <tr>
+                      <td>
+                        <asp:Literal ID="ltlName" runat="server"></asp:Literal>
+                      </td>
+                      <td>
+                        <asp:Literal ID="ltlDir" runat="server"></asp:Literal>
+                      </td>
+                      <td>
+                        <asp:Literal ID="ltlApiUrl" runat="server"></asp:Literal>
+                      </td>
+                      <td class="text-center">
+                        <asp:Literal ID="ltlEditUrl" runat="server"></asp:Literal>
+                      </td>
+                    </tr>
+                  </ItemTemplate>
+                </asp:Repeater>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </asp:PlaceHolder>
-      <hr />
-      <asp:Button class="btn btn-primary" text="确 定" onclick="Submit_OnClick" runat="server" />
+      </div>
     </div>
   </form>
 </body>

@@ -332,7 +332,7 @@ namespace SiteServer.CMS.Provider
         /// 更新发布系统下的所有节点的排序号
         /// </summary>
         /// <param name="siteId"></param>
-        private void UpdateWholeTaxisBySiteId(int siteId)
+        public void UpdateWholeTaxisBySiteId(int siteId)
         {
             if (siteId <= 0) return;
             var idList = new List<int>
@@ -601,6 +601,14 @@ namespace SiteServer.CMS.Provider
             };
 
             var parentChannelInfo = ChannelManager.GetChannelInfo(siteId, parentId);
+            if (parentChannelInfo != null)
+            {
+                var taxisType = ETaxisTypeUtils.GetEnumType(parentChannelInfo.Additional.DefaultTaxisType);
+                if (taxisType != ETaxisType.OrderByTaxisDesc)
+                {
+                    channelInfo.Additional.DefaultTaxisType = ETaxisTypeUtils.GetValue(taxisType);
+                }
+            }
 
             using (var conn = GetConnection())
             {

@@ -11,19 +11,19 @@ namespace SiteServer.CMS.Model.Attributes
             
         }
 
-        public bool IsSeparatedApi
-        {
-            get => GetBool("IsSeparatedApi");
-            set => Set("IsSeparatedApi", value);
-        }
+        //public bool IsSeparatedApi
+        //{
+        //    get => GetBool("IsSeparatedApi");
+        //    set => Set("IsSeparatedApi", value);
+        //}
 
-        public string SeparatedApiUrl
-        {
-            get => GetString("SeparatedApiUrl");
-            set => Set("SeparatedApiUrl", value);
-        }
+        //public string SeparatedApiUrl
+        //{
+        //    get => GetString("SeparatedApiUrl");
+        //    set => Set("SeparatedApiUrl", value);
+        //}
 
-        public string ApiUrl => IsSeparatedApi ? SeparatedApiUrl : PageUtils.ParseNavigationUrl($"~/{WebConfigUtils.ApiPrefix}");
+        //public string ApiUrl => IsSeparatedApi ? SeparatedApiUrl : PageUtils.ParseNavigationUrl("~/api");
 
         public bool IsLogSite
         {
@@ -139,7 +139,7 @@ namespace SiteServer.CMS.Model.Attributes
 
         public int AdminEnforceLogoutMinutes
         {
-            get => GetInt("AdminEnforceLogoutMinutes", 30);
+            get => GetInt("AdminEnforceLogoutMinutes", 960);
             set => Set("AdminEnforceLogoutMinutes", value);
         }
 

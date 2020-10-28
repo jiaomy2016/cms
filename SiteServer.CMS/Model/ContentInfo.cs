@@ -304,7 +304,9 @@ namespace SiteServer.CMS.Model
 	        var channelInfo = ChannelManager.GetChannelInfo(SiteId, ChannelId);
 	        var styleInfoList = TableStyleManager.GetContentStyleInfoList(siteInfo, channelInfo);
 
-	        foreach (var styleInfo in styleInfoList)
+            if (siteInfo == null || channelInfo == null || styleInfoList == null) return dict;
+
+            foreach (var styleInfo in styleInfoList)
 	        {
 	            if (styleInfo.InputType == InputType.Image || styleInfo.InputType == InputType.File || styleInfo.InputType == InputType.Video)
 	            {
@@ -314,8 +316,23 @@ namespace SiteServer.CMS.Model
 	                    value = PageUtility.ParseNavigationUrl(siteInfo, value, false);
 	                }
 
-	                dict.Remove(styleInfo.AttributeName);
                     dict[styleInfo.AttributeName] = value;
+
+                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
+                    dict.Remove(extendAttributeName);
+
+                    var extendValues = GetString(extendAttributeName);
+                    dict[$"{styleInfo.AttributeName}Extends"] = 0;
+                    if (!string.IsNullOrEmpty(extendValues))
+                    {
+                        var no = 0;
+                        var extends = TranslateUtils.StringCollectionToStringList(extendValues);
+                        foreach (var extend in extends)
+                        {
+                            dict[$"{styleInfo.AttributeName}Extend{++no}"] = PageUtility.ParseNavigationUrl(siteInfo, extend, false);
+                        }
+                        dict[$"{styleInfo.AttributeName}Extends"] = no;
+                    }
                 }
                 else if (styleInfo.InputType == InputType.TextEditor)
 	            {
@@ -324,12 +341,10 @@ namespace SiteServer.CMS.Model
 	                {
 	                    value = ContentUtility.TextEditorContentDecode(siteInfo, value, false);
 	                }
-	                dict.Remove(styleInfo.AttributeName);
                     dict[styleInfo.AttributeName] = value;
 	            }
 	            else
 	            {
-	                dict.Remove(styleInfo.AttributeName);
                     dict[styleInfo.AttributeName] = Get(styleInfo.AttributeName);
                 }
 	        }
