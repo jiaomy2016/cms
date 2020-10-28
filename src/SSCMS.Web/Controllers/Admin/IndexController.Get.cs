@@ -19,6 +19,29 @@ namespace SSCMS.Web.Controllers.Admin
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<GetResult>> Get([FromQuery] GetRequest request)
         {
+            var allowed = true;
+            if (!string.IsNullOrEmpty(_settingsManager.AdminRestrictionHost))
+            {
+                var currentHost = PageUtils.RemoveProtocolFromUrl(PageUtils.GetHost(Request));
+                if (!StringUtils.StartsWithIgnoreCase(currentHost, PageUtils.RemoveProtocolFromUrl(_settingsManager.AdminRestrictionHost)))
+                {
+                    allowed = false;
+                }
+            }
+
+            if (!allowed)
+            {
+                var ipAddress = PageUtils.GetIpAddress(Request);
+                allowed = PageUtils.IsAllowed(ipAddress,
+                    new List<string>(_settingsManager.AdminRestrictionBlockList),
+                    new List<string>(_settingsManager.AdminRestrictionAllowList));
+            }
+
+            if (!allowed)
+            {
+                return this.Error($"访问已被禁止，IP地址：{PageUtils.GetIpAddress(Request)}，请与网站管理员联系开通访问权限");
+            }
+
             var (redirect, redirectUrl) = await AdminRedirectCheckAsync();
             if (redirect)
             {
@@ -78,20 +101,8 @@ namespace SSCMS.Web.Controllers.Admin
                 //return this.Error(_local["You do not have a site to manage, please contact the super administrator for assistance"]);
             }
 
-            var plugins = new List<GetPlugin>();
-            foreach (var plugin in _pluginManager.Plugins)
-            {
-                if (plugin.Disabled) continue;
-
-                plugins.Add(new GetPlugin
-                {
-                    PluginId = plugin.PluginId,
-                    DisplayName = plugin.DisplayName,
-                    Version = plugin.Version
-                });
-            }
-
-            var allMenus = _pluginManager.GetMenus();
+            var enabledPlugins = _pluginManager.EnabledPlugins;
+            var allMenus = _settingsManager.GetMenus();
 
             var menus = new List<Menu>();
             var siteType = new SiteType();
@@ -99,20 +110,44 @@ namespace SSCMS.Web.Controllers.Admin
             var previewUrl = string.Empty;
             if (site != null)
             {
-                siteType = _pluginManager.GetSiteType(site.SiteType);
+                siteType = _settingsManager.GetSiteType(site.SiteType);
                 if (await _authManager.HasSitePermissionsAsync(site.Id))
                 {
-                    var sitePermissions = await _authManager.GetSitePermissionsAsync(site.Id);
+                    var sitePlugins = _pluginManager.GetPlugins(site.Id);
+                    var allPluginMenus = new List<Menu>();
+                    var sitePluginMenus = new List<Menu>();
+                    foreach (var enabledPlugin in enabledPlugins)
+                    {
+                        var pluginMenus = enabledPlugin.GetMenus()
+                            .Where(x => ListUtils.ContainsIgnoreCase(x.Type, siteType.Id)).ToList();
+                        if (pluginMenus.Count == 0) continue;
+
+                        allPluginMenus.AddRange(pluginMenus);
+                        if (sitePlugins.Exists(x => x.PluginId == enabledPlugin.PluginId))
+                        {
+                            sitePluginMenus.AddRange(pluginMenus);
+                        }
+                    }
+
+                    var siteMenus = allMenus
+                        .Where(menu => ListUtils.ContainsIgnoreCase(menu.Type, siteType.Id))
+                        .Where(menu => !allPluginMenus.Exists(x => x.Id == menu.Id))
+                        .ToList();
+                    siteMenus.AddRange(sitePluginMenus);
+
                     var siteMenu = new Menu
                     {
                         Id = IdSite,
                         Text = site.SiteName,
-                        Type = siteType.Id,
-                        Children = new List<Menu>(allMenus.Where(x => StringUtils.EqualsIgnoreCase(x.Type, siteType.Id)))
+                        Type = new List<string>
+                        {
+                            siteType.Id
+                        },
+                        Children = siteMenus
                     };
 
+                    var sitePermissions = await _authManager.GetSitePermissionsAsync(site.Id);
                     var query = new NameValueCollection { { "siteId", site.Id.ToString() } };
-
                     siteMenu.Children = GetChildren(siteMenu, sitePermissions, x =>
                     {
                         x.Link = PageUtils.AddQueryStringIfNotExists(x.Link, query);
@@ -131,7 +166,7 @@ namespace SSCMS.Web.Controllers.Admin
                             var theSite = await _siteRepository.GetAsync(siteId);
                             if (theSite == null) continue;
 
-                            var theSiteType = _pluginManager.GetSiteType(theSite.SiteType);
+                            var theSiteType = _settingsManager.GetSiteType(theSite.SiteType);
                             allSiteMenus.Add(new Menu
                             {
                                 Id = $"site_switch_{theSite.Id}",
@@ -146,7 +181,8 @@ namespace SSCMS.Web.Controllers.Admin
                         {
                             Id = "site_switch_all",
                             IconClass = "ion-clock",
-                            Text = _local["Recently site"],
+                            //Text = _local["Recently site"],
+                            Text = "最近访问",
                             Children = allSiteMenus.ToArray()
                         });
                         switchMenus.Add(new Menu
@@ -155,13 +191,15 @@ namespace SSCMS.Web.Controllers.Admin
                             IconClass = "ion-checkmark",
                             Link = _pathManager.GetAdminUrl(SitesLayerSelectController.Route),
                             Target = "_layer",
-                            Text = _local["Select site"]
+                            //Text = _local["Select site"]
+                            Text = "选择站点"
                         });
 
                         menus.Add(new Menu
                         {
                             Id = "site_switch",
-                            Text = _local["Switch site"],
+                            //Text = _local["Switch site"],
+                            Text = "切换站点",
                             Children = switchMenus.ToArray()
                         });
                     }
@@ -171,7 +209,7 @@ namespace SSCMS.Web.Controllers.Admin
             }
 
             var appPermissions = await _authManager.GetAppPermissionsAsync();
-            var appMenus = allMenus.Where(x => StringUtils.EqualsIgnoreCase(x.Type, AuthTypes.Resources.App) && _authManager.IsMenuValid(x, appPermissions)).ToList();
+            var appMenus = allMenus.Where(x => ListUtils.ContainsIgnoreCase(x.Type, Types.Resources.App) && _authManager.IsMenuValid(x, appPermissions)).ToList();
             foreach (var appMenu in appMenus)
             {
                 appMenu.Children = GetChildren(appMenu, appPermissions);
@@ -182,13 +220,13 @@ namespace SSCMS.Web.Controllers.Admin
 
             var requestCulture = HttpContext.Features.Get<IRequestCultureFeature>();
             var culture = requestCulture.RequestCulture.UICulture.Name;
+            var plugins = enabledPlugins.Select(plugin => new GetPlugin { PluginId = plugin.PluginId, DisplayName = plugin.DisplayName, Version = plugin.Version }).ToList();
 
             return new GetResult
             {
                 Value = true,
-                IsNightly = _settingsManager.IsNightlyUpdate,
                 Version = _settingsManager.Version,
-                OperatingSystem = Constants.OperatingSystem,
+                OSArchitecture = _settingsManager.OSArchitecture,
                 AdminLogoUrl = config.AdminLogoUrl,
                 AdminTitle = config.AdminTitle,
                 IsSuperAdmin = isSuperAdmin,

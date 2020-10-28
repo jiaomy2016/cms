@@ -1,14 +1,13 @@
-﻿using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using SSCMS.Configuration;
 using SSCMS.Services;
-using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Sites
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class SitesTemplatesOnlineController : ControllerBase
     {
@@ -21,21 +20,9 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Sites
             _authManager = authManager;
         }
 
-        [HttpGet, Route(Route)]
-        public async Task<ActionResult<GetResult>> Get()
+        public class GetResult
         {
-            if (!await _authManager.HasAppPermissionsAsync(AuthTypes.AppPermissions.SettingsSitesTemplatesOnline))
-            {
-                return Unauthorized();
-            }
-
-            var siteAddPermission =
-                await _authManager.HasAppPermissionsAsync(AuthTypes.AppPermissions.SettingsSitesAdd);
-
-            return new GetResult
-            {
-                SiteAddPermission = siteAddPermission
-            };
+            public bool SiteAddPermission { get; set; }
         }
     }
 }

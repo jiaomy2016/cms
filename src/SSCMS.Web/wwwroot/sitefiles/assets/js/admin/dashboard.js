@@ -8,9 +8,12 @@ var data = utils.init({
   unCheckedListTotalCount: 0,
   adminWelcomeHtml: null,
   frameworkDescription: null,
+  osArchitecture: null,
   osDescription: null,
   containerized: null,
-  cpuCores: null
+  cpuCores: null,
+  userName: null,
+  level: null
 });
 
 var methods = {
@@ -27,9 +30,12 @@ var methods = {
       $this.adminWelcomeHtml = res.adminWelcomeHtml || '欢迎使用 SSCMS 管理后台';
 
       $this.frameworkDescription = res.frameworkDescription;
+      $this.osArchitecture = res.osArchitecture;
       $this.osDescription = res.osDescription;
       $this.containerized = res.containerized;
       $this.cpuCores = res.cpuCores;
+      $this.userName = res.userName;
+      $this.level = res.level;
 
       $this.getUnCheckedList();
     }).catch(function (error) {

@@ -14,29 +14,9 @@ if (window.swal && swal.mixin) {
 }
 
 var PER_PAGE = 30;
-var ADMIN_ACCESS_TOKEN_NAME = "ss_admin_access_token";
-var USER_ACCESS_TOKEN_NAME = "ss_user_access_token";
 var DEFAULT_AVATAR_URL = '/sitefiles/assets/images/default_avatar.png';
 
-var $type = "admin";
-
-try {
-  var scripts = document.getElementsByTagName("script");
-  var dataValue = scripts[scripts.length - 1].getAttribute("data-type");
-  if (dataValue) $type = dataValue;
-} catch (e) {}
-
-var $apiUrl = "/api/admin";
-var $rootUrl = "/ss-admin";
-var $token =
-  sessionStorage.getItem(ADMIN_ACCESS_TOKEN_NAME) ||
-  localStorage.getItem(ADMIN_ACCESS_TOKEN_NAME);
-if ($type === "user") {
-  $apiUrl = "/api/home";
-  $rootUrl = "/home";
-  $token = localStorage.getItem(USER_ACCESS_TOKEN_NAME);
-}
-
+var $token = sessionStorage.getItem(ACCESS_TOKEN_NAME) || localStorage.getItem(ACCESS_TOKEN_NAME);
 var $api = axios.create({
   baseURL: $apiUrl,
   headers: {
@@ -107,6 +87,7 @@ var utils = {
 
   toInt: function (val) {
     if (!val) return 0;
+    if (typeof val === 'number') return val;
     return parseInt(val, 10) || 0;
   },
 
@@ -158,6 +139,10 @@ var utils = {
     return utils.getPageUrl("cms", name, query);
   },
 
+  getWxUrl: function (name, query) {
+    return utils.getPageUrl("wx", name, query);
+  },
+
   getPluginsUrl: function (name, query) {
     return utils.getPageUrl("plugins", name, query);
   },
@@ -187,12 +172,39 @@ var utils = {
     return url;
   },
 
-  getCountName(attributeName) {
+  getCountName: function(attributeName) {
     return _.camelCase(attributeName + "Count");
   },
 
-  getExtendName(attributeName, n) {
+  getExtendName: function(attributeName, n) {
     return _.camelCase(n ? attributeName + n : attributeName);
+  },
+
+  pad: function(num) {
+    var s = num+"";
+    while (s.length < 2) s = "0" + s;
+    return s;
+  },
+
+  getUrl: function(siteUrl, url) {
+    if (url && url.startsWith('/')) return url;
+    siteUrl = _.trimEnd(siteUrl, '/');
+    return siteUrl + '/' + _.trimStart(_.trimStart(_.trimStart(url, '~'), '@'), '/');
+  },
+
+  getFriendlyDate: function(date) {
+    if (Object.prototype.toString.call(date) !== '[object Date]') {
+      date = new Date(date);
+    }
+    var delta = Math.round((new Date() - date) / 1000);
+    var minute = 60, hour = minute * 60, day = hour * 24;
+    if (delta < day) {
+      return utils.pad(date.getHours()) + ':' + utils.pad(date.getMinutes());
+    }
+    if (delta < day * 2) {
+      return '昨天 ' + utils.pad(date.getHours()) + ':' + utils.pad(date.getMinutes());
+    }
+    return utils.pad(date.getMonth() + 1) + '月' + utils.pad(date.getDate()) + '日';
   },
 
   getRootVue: function() {
@@ -218,7 +230,12 @@ var utils = {
 
   openTab: function(name) {
     var $this = utils.getRootVue();
-    $this.tabName = name;
+    var index = $this.tabs.findIndex(function(tab) {
+      return tab.name == name;
+    });
+    if (index !== -1) {
+      $this.tabName = name;
+    }
   },
 
   addTab: function(title, url) {
@@ -467,6 +484,10 @@ var utils = {
     }
   },
 
+  scrollTop: function () {
+    document.documentElement.scrollTop = document.body.scrollTop = 0;
+  },
+
   closeLayer: function (reload) {
     if (reload) {
       parent.location.reload();
@@ -516,6 +537,33 @@ var utils = {
     } else {
       callback()
     }
+  },
+
+  getForm: function(styles, value) {
+    var form =  _.assign({}, value);
+    for (var i = 0; i < styles.length; i++) {
+      var style = styles[i];
+      var name = _.lowerFirst(style.attributeName);
+      if (style.inputType === 'TextEditor') {
+        setTimeout(function () {
+          var editor = UE.getEditor(style.attributeName, {
+            allowDivTransToP: false,
+            maximumWords: 99999999
+          });
+          editor.attributeName = style.attributeName;
+          editor.ready(function () {
+            editor.addListener("contentChange", function () {
+              $this.form[this.attributeName] = this.getContent();
+            });
+          });
+        }, 100);
+      } else if (style.inputType === 'CheckBox' || style.inputType === 'SelectMultiple') {
+        if (!form[name] || !Array.isArray(form[name])) {
+          form[name] = [];
+        }
+      }
+    }
+    return form;
   },
 
   getRules: function (rules) {
@@ -681,56 +729,5 @@ var utils = {
       return array;
     }
     return null;
-  },
-
-  compareVersion: function (currentVersion, newVersion, options) {
-    // var v1 = (currentVersion || "").split("-")[0];
-    // var v2 = (newVersion || "").split("-")[0];
-    var v1 = (currentVersion || '').replace(/[^0-9\.]+/g, ".");
-    var v2 = (newVersion || '').replace(/[^0-9\.]+/g, ".");
-
-    var lexicographical = options && options.lexicographical,
-      zeroExtend = options && options.zeroExtend,
-      v1parts = v1.split("."),
-      v2parts = v2.split(".");
-
-    function isValidPart(x) {
-      return (lexicographical ? /^\d+[A-Za-z]*$/ : /^\d+$/).test(x);
-    }
-
-    if (!v1parts.every(isValidPart) || !v2parts.every(isValidPart)) {
-      return NaN;
-    }
-
-    if (zeroExtend) {
-      while (v1parts.length < v2parts.length) v1parts.push("0");
-      while (v2parts.length < v1parts.length) v2parts.push("0");
-    }
-
-    if (!lexicographical) {
-      v1parts = v1parts.map(Number);
-      v2parts = v2parts.map(Number);
-    }
-
-    for (var i = 0; i < v1parts.length; ++i) {
-      if (v2parts.length == i) {
-        return 1;
-      }
-
-      if (v1parts[i] == v2parts[i]) {
-        continue;
-      } else if (v1parts[i] > v2parts[i]) {
-        return 1;
-      } else {
-        return -1;
-      }
-    }
-
-    if (v1parts.length != v2parts.length) {
-      return -1;
-    }
-
-    //1 >, -1 <, 0 ==
-    return 0;
-  },
+  }
 };

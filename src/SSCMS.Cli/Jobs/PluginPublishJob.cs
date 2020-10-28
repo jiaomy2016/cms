@@ -5,6 +5,7 @@ using Semver;
 using SSCMS.Cli.Abstractions;
 using SSCMS.Cli.Core;
 using SSCMS.Core.Plugins;
+using SSCMS.Plugins;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -32,7 +33,7 @@ namespace SSCMS.Cli.Jobs
                 { "v|version=", "发布版本",
                     v => _version = v },
                 {
-                    "h|help", "命令说明",
+                    "h|help", "Display help",
                     v => _isHelp = v != null
                 }
             };
@@ -47,7 +48,7 @@ namespace SSCMS.Cli.Jobs
             Console.WriteLine();
         }
 
-        public async Task ExecuteAsync(IJobContext context)
+        public async Task ExecuteAsync(IPluginJobContext context)
         {
             if (!CliUtils.ParseArgs(_options, context.Args)) return;
 
@@ -121,7 +122,7 @@ namespace SSCMS.Cli.Jobs
             }
 
             var packageId = PluginUtils.GetPackageId(plugin.Publisher, plugin.Name, plugin.Version);
-            var zipPath = PluginPackageJob.Package(plugin);
+            var zipPath = PluginPackageJob.Package(_pathManager, plugin);
             var fileSize = FileUtils.GetFileSizeByFilePath(zipPath);
 
             await Console.Out.WriteLineAsync($"Packaged: {zipPath}");

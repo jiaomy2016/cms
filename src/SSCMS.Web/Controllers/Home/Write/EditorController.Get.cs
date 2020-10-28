@@ -15,9 +15,9 @@ namespace SSCMS.Web.Controllers.Home.Write
         public async Task<ActionResult<GetResult>> Get([FromQuery]GetRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    AuthTypes.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, AuthTypes.ContentPermissions.Add) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, AuthTypes.ContentPermissions.Edit))
+                    Types.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Edit))
             {
                 return Unauthorized();
             }
@@ -31,8 +31,7 @@ namespace SSCMS.Web.Controllers.Home.Write
             var groupNames = await _contentGroupRepository.GetGroupNamesAsync(site.Id);
             var tagNames = await _contentTagRepository.GetTagNamesAsync(site.Id);
 
-            var tableName = _channelRepository.GetTableName(site, channel);
-            var allStyles = await _tableStyleRepository.GetContentStylesAsync(channel, tableName);
+            var allStyles = await _tableStyleRepository.GetContentStylesAsync(site, channel);
             var styles = allStyles
                 .Where(style =>
                     !string.IsNullOrEmpty(style.DisplayName) &&

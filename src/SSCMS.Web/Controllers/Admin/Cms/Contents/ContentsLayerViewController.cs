@@ -3,16 +3,16 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
 using SSCMS.Repositories;
 using SSCMS.Services;
-using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Contents
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class ContentsLayerViewController : ControllerBase
     {
@@ -21,7 +21,6 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         private readonly IAuthManager _authManager;
         private readonly IPathManager _pathManager;
         private readonly IDatabaseManager _databaseManager;
-        private readonly IOldPluginManager _pluginManager;
         private readonly ISiteRepository _siteRepository;
         private readonly IChannelRepository _channelRepository;
         private readonly IContentRepository _contentRepository;
@@ -29,12 +28,11 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         private readonly IContentTagRepository _contentTagRepository;
         private readonly ITableStyleRepository _tableStyleRepository;
 
-        public ContentsLayerViewController(IAuthManager authManager, IPathManager pathManager, IDatabaseManager databaseManager, IOldPluginManager pluginManager, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IContentGroupRepository contentGroupRepository, IContentTagRepository contentTagRepository, ITableStyleRepository tableStyleRepository)
+        public ContentsLayerViewController(IAuthManager authManager, IPathManager pathManager, IDatabaseManager databaseManager, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IContentGroupRepository contentGroupRepository, IContentTagRepository contentTagRepository, ITableStyleRepository tableStyleRepository)
         {
             _authManager = authManager;
             _pathManager = pathManager;
             _databaseManager = databaseManager;
-            _pluginManager = pluginManager;
             _siteRepository = siteRepository;
             _channelRepository = channelRepository;
             _contentRepository = contentRepository;
@@ -48,8 +46,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         {
             
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    AuthTypes.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, AuthTypes.ContentPermissions.View))
+                    Types.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.View))
             {
                 return Unauthorized();
             }
@@ -63,12 +61,12 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
 
             var channelName = await _channelRepository.GetChannelNameNavigationAsync(request.SiteId, request.ChannelId);
 
-            var columnsManager = new ColumnsManager(_databaseManager, _pluginManager, _pathManager);
+            var columnsManager = new ColumnsManager(_databaseManager, _pathManager);
 
             var columns = await columnsManager.GetContentListColumnsAsync(site, channel, ColumnsManager.PageType.Contents);
 
             var calculatedContent =
-                await columnsManager.CalculateContentListAsync(1, site, request.ChannelId, content, columns, null);
+                await columnsManager.CalculateContentListAsync(1, site, request.ChannelId, content, columns);
             calculatedContent.Body = content.Body;
 
             var siteUrl = await _pathManager.GetSiteUrlAsync(site, true);
@@ -77,18 +75,16 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
 
             var editorColumns = new List<ContentColumn>();
 
-            var tableName = _channelRepository.GetTableName(site, channel);
-            var styleList = await _tableStyleRepository.GetContentStylesAsync(channel, tableName);
-            foreach (var tableStyle in styleList)
+            var styles = await _tableStyleRepository.GetContentStylesAsync(site, channel);
+            foreach (var tableStyle in styles)
             {
-                if (tableStyle.InputType == InputType.TextEditor)
+                if (tableStyle.InputType != InputType.TextEditor) continue;
+
+                editorColumns.Add(new ContentColumn
                 {
-                    editorColumns.Add(new ContentColumn
-                    {
-                        AttributeName = tableStyle.AttributeName,
-                        DisplayName = tableStyle.DisplayName
-                    });
-                }
+                    AttributeName = tableStyle.AttributeName,
+                    DisplayName = tableStyle.DisplayName
+                });
             }
 
             return new GetResult

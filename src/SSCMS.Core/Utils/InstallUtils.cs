@@ -1,29 +1,51 @@
 ﻿using Datory;
+using SSCMS.Configuration;
 using SSCMS.Utils;
 
 namespace SSCMS.Core.Utils
 {
     public static class InstallUtils
     {
-        public static void SaveSettings(string contentRootPath, bool isNightlyUpdate, bool isProtectData, string securityKey, string databaseType, string databaseConnectionString, string redisConnectionString)
+        public static void SaveSettings(string contentRootPath, bool isProtectData, bool isDisablePlugins, string securityKey, string databaseType, string databaseConnectionString, string redisConnectionString, string adminRestrictionHost, string[] adminRestrictionAllowList, string[] adminRestrictionBlockList)
         {
             var path = PathUtils.Combine(contentRootPath, Constants.ConfigFileName);
 
+            if (adminRestrictionAllowList == null)
+            {
+                adminRestrictionAllowList = new string[] { };
+            }
+            if (adminRestrictionBlockList == null)
+            {
+                adminRestrictionBlockList = new string[] { };
+            }
+
             var json = $@"
 {{
-  ""IsNightlyUpdate"": {StringUtils.ToLower(isNightlyUpdate.ToString())},
   ""IsProtectData"": {StringUtils.ToLower(isProtectData.ToString())},
+  ""IsDisablePlugins"": {StringUtils.ToLower(isDisablePlugins.ToString())},
   ""SecurityKey"": ""{securityKey}"",
   ""Database"": {{
     ""Type"": ""{databaseType}"",
-    ""ConnectionString"": ""{databaseConnectionString}""
+    ""ConnectionString"": ""{StringUtils.ToJsonString(databaseConnectionString)}""
   }},
   ""Redis"": {{
     ""ConnectionString"": ""{redisConnectionString}""
+  }},
+  ""AdminRestriction"": {{
+    ""Host"": ""{adminRestrictionHost}"",
+    ""AllowList"": {TranslateUtils.JsonSerialize(adminRestrictionAllowList)},
+    ""BlockList"": {TranslateUtils.JsonSerialize(adminRestrictionBlockList)}
   }}
 }}";
 
             FileUtils.WriteText(path, json.Trim());
+
+            var webConfigPath = PathUtils.Combine(contentRootPath, "Web.config");
+            if (FileUtils.IsFileExists(webConfigPath))
+            {
+                var webConfigContent = FileUtils.ReadText(webConfigPath);
+                FileUtils.WriteText(webConfigPath, webConfigContent);
+            }
         }
 
         public static void Init(string contentRootPath)
@@ -43,7 +65,7 @@ namespace SSCMS.Core.Utils
                 var securityKey = StringUtils.GetShortGuid(false) + StringUtils.GetShortGuid(false) + StringUtils.GetShortGuid(false);
 
                 SaveSettings(contentRootPath, false, false, securityKey, DatabaseType.MySql.GetValue(),
-                    string.Empty, string.Empty);
+                    string.Empty, string.Empty, string.Empty, null, null);
             }
         }
 

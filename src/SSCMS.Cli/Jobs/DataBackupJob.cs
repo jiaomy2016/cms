@@ -5,6 +5,7 @@ using Datory;
 using Mono.Options;
 using SSCMS.Cli.Abstractions;
 using SSCMS.Cli.Core;
+using SSCMS.Plugins;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -14,8 +15,9 @@ namespace SSCMS.Cli.Jobs
     {
         public string CommandName => "data backup";
 
+        private string _databaseType;
+        private string _connectionString;
         private string _directory;
-        private string _configFile;
         private List<string> _includes;
         private List<string> _excludes;
         private int _maxRows;
@@ -31,31 +33,47 @@ namespace SSCMS.Cli.Jobs
             _databaseManager = databaseManager;
             _options = new OptionSet
             {
-                { "d|directory=", "指定保存备份文件的文件夹名称",
-                    v => _directory = v },
-                { "c|config-file=", "指定配置文件Web.config路径或文件名",
-                    v => _configFile = v },
-                { "includes=", "指定需要备份的表，多个表用英文逗号隔开，默认备份所有表",
-                    v => _includes = v == null ? null : ListUtils.GetStringList(v) },
-                { "excludes=", "指定需要排除的表，多个表用英文逗号隔开",
-                    v => _excludes = v == null ? null : ListUtils.GetStringList(v) },
-                { "max-rows=", "指定需要备份的表的最大行数",
-                    v => _maxRows = v == null ? 0 : TranslateUtils.ToInt(v) },
-                { "h|help",  "命令说明",
-                    v => _isHelp = v != null }
+                {
+                    "t|database-type=", "Database type",
+                    v => _databaseType = v
+                },
+                {
+                    "c|connection-string=", "Database connection string",
+                    v => _connectionString = v
+                },
+                {
+                    "d|directory=", "Backup folder name",
+                    v => _directory = v
+                },
+                {
+                    "includes=", "Include table names, separated by commas, default backup all tables",
+                    v => _includes = v == null ? null : ListUtils.GetStringList(v)
+                },
+                {
+                    "excludes=", "Exclude table names, separated by commas",
+                    v => _excludes = v == null ? null : ListUtils.GetStringList(v)
+                },
+                {
+                    "max-rows=", "Maximum number of rows to backup. All data is backed up by default",
+                    v => _maxRows = v == null ? 0 : TranslateUtils.ToInt(v)
+                },
+                {
+                    "h|help", "Display help",
+                    v => _isHelp = v != null
+                }
             };
         }
 
         public void PrintUsage()
         {
             Console.WriteLine($"Usage: sscms {CommandName}");
-            Console.WriteLine("Summary: backup database to dist");
+            Console.WriteLine("Summary: backup database to folder");
             Console.WriteLine("Options:");
             _options.WriteOptionDescriptions(Console.Out);
             Console.WriteLine();
         }
 
-        public async Task ExecuteAsync(IJobContext context)
+        public async Task ExecuteAsync(IPluginJobContext context)
         {
             if (!CliUtils.ParseArgs(_options, context.Args)) return;
 
@@ -74,12 +92,27 @@ namespace SSCMS.Cli.Jobs
             var treeInfo = new TreeInfo(_settingsManager, directory);
             DirectoryUtils.CreateDirectoryIfNotExists(treeInfo.DirectoryPath);
 
-            var webConfigPath = CliUtils.GetWebConfigPath(_configFile, _settingsManager);
-            if (!FileUtils.IsFileExists(webConfigPath))
+            var configPath = CliUtils.GetConfigPath(_settingsManager);
+
+            var databaseType = TranslateUtils.ToEnum(_databaseType, DatabaseType.MySql);
+            var connectionString = _connectionString;
+            if (string.IsNullOrEmpty(connectionString))
             {
-                await WriteUtils.PrintErrorAsync($"系统配置文件不存在：{webConfigPath}！");
-                return;
+                if (FileUtils.IsFileExists(configPath))
+                {
+                    databaseType = _settingsManager.Database.DatabaseType;
+                    connectionString = _settingsManager.DatabaseConnectionString;
+                }
+                else
+                {
+                    await WriteUtils.PrintErrorAsync($"The sscms.json file does not exist: {configPath}");
+                    return;
+                }
             }
+
+            await Console.Out.WriteLineAsync($"Database type: {databaseType.GetDisplayName()}");
+            await Console.Out.WriteLineAsync($"Database connection string: {connectionString}");
+            await Console.Out.WriteLineAsync($"Backup folder: {treeInfo.DirectoryPath}");
 
             //WebConfigUtils.Load(_settingsManager.ContentRootPath, webConfigPath);
 
@@ -100,6 +133,14 @@ namespace SSCMS.Cli.Jobs
             //    return;
             //}
 
+            var database = new Database(databaseType, connectionString);
+            var (isConnectionWorks, errorMessage) = await database.IsConnectionWorksAsync();
+            if (!isConnectionWorks)
+            {
+                await WriteUtils.PrintErrorAsync($"Unable to connect to database, error message:{errorMessage}");
+                return;
+            }
+
             if (_excludes == null)
             {
                 _excludes = new List<string>();
@@ -110,15 +151,15 @@ namespace SSCMS.Cli.Jobs
             _excludes.Add("siteserver_Log");
             _excludes.Add("siteserver_Tracking");
 
-            await Backup(_settingsManager, _databaseManager, _includes, _excludes, _maxRows, treeInfo);
+            await Backup(database, _databaseManager, _includes, _excludes, _maxRows, treeInfo);
 
             await WriteUtils.PrintRowLineAsync();
-            await WriteUtils.PrintSuccessAsync($"恭喜，成功备份数据库至文件夹：{treeInfo.DirectoryPath}！");
+            await WriteUtils.PrintSuccessAsync("backup database to folder successfully!");
         }
 
-        public static async Task Backup(ISettingsManager settingsManager, IDatabaseManager databaseManager, List<string> includes, List<string> excludes, int maxRows, TreeInfo treeInfo)
+        public static async Task Backup(IDatabase database, IDatabaseManager databaseManager, List<string> includes, List<string> excludes, int maxRows, TreeInfo treeInfo)
         {
-            var allTableNames = await settingsManager.Database.GetTableNamesAsync();
+            var allTableNames = await database.GetTableNamesAsync();
 
             var tableNames = new List<string>();
 
@@ -133,12 +174,14 @@ namespace SSCMS.Cli.Jobs
             await FileUtils.WriteTextAsync(treeInfo.TablesFilePath, TranslateUtils.JsonSerialize(tableNames));
 
             await WriteUtils.PrintRowLineAsync();
-            await WriteUtils.PrintRowAsync("备份表名称", "总条数");
+            await WriteUtils.PrintRowAsync("Backup table name", "Count");
             await WriteUtils.PrintRowLineAsync();
 
             foreach (var tableName in tableNames)
             {
-                var repository = new Repository(settingsManager.Database, tableName);
+                var columns = await database.GetTableColumnsAsync(tableName);
+                var repository = new Repository(database, tableName, columns);
+
                 var tableInfo = new TableInfo
                 {
                     Columns = repository.TableColumns,
@@ -153,7 +196,7 @@ namespace SSCMS.Cli.Jobs
 
                 await WriteUtils.PrintRowAsync(tableName, tableInfo.TotalCount.ToString("#,0"));
 
-                var identityColumnName = await settingsManager.Database.AddIdentityColumnIdIfNotExistsAsync(tableName, tableInfo.Columns);
+                var identityColumnName = await database.AddIdentityColumnIdIfNotExistsAsync(tableName, tableInfo.Columns);
 
                 if (tableInfo.TotalCount > 0)
                 {

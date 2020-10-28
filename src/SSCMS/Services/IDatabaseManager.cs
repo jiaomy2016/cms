@@ -9,8 +9,8 @@ namespace SSCMS.Services
         IAccessTokenRepository AccessTokenRepository { get; }
         IAdministratorRepository AdministratorRepository { get; }
         IAdministratorsInRolesRepository AdministratorsInRolesRepository { get; }
-        IChannelGroupRepository ChannelGroupRepository { get; }
         IChannelRepository ChannelRepository { get; }
+        IChannelGroupRepository ChannelGroupRepository { get; }
         IConfigRepository ConfigRepository { get; }
         IContentCheckRepository ContentCheckRepository { get; }
         IContentGroupRepository ContentGroupRepository { get; }
@@ -18,12 +18,12 @@ namespace SSCMS.Services
         IContentTagRepository ContentTagRepository { get; }
         IDbCacheRepository DbCacheRepository { get; }
         IErrorLogRepository ErrorLogRepository { get; }
-        ILibraryAudioRepository LibraryAudioRepository { get; }
-        ILibraryCardRepository LibraryCardRepository { get; }
-        ILibraryFileRepository LibraryFileRepository { get; }
-        ILibraryGroupRepository LibraryGroupRepository { get; }
-        ILibraryImageRepository LibraryImageRepository { get; }
-        ILibraryVideoRepository LibraryVideoRepository { get; }
+        IMaterialAudioRepository MaterialAudioRepository { get; }
+        IMaterialArticleRepository MaterialArticleRepository { get; }
+        IMaterialFileRepository MaterialFileRepository { get; }
+        IMaterialGroupRepository MaterialGroupRepository { get; }
+        IMaterialImageRepository MaterialImageRepository { get; }
+        IMaterialVideoRepository MaterialVideoRepository { get; }
         ILogRepository LogRepository { get; }
         IPermissionsInRolesRepository PermissionsInRolesRepository { get; }
         IPluginConfigRepository PluginConfigRepository { get; }
@@ -38,6 +38,7 @@ namespace SSCMS.Services
         ITableStyleRepository TableStyleRepository { get; }
         ITemplateLogRepository TemplateLogRepository { get; }
         ITemplateRepository TemplateRepository { get; }
+        ITranslateRepository TranslateRepository { get; }
         IUserGroupRepository UserGroupRepository { get; }
         IUserMenuRepository UserMenuRepository { get; }
         IUserRepository UserRepository { get; }

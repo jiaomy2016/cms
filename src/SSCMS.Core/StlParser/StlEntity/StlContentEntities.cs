@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Datory;
+using SSCMS.Configuration;
 using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
@@ -62,7 +63,7 @@ namespace SSCMS.Core.StlParser.StlEntity
                 {
                     var contentInfo = await parseManager.GetContentAsync();
 
-                    if (contentInfo != null && contentInfo.ReferenceId > 0 && contentInfo.SourceId > 0 && TranslateContentType.ReferenceContent.GetValue() == contentInfo.Get<string>(ColumnsManager.TranslateContentType))
+                    if (contentInfo != null && contentInfo.ReferenceId > 0 && contentInfo.SourceId > 0 && TranslateType.ReferenceContent.GetValue() == contentInfo.Get<string>(ColumnsManager.TranslateContentType))
                     {
                         var targetChannelId = contentInfo.SourceId;
                         var targetSiteId = await databaseManager.ChannelRepository.GetSiteIdAsync(targetChannelId);

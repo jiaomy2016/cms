@@ -10,6 +10,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Editor
 {
     public partial class ActionsController
     {
+        [RequestSizeLimit(long.MaxValue)]
         [HttpPost, Route(RouteActionsUploadImage)]
         public async Task<ActionResult<UploadImageResult>> UploadImage([FromQuery] SiteRequest request, [FromForm] IFormFile file)
         {
@@ -38,6 +39,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Editor
             var filePath = PathUtils.Combine(localDirectoryPath, fileName);
 
             await _pathManager.UploadAsync(file, filePath);
+            await _pathManager.AddWaterMarkAsync(site, filePath);
 
             var imageUrl = await _pathManager.GetSiteUrlByPhysicalPathAsync(site, filePath, true);
 

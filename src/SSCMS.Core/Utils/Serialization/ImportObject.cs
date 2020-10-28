@@ -18,16 +18,14 @@ namespace SSCMS.Core.Utils.Serialization
     public class ImportObject
     {
         private readonly IPathManager _pathManager;
-        private readonly IOldPluginManager _pluginManager;
         private readonly IDatabaseManager _databaseManager;
         private readonly CacheUtils _caching;
         private readonly Site _site;
         private readonly int _adminId;
 
-        public ImportObject(IPathManager pathManager, IOldPluginManager pluginManager, IDatabaseManager databaseManager, CacheUtils caching, Site site, int adminId)
+        public ImportObject(IPathManager pathManager, IDatabaseManager databaseManager, CacheUtils caching, Site site, int adminId)
         {
             _pathManager = pathManager;
-            _pluginManager = pluginManager;
             _databaseManager = databaseManager;
             _caching = caching;
             _site = site;
@@ -38,36 +36,37 @@ namespace SSCMS.Core.Utils.Serialization
         {
             var sitePath = await _pathManager.GetSitePathAsync(_site);
 
+            IList<string> siteDirList = new List<string>();
+
+            var filePaths = DirectoryUtils.GetFilePaths(siteTemplatePath);
+            foreach (var filePath in filePaths)
+            {
+                var fileName = PathUtils.GetFileName(filePath);
+                if (StringUtils.StartsWithIgnoreCase(fileName, "T_")) continue;
+
+                var destFilePath = PathUtils.Combine(sitePath, fileName);
+                _caching.SetProcess(guid, $"导入站点文件: {filePath}");
+                FileUtils.MoveFile(filePath, destFilePath, isOverride);
+            }
+
             if (_site.Root)
             {
-                var filePaths = DirectoryUtils.GetFilePaths(siteTemplatePath);
-                foreach (var filePath in filePaths)
-                {
-                    var fileName = PathUtils.GetFileName(filePath);
-                    var destFilePath = PathUtils.Combine(sitePath, fileName);
-                    _caching.SetProcess(guid, $"导入站点文件: {filePath}");
-                    FileUtils.MoveFile(filePath, destFilePath, isOverride);
-                }
-
-                var siteDirList = await _databaseManager.SiteRepository.GetSiteDirsAsync(0);
-
-                var directoryPaths = DirectoryUtils.GetDirectoryPaths(siteTemplatePath);
-                foreach (var subDirectoryPath in directoryPaths)
-                {
-                    var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
-                    if (!_pathManager.IsSystemDirectory(directoryName) && !ListUtils.ContainsIgnoreCase(siteDirList, directoryName))
-                    {
-                        _caching.SetProcess(guid, $"导入站点文件夹: {subDirectoryPath}");
-                        var destDirectoryPath = PathUtils.Combine(sitePath, directoryName);
-                        DirectoryUtils.MoveDirectory(subDirectoryPath, destDirectoryPath, isOverride);
-                    }
-                }
+                siteDirList = await _databaseManager.SiteRepository.GetSiteDirsAsync(0);
             }
-            else
+
+            var directoryPaths = DirectoryUtils.GetDirectoryPaths(siteTemplatePath);
+            foreach (var subDirectoryPath in directoryPaths)
             {
-                _caching.SetProcess(guid, $"导入站点文件夹: {siteTemplatePath}");
-                DirectoryUtils.MoveDirectory(siteTemplatePath, sitePath, isOverride);
+                var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
+                if (StringUtils.EqualsIgnoreCase(directoryName, "Template")) continue;
+
+                if (_site.Root && (_pathManager.IsSystemDirectory(directoryName) || ListUtils.ContainsIgnoreCase(siteDirList, directoryName))) continue;
+
+                _caching.SetProcess(guid, $"导入站点文件夹: {subDirectoryPath}");
+                var destDirectoryPath = PathUtils.Combine(sitePath, directoryName);
+                DirectoryUtils.MoveDirectory(subDirectoryPath, destDirectoryPath, isOverride);
             }
+
             var siteTemplateMetadataPath = PathUtils.Combine(sitePath, DirectoryUtils.SiteFiles.SiteTemplates.SiteTemplateMetadata);
             DirectoryUtils.DeleteDirectoryIfExists(siteTemplateMetadataPath);
         }
@@ -94,7 +93,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(directoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, directoryPath);
+            pathManager.ExtractZip(zipFilePath, directoryPath);
 
             var relatedFieldIe = new RelatedFieldIe(databaseManager, site, directoryPath);
             await relatedFieldIe.ImportRelatedFieldAsync(true);
@@ -117,7 +116,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(styleDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(styleDirectoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, styleDirectoryPath);
+            pathManager.ExtractZip(zipFilePath, styleDirectoryPath);
 
             await TableStyleIe.SingleImportTableStyleAsync(databaseManager, tableName, styleDirectoryPath, relatedIdentities);
             return styleDirectoryPath;
@@ -135,7 +134,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, siteContentDirectoryPath);
+            _pathManager.ExtractZip(zipFilePath, siteContentDirectoryPath);
 
             await ImportChannelsAndContentsFromZipAsync(parentId, siteContentDirectoryPath, isOverride, guid);
 
@@ -230,7 +229,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, siteContentDirectoryPath);
+            _pathManager.ExtractZip(zipFilePath, siteContentDirectoryPath);
 
             var taxis = await _databaseManager.ContentRepository.GetMaxTaxisAsync(_site, channel, false);
 
@@ -243,7 +242,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, siteContentDirectoryPath);
+            _pathManager.ExtractZip(zipFilePath, siteContentDirectoryPath);
 
             var taxis = await _databaseManager.ContentRepository.GetMaxTaxisAsync(_site, channel, false);
 
@@ -253,7 +252,7 @@ namespace SSCMS.Core.Utils.Serialization
         public async Task ImportContentsByCsvFileAsync(int channelId, string csvFilePath, bool isOverride, int importStart, int importCount, bool isChecked, int checkedLevel)
         {
             var channelInfo = await _databaseManager.ChannelRepository.GetAsync(channelId);
-            var excelObject = new ExcelObject(_databaseManager, _pluginManager, _pathManager);
+            var excelObject = new ExcelObject(_databaseManager, _pathManager);
             var contentInfoList = await excelObject.GetContentsByCsvFileAsync(csvFilePath, _site, channelInfo);
             contentInfoList.Reverse();
 
@@ -320,7 +319,7 @@ namespace SSCMS.Core.Utils.Serialization
 
         public async Task<List<int>> ImportContentsByCsvFileAsync(Channel channel, string csvFilePath, bool isOverride, bool isChecked, int checkedLevel, int adminId, int userId, int sourceId)
         {
-            var excelObject = new ExcelObject(_databaseManager, _pluginManager, _pathManager);
+            var excelObject = new ExcelObject(_databaseManager, _pathManager);
             var contentInfoList = await excelObject.GetContentsByCsvFileAsync(csvFilePath, _site, channel);
             contentInfoList.Reverse();
 
@@ -367,7 +366,7 @@ namespace SSCMS.Core.Utils.Serialization
             DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(directoryPath);
 
-            ZipUtils.ExtractZip(zipFilePath, directoryPath);
+            _pathManager.ExtractZip(zipFilePath, directoryPath);
 
             var channelInfo = await _databaseManager.ChannelRepository.GetAsync(channelId);
 

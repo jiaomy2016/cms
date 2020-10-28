@@ -18,11 +18,13 @@ namespace SSCMS.Core.Repositories
     public partial class UserRepository : IUserRepository
     {
         private readonly Repository<User> _repository;
+        private readonly ICacheManager<bool> _cacheManager;
         private readonly IConfigRepository _configRepository;
 
-        public UserRepository(ISettingsManager settingsManager, IConfigRepository configRepository)
+        public UserRepository(ISettingsManager settingsManager, ICacheManager<bool> cacheManager, IConfigRepository configRepository)
         {
             _repository = new Repository<User>(settingsManager.Database, settingsManager.Redis);
+            _cacheManager = cacheManager;
             _configRepository = configRepository;
         }
 
@@ -34,7 +36,7 @@ namespace SSCMS.Core.Repositories
         private async Task<(bool success, string errorMessage)> InsertValidateAsync(string userName, string email, string mobile, string password, string ipAddress)
         {
             var config = await _configRepository.GetAsync();
-            if (!await IsIpAddressCachedAsync(ipAddress))
+            if (await IsIpAddressCachedAsync(ipAddress))
             {
                 return (false, $"同一IP在{config.UserRegistrationMinMinutes}分钟内只能注册一次");
             }

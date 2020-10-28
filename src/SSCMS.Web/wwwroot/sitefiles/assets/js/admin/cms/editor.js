@@ -10,9 +10,10 @@ var data = utils.init({
   isSettings: true,
   sideType: 'first',
   collapseSettings: ['checkedLevel', 'addDate'],
-  collapseMore: ['translations'],
+  collapseMore: ['translates'],
 
   site: null,
+  siteUrl: null,
   channel: null,
   groupNames: null,
   tagNames: null,
@@ -22,28 +23,41 @@ var data = utils.init({
   styles: null,
   form: null,
 
-  translations: [],
+  translates: [],
   isPreviewSaving: false
 });
 
 var methods = {
-  getEditorAttributeName: function() {
-    for (var i = 0; i < this.styles.length; i++) {
-      var style = this.styles[i];
-      if (style.inputType === 'TextEditor') {
-        return style.attributeName;
-      }
-    }
-    return null;
+  runFormLayerImageUploadText: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
   },
 
-  insertEditor: function(attributeName, html)
-  {
-    if (!attributeName) attributeName = 'Body';
-    if (html)
-    {
-      UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
-    }
+  runFormLayerImageUploadEditor: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
+  },
+
+  runMaterialLayerImageSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerFileUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerFileSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerVideoUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerVideoSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runEditorLayerImage: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
   },
 
   insertText: function(attributeName, no, text) {
@@ -55,12 +69,20 @@ var methods = {
     this.form = _.assign({}, this.form);
   },
 
-  addTranslation: function(transSiteId, transChannelId, transType, name) {
-    this.translations.push({
-      transSiteId: transSiteId,
-      transChannelId: transChannelId,
-      transType: transType,
-      name: name
+  insertEditor: function(attributeName, html) {
+    if (!attributeName) attributeName = 'Body';
+    if (!html) return;
+    UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
+  },
+
+  addTranslation: function(targetSiteId, targetChannelId, translateType, summary) {
+    this.translates.push({
+      siteId: this.siteId,
+      channelId: this.channelId,
+      targetSiteId: targetSiteId,
+      targetChannelId: targetChannelId,
+      translateType: translateType,
+      summary: summary
     });
   },
 
@@ -72,7 +94,9 @@ var methods = {
   apiGet: function() {
     var $this = this;
 
-    window.onresize = $this.winResize;
+    window.onresize = function() {
+      $this.mainHeight = ($(window).height() - 70) + 'px';
+    };
     window.onresize();
 
     $api.get($url, {
@@ -85,7 +109,63 @@ var methods = {
     .then(function(response) {
       var res = response.data;
 
-      $this.loadEditor(res);
+      $this.site = res.site;
+      $this.siteUrl = res.siteUrl;
+      $this.channel = res.channel;
+      $this.groupNames = res.groupNames;
+      $this.tagNames = res.tagNames;
+      $this.checkedLevels = res.checkedLevels;
+      
+      $this.siteOptions = res.siteOptions;
+      $this.channelOptions = res.channelOptions;
+
+      $this.styles = res.styles;
+      $this.form = _.assign({}, res.content);
+      if ($this.form.checked) {
+        $this.form.checkedLevel = $this.site.checkContentLevel;
+      }
+      if ($this.form.top || $this.form.recommend || $this.form.hot || $this.form.color) {
+        $this.collapseSettings.push('attributes');
+      }
+      if ($this.form.groupNames && $this.form.groupNames.length > 0) {
+        $this.collapseSettings.push('groupNames');
+      } else {
+        $this.form.groupNames = [];
+      }
+      if ($this.form.tagNames && $this.form.tagNames.length > 0) {
+        $this.collapseSettings.push('tagNames');
+      } else {
+        $this.form.tagNames = [];
+      }
+      if ($this.form.linkUrl) {
+        $this.collapseSettings.push('linkUrl');
+      }
+
+      for (var i = 0; i < $this.styles.length; i++) {
+        var style = $this.styles[i];
+        if (style.inputType !== 'Image' && style.inputType !== 'File' && style.inputType !== 'Video') continue;
+        
+        $this.form[utils.getCountName(style.attributeName)] = utils.toInt($this.form[utils.getCountName(style.attributeName)]);
+      }
+
+      setTimeout(function () {
+        for (var i = 0; i < $this.styles.length; i++) {
+          var style = $this.styles[i];
+          if (style.inputType === 'TextEditor') {
+            var editor = UE.getEditor(style.attributeName, {
+              allowDivTransToP: false,
+              maximumWords: 99999999
+            });
+            editor.styleIndex = i;
+            editor.ready(function () {
+              editor.addListener("contentChange", function () {
+                var style = $this.styles[this.styleIndex];
+                $this.form[_.lowerFirst(style.attributeName)] = this.getContent();
+              });
+            });
+          }
+        }
+      }, 100);
     })
     .catch(function(error) {
       utils.error(error);
@@ -104,7 +184,7 @@ var methods = {
       channelId: this.channelId,
       contentId: this.contentId,
       content: this.form,
-      translations: this.translations
+      translates: this.translates
     }).then(function(response) {
       var res = response.data;
 
@@ -150,7 +230,7 @@ var methods = {
       channelId: this.channelId,
       contentId: this.contentId,
       content: this.form,
-      translations: this.translations
+      translates: this.translates
     }).then(function(response) {
       var res = response.data;
 
@@ -177,95 +257,18 @@ var methods = {
     utils.openTab(this.tabName);
   },
 
-  loadEditor: function(res) {
-    this.site = res.site;
-    this.channel = res.channel;
-    this.groupNames = res.groupNames;
-    this.tagNames = res.tagNames;
-    this.checkedLevels = res.checkedLevels;
-    
-    this.siteOptions = res.siteOptions;
-    this.channelOptions = res.channelOptions;
-    // this.styles = [];
-    // this.content = res.content;
-    // for (let i = 0; i < res.styles.length; i++) {
-    //   var style = res.styles[i];
-    //   if (this.contentId) {
-    //     style.value = this.content[_.camelCase(style.attributeName)];
-    //   } else {
-    //     style.value = style.defaultValue || '';
-    //   }
-    //   this.styles.push(style);
-    // }
-
-    this.styles = res.styles;
-    this.form = _.assign({}, res.content);
-    if (this.form.checked) {
-      this.form.checkedLevel = this.site.checkContentLevel;
-    }
-    if (this.form.top || this.form.recommend || this.form.hot || this.form.color) {
-      this.collapseSettings.push('attributes');
-    }
-    if (this.form.groupNames && this.form.groupNames.length > 0) {
-      this.collapseSettings.push('groupNames');
-    } else {
-      this.form.groupNames = [];
-    }
-    if (this.form.tagNames && this.form.tagNames.length > 0) {
-      this.collapseSettings.push('tagNames');
-    } else {
-      this.form.tagNames = [];
-    }
-    if (this.form.linkUrl) {
-      this.collapseSettings.push('linkUrl');
-    }
-
-    for (var i = 0; i < this.styles.length; i++) {
-      var style = this.styles[i];
-      if (style.inputType !== 'Image' && style.inputType !== 'File' && style.inputType !== 'Video') continue;
-      
-      var count = this.form[utils.getCountName(style.attributeName)];
-      if (!count){
-        this.form[utils.getCountName(style.attributeName)] = 0;
-      }
-    }
-
-    var $this = this;
-    setTimeout(function () {
-      for (var i = 0; i < $this.styles.length; i++) {
-        var style = $this.styles[i];
-        if (style.inputType === 'TextEditor') {
-          var editor = UE.getEditor(style.attributeName, {
-            allowDivTransToP: false,
-            maximumWords: 99999999
-          });
-          editor.styleIndex = i;
-          editor.ready(function () {
-            editor.addListener("contentChange", function () {
-              var style = $this.styles[this.styleIndex];
-              $this.form[_.lowerFirst(style.attributeName)] = this.getContent();
-            });
-          });
-        }
-      }
-    }, 100);
-  },
-
-  winResize: function () {
-    this.mainHeight = ($(window).height() - 52) + 'px';
-  },
-
   btnLayerClick: function(options) {
     var query = {
       siteId: this.siteId,
-      channelId: this.channelId
+      channelId: this.channelId,
+      editorAttributeName: 'Body'
     };
 
-    if (options.attributeName) {
-      query.attributeName = options.attributeName;
-    }
     if (options.contentId) {
       query.contentId = options.contentId;
+    }
+    if (options.attributeName) {
+      query.attributeName = options.attributeName;
     }
     if (options.no) {
       query.no = options.no;
@@ -283,9 +286,9 @@ var methods = {
     utils.openLayer(args);
   },
 
-  handleTranslationClose: function(name) {
-    this.translations = _.remove(this.translations, function(n) {
-      return name !== n.name;
+  handleTranslationClose: function(summary) {
+    this.translates = _.remove(this.translates, function(n) {
+      return summary !== n.summary;
     });
   },
 
@@ -331,6 +334,10 @@ var methods = {
     });
   },
 
+  btnCloseClick: function() {
+    utils.removeTab();
+  },
+
   btnGroupAddClick: function() {
     utils.openLayer({
       title: '新增内容组',
@@ -366,11 +373,12 @@ var methods = {
     this.form = _.assign({}, this.form);
   },
 
-  btnExtendPreviewClick: function(style, no) {
-    var count = this.form[utils.getCountName(style.attributeName)];
+  btnExtendPreviewClick: function(attributeName, no) {
+    var count = this.form[utils.getCountName(attributeName)];
     var data = [];
     for (var i = 0; i <= count; i++) {
-      var imageUrl = this.form[utils.getExtendName(style.attributeName, i)];
+      var imageUrl = this.form[utils.getExtendName(attributeName, i)];
+      imageUrl = utils.getUrl(this.siteUrl, imageUrl);
       data.push({
         "src": imageUrl
       });

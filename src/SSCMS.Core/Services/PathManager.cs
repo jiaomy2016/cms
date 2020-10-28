@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using CacheManager.Core;
 using Microsoft.AspNetCore.Http;
+using SSCMS.Configuration;
 using SSCMS.Models;
 using SSCMS.Repositories;
 using SSCMS.Services;
@@ -12,7 +12,7 @@ namespace SSCMS.Core.Services
 {
     public partial class PathManager : IPathManager
     {
-        private readonly ICacheManager<object> _cacheManager;
+        private readonly ICacheManager<string> _cacheManager;
         private readonly ISettingsManager _settingsManager;
         private readonly IDatabaseManager _databaseManager;
         private readonly ISpecialRepository _specialRepository;
@@ -23,7 +23,7 @@ namespace SSCMS.Core.Services
         private readonly IContentRepository _contentRepository;
         private readonly ITableStyleRepository _tableStyleRepository;
 
-        public PathManager(ICacheManager<object> cacheManager, ISettingsManager settingsManager, IDatabaseManager databaseManager, ISpecialRepository specialRepository, ITemplateLogRepository templateLogRepository, ITemplateRepository templateRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, ITableStyleRepository tableStyleRepository)
+        public PathManager(ICacheManager<string> cacheManager, ISettingsManager settingsManager, IDatabaseManager databaseManager, ISpecialRepository specialRepository, ITemplateLogRepository templateLogRepository, ITemplateRepository templateRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, ITableStyleRepository tableStyleRepository)
         {
             _cacheManager = cacheManager;
             _settingsManager = settingsManager;

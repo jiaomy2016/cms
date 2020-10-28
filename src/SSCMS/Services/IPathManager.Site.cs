@@ -22,9 +22,7 @@ namespace SSCMS.Services
 
         string GetPreviewChannelUrl(int siteId, int channelId);
 
-        string GetPreviewContentUrl(int siteId, int channelId, int contentId);
-
-        string GetPreviewContentUrl(int siteId, int channelId, int contentId, int previewId);
+        string GetPreviewContentUrl(int siteId, int channelId, int contentId, bool isPreview = false);
 
         string GetPreviewFileUrl(int siteId, int fileTemplateId);
 
@@ -129,6 +127,10 @@ namespace SSCMS.Services
 
         bool IsVideoSizeAllowed(Site site, int contentLength);
 
+        bool IsAudioExtensionAllowed(Site site, string fileExtension);
+
+        bool IsAudioSizeAllowed(Site site, int contentLength);
+
         bool IsFileExtensionAllowed(Site site, string fileExtention);
 
         bool IsFileSizeAllowed(Site site, int contentLength);
@@ -140,8 +142,6 @@ namespace SSCMS.Services
         string GetBinDirectoryPath(string relatedPath);
 
         string PhysicalSiteFilesPath { get; }
-
-        string GetLibraryFilePath(string virtualUrl);
 
         Task DeleteSiteFilesAsync(Site site);
 

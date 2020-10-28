@@ -19,7 +19,7 @@ namespace SSCMS.Models
         public string ContentModelPluginId { get; set; }
 
         [DataColumn]
-        public List<string> ContentRelatedPluginIds { get; set; }
+        public string TableName { get; set; }
 
         [DataColumn]
         public int ParentId { get; set; }
@@ -85,19 +85,6 @@ namespace SSCMS.Models
         public string CreateChannelIdsIfContentChanged { get; set; }
 
         public string ListColumns { get; set; }
-
-        public TransType TransType { get; set; }
-
-        public int TransSiteId { get; set; }
-
-        public string TransChannelIds { get; set; }
-
-        public string TransChannelNames { get; set; }
-
-        public bool TransIsAutomatic { get; set; }
-
-        //跨站转发操作类型：复制 引用地址 引用内容
-        public TranslateContentType TransDoneType { get; set; }
 
         public bool IsPreviewContentsExists { get; set; }
 

@@ -2,6 +2,7 @@
 
 var data = utils.init({
   siteId: utils.getQueryInt("siteId"),
+  siteUrl: null,
   pageType: null,
   form: null,
   styles: null,
@@ -9,21 +10,51 @@ var data = utils.init({
 });
 
 var methods = {
-  insertEditor: function(attributeName, html)
-  {
-    if (html)
-    {
-      UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
-    }
+  runFormLayerImageUploadText: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerImageUploadEditor: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
+  },
+
+  runMaterialLayerImageSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerFileUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerFileSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerVideoUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerVideoSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runEditorLayerImage: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
   },
 
   insertText: function(attributeName, no, text) {
     var count = this.form[utils.getCountName(attributeName)];
-    if (count < no) {
+    if (count && count < no) {
       this.form[utils.getCountName(attributeName)] = no;
     }
     this.form[utils.getExtendName(attributeName, no)] = text;
     this.form = _.assign({}, this.form);
+  },
+
+  insertEditor: function(attributeName, html) {
+    if (!attributeName) attributeName = 'Body';
+    if (!html) return;
+    UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
   },
   
   apiGet: function () {
@@ -36,6 +67,10 @@ var methods = {
       }
     }).then(function (response) {
       var res = response.data;
+
+      $this.siteUrl = res.siteUrl;
+      $this.styles = res.styles;
+      $this.form = res.entity;
 
       $this.loadEditor(res);
     }).catch(function (error) {
@@ -53,25 +88,8 @@ var methods = {
   },
 
   loadEditor: function(res) {
-    // var values = {
-    //   siteName: res.siteName,
-    //   pageSize: res.pageSize,
-    //   isCreateDoubleClick: res.isCreateDoubleClick,
-    // };
-    // this.styles = res.styles;
-    // for(var i = 0; i < res.styles.length; i++) {
-    //   var style = res.styles[i];
-    //   values[style.attributeName] = res[style.attributeName];
-    //   if (style.inputType === 'Image' || style.inputType === 'Video' || style.inputType === 'File') {
-    //     var count = utils.toInt(res[style.attributeName + 'Count']);
-        
-    //   }
-    // }
-    
-    this.styles = res.styles;
-    this.form = _.assign({}, res.site);
-
     var $this = this;
+
     setTimeout(function () {
       for (var i = 0; i < $this.styles.length; i++) {
         var style = $this.styles[i];
@@ -88,7 +106,6 @@ var methods = {
           });
         }
       }
-
     }, 100);
   },
 
@@ -96,12 +113,33 @@ var methods = {
     var no = this.form[utils.getCountName(style.attributeName)] + 1;
     this.form[utils.getCountName(style.attributeName)] = no;
     this.form[utils.getExtendName(style.attributeName, no)] = '';
+    this.form = _.assign({}, this.form);
   },
 
   btnExtendRemoveClick: function(style) {
-    var no = this.form[utils.getCountName(style.attributeName)] - 1;
-    this.form[utils.getCountName(style.attributeName)] = no;
+    var no = this.form[utils.getCountName(style.attributeName)];
+    this.form[utils.getCountName(style.attributeName)] = no - 1;
     this.form[utils.getExtendName(style.attributeName, no)] = '';
+    this.form = _.assign({}, this.form);
+  },
+
+  btnExtendPreviewClick: function(attributeName, no) {
+    var count = this.form[utils.getCountName(attributeName)];
+    var data = [];
+    for (var i = 0; i <= count; i++) {
+      var imageUrl = this.form[utils.getExtendName(attributeName, i)];
+      imageUrl = utils.getUrl(this.siteUrl, imageUrl);
+      data.push({
+        "src": imageUrl
+      });
+    }
+    layer.photos({
+      photos: {
+        "start": no,
+        "data": data
+      }
+      ,anim: 5
+    });
   },
 
   btnLayerClick: function(options) {
@@ -122,11 +160,6 @@ var methods = {
       args.height = options.height ? options.height : 500;
     }
     utils.openLayer(args);
-  },
-
-  btnPreviewClick: function(attributeName, n) {
-    var imageUrl = n ? this.form[utils.getExtendName(attributeName, n)] : this.form[attributeName];
-    window.open(imageUrl);
   },
 
   apiSubmit: function () {

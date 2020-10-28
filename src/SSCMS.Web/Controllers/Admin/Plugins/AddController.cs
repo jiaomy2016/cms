@@ -1,15 +1,14 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using SSCMS.Configuration;
 using SSCMS.Services;
-using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Plugins
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class AddController : ControllerBase
     {
@@ -26,22 +25,10 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
             _pluginManager = pluginManager;
         }
 
-        [HttpGet, Route(Route)]
-        public async Task<ActionResult<GetResult>> Get()
+        public class GetResult
         {
-            if (!await _authManager.HasAppPermissionsAsync(AuthTypes.AppPermissions.PluginsAdd))
-            {
-                return Unauthorized();
-            }
-
-            var packageIds = _pluginManager.Plugins.Select(x => x.PluginId);
-
-            return new GetResult
-            {
-                IsNightly = _settingsManager.IsNightlyUpdate,
-                Version = _settingsManager.Version,
-                PackageIds = packageIds
-            };
+            public string Version { get; set; }
+            public IEnumerable<string> PackageIds { get; set; }
         }
     }
 }

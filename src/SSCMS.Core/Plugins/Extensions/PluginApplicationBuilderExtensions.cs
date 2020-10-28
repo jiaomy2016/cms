@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Datory;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using SSCMS.Configuration;
 using SSCMS.Models;
 using SSCMS.Plugins;
+using SSCMS.Repositories;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -17,7 +19,7 @@ namespace SSCMS.Core.Plugins.Extensions
     public static class PluginApplicationBuilderExtensions
     {
         public static async Task UsePluginsAsync(this IApplicationBuilder app, ISettingsManager settingsManager,
-            IPluginManager pluginManager)
+            IPluginManager pluginManager, IErrorLogRepository errorLogRepository)
         {
             var logger = app.ApplicationServices.GetService<ILoggerFactory>()
                 .CreateLogger<IApplicationBuilder>();
@@ -47,26 +49,17 @@ namespace SSCMS.Core.Plugins.Extensions
                 }
             }
 
-            var middlewares = pluginManager.GetExtensions<IPluginMiddleware>();
-            if (middlewares != null)
-            {
-                foreach (var middleware in middlewares)
-                {
-                    app.Use(next => async context => await middleware.UseAsync(next, context));
-                }
-            }
-
             var database = settingsManager.Database;
 
-            var tables = pluginManager.GetTables();
+            var tables = settingsManager.GetTables();
             foreach (var table in tables.Where(table => !string.IsNullOrEmpty(table.Id)))
             {
                 List<TableColumn> columns;
-                if (table.Type == TableType.Custom)
+                if (StringUtils.EqualsIgnoreCase(table.Type, Types.TableTypes.Custom))
                 {
                     columns = table.Columns;
                 }
-                else if (table.Type == TableType.Content)
+                else if (StringUtils.EqualsIgnoreCase(table.Type, Types.TableTypes.Content))
                 {
                     columns = database.GetTableColumns(null);
                     columns.AddRange(database.GetTableColumns<Content>());

@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using CacheManager.Core;
 using Datory;
 using SSCMS.Core.Utils;
 using SSCMS.Models;
@@ -108,27 +106,23 @@ namespace SSCMS.Core.Repositories
             return $"{nameof(UserRepository)}:{ipAddress}";
         }
 
-        public async Task<bool> IsIpAddressCachedAsync(string ipAddress)
+        private async Task<bool> IsIpAddressCachedAsync(string ipAddress)
         {
             var config = await _configRepository.GetAsync();
             if (config.UserRegistrationMinMinutes == 0 || string.IsNullOrEmpty(ipAddress))
             {
-                return true;
+                return false;
             }
 
-            var cacheManager = await _repository.GetCacheManagerAsync();
-            return cacheManager.Exists(GetIpAddressCacheKey(ipAddress));
+            return _cacheManager.Exists(GetIpAddressCacheKey(ipAddress));
         }
 
-        public async Task CacheIpAddressAsync(string ipAddress)
+        private async Task CacheIpAddressAsync(string ipAddress)
         {
             var config = await _configRepository.GetAsync();
             if (config.UserRegistrationMinMinutes > 0 && !string.IsNullOrEmpty(ipAddress))
             {
-                var cacheManager = await _repository.GetCacheManagerAsync();
-                var value = new CacheItem<object>(GetIpAddressCacheKey(ipAddress), true, ExpirationMode.Sliding, TimeSpan.FromMinutes(config.UserRegistrationMinMinutes));
-
-                cacheManager.AddOrUpdate(value, _ => value);
+                _cacheManager.AddOrUpdateAbsolute(GetIpAddressCacheKey(ipAddress), true, config.UserRegistrationMinMinutes);
             }
         }
 

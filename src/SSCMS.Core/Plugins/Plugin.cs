@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
+using SSCMS.Configuration;
 using SSCMS.Plugins;
 using SSCMS.Utils;
 
@@ -25,10 +26,8 @@ namespace SSCMS.Core.Plugins
             Configuration = builder.Build();
         }
 
-        public (bool, string) LoadAssembly()
+        public string GetAssemblyPath()
         {
-            if (string.IsNullOrEmpty(Main)) return (true, string.Empty);
-
             string assemblyPath;
             if (FileUtils.IsFileExists(PathUtils.Combine(ContentRootPath, Output, Main)))
             {
@@ -42,6 +41,15 @@ namespace SSCMS.Core.Plugins
             {
                 assemblyPath = Directory.GetFiles(ContentRootPath, Main, SearchOption.AllDirectories).FirstOrDefault();
             }
+
+            return assemblyPath;
+        }
+
+        public (bool, string) LoadAssembly()
+        {
+            if (string.IsNullOrEmpty(Main)) return (true, string.Empty);
+
+            var assemblyPath = GetAssemblyPath();
 
             if (string.IsNullOrEmpty(assemblyPath)) return (false, $"{Main}可执行文件不存在");
 
@@ -83,11 +91,56 @@ namespace SSCMS.Core.Plugins
         public string Homepage => Configuration[nameof(Homepage)];
         public string Output => Configuration[nameof(Output)];
         public string Main => Configuration[nameof(Main)];
+        public bool ApplyToSites => Configuration.GetValue(nameof(ApplyToSites), true);
+        public bool ApplyToChannels => Configuration.GetValue(nameof(ApplyToChannels), false);
 
         public bool Disabled => Configuration.GetValue<bool>(nameof(Disabled));
+        public bool AllSites => Configuration.GetValue(nameof(AllSites), true);
+        public IEnumerable<int> SiteIds => Configuration.GetSection(nameof(SiteIds)).Get<int[]>();
+        public IEnumerable<SiteConfig> SiteConfigs => Configuration.GetSection(nameof(SiteConfigs)).Get<SiteConfig[]>();
+        public IEnumerable<Table> Tables => Configuration.GetSection(nameof(Tables)).Get<Table[]>();
+
         public bool Success { get; set; }
         public string ErrorMessage { get; set; }
 
         public int Taxis => Configuration.GetValue<int>(nameof(Taxis));
+
+        public List<Menu> GetMenus()
+        {
+            var section = Configuration.GetSection("extensions:menus");
+            return GetMenus(section);
+        }
+
+        private List<Menu> GetMenus(IConfigurationSection section)
+        {
+            var menus = new List<Menu>();
+            if (section.Exists())
+            {
+                var children = section.GetChildren();
+                if (children != null)
+                {
+                    foreach (var child in children)
+                    {
+                        var menu = child.Get<Menu>();
+                        var childSection = child.GetSection("menus");
+
+                        menus.Add(new Menu
+                        {
+                            Id = child.Key,
+                            Text = menu.Text,
+                            Type = menu.Type,
+                            IconClass = menu.IconClass,
+                            Link = menu.Link,
+                            Target = menu.Target,
+                            Permissions = menu.Permissions,
+                            Order = menu.Order,
+                            Children = GetMenus(childSection)
+                        });
+                    }
+                }
+            }
+
+            return menus.OrderByDescending(x => x.Order.HasValue).ThenBy(x => x.Order).ToList();
+        }
     }
 }

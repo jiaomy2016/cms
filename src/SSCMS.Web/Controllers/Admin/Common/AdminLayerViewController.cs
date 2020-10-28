@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using SSCMS.Configuration;
 using SSCMS.Core.Services;
 using SSCMS.Models;
 using SSCMS.Repositories;
@@ -13,7 +14,7 @@ using SSCMS.Utils;
 namespace SSCMS.Web.Controllers.Admin.Common
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class AdminLayerViewController : ControllerBase
     {
@@ -21,16 +22,14 @@ namespace SSCMS.Web.Controllers.Admin.Common
 
         private readonly IHttpContextAccessor _context;
         private readonly ISettingsManager _settingsManager;
-        private readonly IPluginManager _pluginManager;
         private readonly IDatabaseManager _databaseManager;
         private readonly IAdministratorRepository _administratorRepository;
         private readonly ISiteRepository _siteRepository;
 
-        public AdminLayerViewController(IHttpContextAccessor context, ISettingsManager settingsManager, IPluginManager pluginManager, IDatabaseManager databaseManager, IAdministratorRepository administratorRepository, ISiteRepository siteRepository)
+        public AdminLayerViewController(IHttpContextAccessor context, ISettingsManager settingsManager, IDatabaseManager databaseManager, IAdministratorRepository administratorRepository, ISiteRepository siteRepository)
         {
             _context = context;
             _settingsManager = settingsManager;
-            _pluginManager = pluginManager;
             _databaseManager = databaseManager;
             _administratorRepository = administratorRepository;
             _siteRepository = siteRepository;
@@ -51,7 +50,7 @@ namespace SSCMS.Web.Controllers.Admin.Common
 
             if (admin == null) return NotFound();
 
-            var permissions = new AuthManager(_context, _settingsManager, _pluginManager, _databaseManager);
+            var permissions = new AuthManager(_context, _settingsManager, _databaseManager);
             permissions.Init(admin);
             var level = await permissions.GetAdminLevelAsync();
             var isSuperAdmin = await permissions.IsSuperAdminAsync();

@@ -4,16 +4,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using SSCMS.Configuration;
 using SSCMS.Core.Services;
 using SSCMS.Models;
 using SSCMS.Repositories;
 using SSCMS.Services;
-using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Administrators
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class AdministratorsLayerViewController : ControllerBase
     {
@@ -21,17 +21,15 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Administrators
 
         private readonly IHttpContextAccessor _context;
         private readonly ISettingsManager _settingsManager;
-        private readonly IPluginManager _pluginManager;
         private readonly IAuthManager _authManager;
         private readonly IDatabaseManager _databaseManager;
         private readonly IAdministratorRepository _administratorRepository;
         private readonly ISiteRepository _siteRepository;
 
-        public AdministratorsLayerViewController(IHttpContextAccessor context, ISettingsManager settingsManager, IPluginManager pluginManager, IAuthManager authManager, IDatabaseManager databaseManager, IAdministratorRepository administratorRepository, ISiteRepository siteRepository)
+        public AdministratorsLayerViewController(IHttpContextAccessor context, ISettingsManager settingsManager, IAuthManager authManager, IDatabaseManager databaseManager, IAdministratorRepository administratorRepository, ISiteRepository siteRepository)
         {
             _context = context;
             _settingsManager = settingsManager;
-            _pluginManager = pluginManager;
             _authManager = authManager;
             _databaseManager = databaseManager;
             _administratorRepository = administratorRepository;
@@ -58,12 +56,12 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Administrators
 
             var adminId = _authManager.AdminId;
             if (adminId != admin.Id &&
-                !await _authManager.HasAppPermissionsAsync(AuthTypes.AppPermissions.SettingsAdministrators))
+                !await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsAdministrators))
             {
                 return Unauthorized();
             }
 
-            var permissions = new AuthManager(_context, _settingsManager, _pluginManager, _databaseManager);
+            var permissions = new AuthManager(_context, _settingsManager, _databaseManager);
             permissions.Init(admin);
             var level = await permissions.GetAdminLevelAsync();
             var isSuperAdmin = await permissions.IsSuperAdminAsync();

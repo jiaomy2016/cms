@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
+using SSCMS.Configuration;
 using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Parse;
@@ -216,7 +217,7 @@ namespace SSCMS.Core.Utils
                         TranslateUtils.AddAttributesIfNotExists(imageAttributes, attributes);
                         imageAttributes["src"] = imageUrl;
 
-                        retVal = $@"<img {TranslateUtils.ToAttributesString(attributes)}>";
+                        retVal = $@"<img {TranslateUtils.ToAttributesString(imageAttributes)}>";
                     }
                     else
                     {

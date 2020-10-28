@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Threading.Tasks;
 using Datory;
+using SSCMS.Configuration;
 using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
@@ -216,7 +217,7 @@ namespace SSCMS.Core.StlParser.StlElement
 
             if (isOriginal)
             {
-                if (content.ReferenceId > 0 && content.SourceId > 0 && TranslateContentType.Reference.GetValue() == content.Get<string>(ColumnsManager.TranslateContentType))
+                if (content.ReferenceId > 0 && content.SourceId > 0 && TranslateType.Reference.GetValue() == content.Get<string>(ColumnsManager.TranslateContentType))
                 {
                     var targetChannelId = content.SourceId;
                     //var targetSiteId = databaseManager.ChannelRepository.GetSiteId(targetChannelId);

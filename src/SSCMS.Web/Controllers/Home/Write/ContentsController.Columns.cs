@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using SSCMS.Configuration;
 using SSCMS.Dto;
 
 namespace SSCMS.Web.Controllers.Home.Write
@@ -11,7 +11,7 @@ namespace SSCMS.Web.Controllers.Home.Write
         public async Task<ActionResult<BoolResult>> Columns([FromBody] ColumnsRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    AuthTypes.SitePermissions.Contents))
+                    Types.SitePermissions.Contents))
             {
                 return Unauthorized();
             }
@@ -27,11 +27,6 @@ namespace SSCMS.Web.Controllers.Home.Write
             {
                 Value = true
             };
-        }
-
-        public class ColumnsRequest : SiteRequest
-        {
-            public List<string> AttributeNames { get; set; }
         }
     }
 }

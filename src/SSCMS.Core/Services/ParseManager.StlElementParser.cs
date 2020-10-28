@@ -56,7 +56,7 @@ namespace SSCMS.Core.Services
             {StringUtils.ToLower(StlIf.ElementName), StlIf.ParseAsync},
             {StringUtils.ToLower(StlImage.ElementName), StlImage.ParseAsync},
             {StringUtils.ToLower(StlInclude.ElementName), StlInclude.ParseAsync},
-            {StringUtils.ToLower(StlLibrary.ElementName), StlLibrary.ParseAsync},
+            {StringUtils.ToLower(StlMaterial.ElementName), StlMaterial.ParseAsync},
             {StringUtils.ToLower(StlLocation.ElementName), StlLocation.ParseAsync},
             {StringUtils.ToLower(StlMarquee.ElementName), StlMarquee.ParseAsync},
             {StringUtils.ToLower(StlNavigation.ElementName), StlNavigation.ParseAsync},
@@ -70,6 +70,7 @@ namespace SSCMS.Core.Services
             {StringUtils.ToLower(StlSqlContent.ElementName), StlSqlContent.ParseAsync},
             {StringUtils.ToLower(StlSqlContents.ElementName), StlSqlContents.ParseAsync},
             {StringUtils.ToLower(StlTabs.ElementName), StlTabs.ParseAsync},
+            {StringUtils.ToLower(StlTags.ElementName), StlTags.ParseAsync},
             {StringUtils.ToLower(StlValue.ElementName), StlValue.ParseAsync},
             {StringUtils.ToLower(StlVideo.ElementName), StlVideo.ParseAsync},
             {StringUtils.ToLower(StlZoom.ElementName), StlZoom.ParseAsync}

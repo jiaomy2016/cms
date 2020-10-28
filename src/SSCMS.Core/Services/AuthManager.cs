@@ -12,19 +12,19 @@ namespace SSCMS.Core.Services
 {
     public partial class AuthManager : IAuthManager
     {
+        private readonly IHttpContextAccessor _context;
         private readonly ClaimsPrincipal _principal;
         private readonly ISettingsManager _settingsManager;
-        private readonly IPluginManager _pluginManager;
         private readonly IDatabaseManager _databaseManager;
         private readonly List<Permission> _permissions;
 
-        public AuthManager(IHttpContextAccessor context, ISettingsManager settingsManager, IPluginManager pluginManager, IDatabaseManager databaseManager)
+        public AuthManager(IHttpContextAccessor context, ISettingsManager settingsManager, IDatabaseManager databaseManager)
         {
+            _context = context;
             _principal = context.HttpContext.User;
             _settingsManager = settingsManager;
-            _pluginManager = pluginManager;
             _databaseManager = databaseManager;
-            _permissions = pluginManager.GetPermissions();
+            _permissions = _settingsManager.GetPermissions();
         }
 
         private Administrator _admin;
@@ -86,7 +86,7 @@ namespace SSCMS.Core.Services
             return _admin;
         }
 
-        public bool IsAdmin => _principal != null && _principal.IsInRole(AuthTypes.Roles.Administrator);
+        public bool IsAdmin => _principal != null && _principal.IsInRole(Types.Roles.Administrator);
 
         public int AdminId => IsAdmin
             ? TranslateUtils.ToInt(_principal.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value)
@@ -94,7 +94,7 @@ namespace SSCMS.Core.Services
 
         public string AdminName => IsAdmin ? _principal.Identity.Name : string.Empty;
 
-        public bool IsUser => _principal != null && _principal.IsInRole(AuthTypes.Roles.User);
+        public bool IsUser => _principal != null && _principal.IsInRole(Types.Roles.User);
 
         public int UserId => IsUser
             ? TranslateUtils.ToInt(_principal.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value)
@@ -102,8 +102,35 @@ namespace SSCMS.Core.Services
 
         public string UserName => IsUser ? _principal.Identity.Name : string.Empty;
 
-        public bool IsApi => _principal != null && _principal.IsInRole(AuthTypes.Roles.Api);
+        //public bool IsApi => _principal != null && _principal.IsInRole(Types.Roles.Api);
 
-        public string ApiToken => IsApi ? _principal.Identity.Name : string.Empty;
+        //public string ApiToken => IsApi ? _principal.Identity.Name : string.Empty;
+
+        public bool IsApi => ApiToken != null;
+
+        public string ApiToken
+        {
+            get
+            {
+                if (_context.HttpContext.Request.Query.TryGetValue("apiKey", out var queries))
+                {
+                    var token = queries.SingleOrDefault();
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        return token;
+                    }
+                }
+                if (_context.HttpContext.Request.Headers.TryGetValue("X-SS-API-KEY", out var headers))
+                {
+                    var token = headers.SingleOrDefault();
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        return token;
+                    }
+                }
+
+                return null;
+            }
+        }
     }
 }

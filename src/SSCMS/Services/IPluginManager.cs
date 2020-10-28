@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using SSCMS.Plugins;
 
 namespace SSCMS.Services
@@ -10,9 +9,11 @@ namespace SSCMS.Services
         List<IPlugin> Plugins { get; }
         List<IPlugin> EnabledPlugins { get; }
         List<IPlugin> NetCorePlugins { get; }
-        IPlugin Current { get; }
+        List<IPlugin> GetPlugins(int siteId);
+        List<IPlugin> GetPlugins(int siteId, int channelId);
+        bool IsEnabled(string pluginId, int siteId);
+        bool IsEnabled(string pluginId, int siteId, int channelId);
         IPlugin GetPlugin(string pluginId);
-        IConfiguration Configuration { get; }
         void Load();
         IEnumerable<T> GetExtensions<T>(bool useCaching = true) where T : IPluginExtension;
         Task<Dictionary<string, object>> GetConfigAsync(string pluginId);

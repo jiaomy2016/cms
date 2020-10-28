@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using SSCMS.Configuration;
 
 namespace SSCMS.Utils
 {
@@ -101,6 +102,11 @@ namespace SSCMS.Utils
                 boolean = defaultValue;
             }
             return boolean;
+        }
+
+        public static int Ceiling(int numerator, int denominator)
+        {
+            return Convert.ToInt32(Math.Ceiling((double) numerator / denominator));
         }
 
         public static DateTime ToDateTime(string dateTimeStr)

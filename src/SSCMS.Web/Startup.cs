@@ -26,6 +26,7 @@ using Senparc.CO2NET;
 using Senparc.CO2NET.RegisterServices;
 using SSCMS.Core.Extensions;
 using SSCMS.Core.Plugins.Extensions;
+using SSCMS.Repositories;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -120,7 +121,7 @@ namespace SSCMS.Web
 
             services.AddRepositories(assemblies);
             services.AddServices();
-            services.AddOpenManager(_config);
+            services.AddWxManager(_config);
 
             services.AddLocalization(options => options.ResourcesPath = "Resources");
             services
@@ -164,7 +165,7 @@ namespace SSCMS.Web
                     {
                         Name = "SS CMS",
                         Email = string.Empty,
-                        Url = "https://www.siteserver.cn"
+                        Url = "https://www.sscms.com"
                     };
                     document.Info.License = new NSwag.OpenApiLicense
                     {
@@ -175,7 +176,7 @@ namespace SSCMS.Web
             });
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ISettingsManager settingsManager, IPluginManager pluginManager, IOptions<SenparcSetting> senparcSetting)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ISettingsManager settingsManager, IPluginManager pluginManager, IErrorLogRepository errorLogRepository, IOptions<SenparcSetting> senparcSetting)
         {
             if (env.IsDevelopment())
             {
@@ -187,12 +188,24 @@ namespace SSCMS.Web
                 var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
                 var exception = exceptionHandlerPathFeature.Error;
 
-                var result = TranslateUtils.JsonSerialize(new
+                string result;
+                if (env.IsDevelopment())
                 {
-                    exception.Message,
-                    exception.StackTrace,
-                    AddDate = DateTime.Now
-                });
+                    result = TranslateUtils.JsonSerialize(new
+                    {
+                        exception.Message,
+                        exception.StackTrace,
+                        AddDate = DateTime.Now
+                    });
+                }
+                else
+                {
+                    result = TranslateUtils.JsonSerialize(new
+                    {
+                        exception.Message,
+                        AddDate = DateTime.Now
+                    });
+                }
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsync(result);
             }));
@@ -243,7 +256,7 @@ namespace SSCMS.Web
             app.UseAuthentication();
             app.UseAuthorization();
 
-            app.UsePluginsAsync(settingsManager, pluginManager).GetAwaiter().GetResult();
+            app.UsePluginsAsync(settingsManager, pluginManager, errorLogRepository).GetAwaiter().GetResult();
 
             app.UseEndpoints(endpoints =>
             {
@@ -257,10 +270,8 @@ namespace SSCMS.Web
             app.UseRequestLocalization();
 
             RegisterService.Start(senparcSetting.Value)
-
-                    //自动扫描自定义扩展缓存（二选一）
-                    .UseSenparcGlobal(true)
-
+                //自动扫描自定义扩展缓存（二选一）
+                .UseSenparcGlobal(true)
                 //指定自定义扩展缓存（二选一）
                 //.UseSenparcGlobal(false, () => GetExCacheStrategies(senparcSetting.Value))   
                 ;
@@ -269,7 +280,7 @@ namespace SSCMS.Web
             app.UseSwaggerUi3();
             app.UseReDoc(settings =>
             {
-                settings.Path = "/docs";
+                settings.Path = "/api/docs";
                 settings.DocumentPath = "/swagger/v1/swagger.json";
             });
         }

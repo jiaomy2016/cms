@@ -3,7 +3,8 @@
 var data = utils.init({
   tableName: utils.getQueryString('tableName'),
   attributeName: utils.getQueryString('attributeName'),
-  relatedIdentities: utils.getQueryIntList('relatedIdentities'),
+  relatedIdentities: utils.getQueryString('relatedIdentities'),
+  excludes: utils.getQueryStringList('excludes'),
   inputTypes: null,
   form: null
 });
@@ -22,7 +23,10 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
-      $this.inputTypes = res.inputTypes;
+      $this.inputTypes = res.inputTypes.filter(function (x) {
+        return $this.excludes.indexOf(x.key) == -1;
+      });
+
       $this.form = res.form;
       if (!$this.form.items || $this.form.items.length === 0) {
         $this.form.items.push({
@@ -49,7 +53,14 @@ var methods = {
       var res = response.data;
 
       utils.closeLayer();
-      parent.$vue.apiList();
+      if ($this.attributeName !== '') {
+        utils.success('字段编辑成功!');
+      } else {
+        utils.success('字段新增成功!');
+      }
+      if (parent.$vue.runTableStyleLayerEditor) {
+        parent.$vue.runTableStyleLayerEditor();
+      }
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {

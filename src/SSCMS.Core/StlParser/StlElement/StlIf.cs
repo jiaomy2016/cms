@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Datory;
+using SSCMS.Configuration;
 using SSCMS.Parse;
 using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
@@ -437,7 +438,7 @@ namespace SSCMS.Core.StlParser.StlElement
                 await parseManager.ParseInnerContentAsync(new StringBuilder(no));
             }
 
-            var dynamicInfo = new DynamicInfo
+            var dynamicInfo = new DynamicInfo(parseManager.SettingsManager)
             {
                 ElementName = ElementName,
                 SiteId = pageInfo.SiteId,

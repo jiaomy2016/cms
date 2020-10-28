@@ -1,11 +1,11 @@
 ﻿var $url = '/plugins/view';
 var $urlActionsDisable = $url + '/actions/disable';
 var $urlActionsDelete = $url + '/actions/delete';
+var $urlActionsRestart = $url + '/actions/restart';
 
 var data = utils.init({
   pluginId: utils.getQueryString('pluginId'),
   activeName: 'overview',
-  isNightly: null,
   version: null,
   localPlugin: null,
   content: null,
@@ -27,13 +27,12 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
-      $this.isNightly = res.isNightly;
       $this.version = res.version;
       $this.localPlugin = res.localPlugin;
       $this.content = res.content;
       $this.changeLog = res.changeLog;
 
-      cloud.getPlugin($this.pluginId, $this.isNightly, $this.version).then(function (response) {
+      cloud.getPlugin($this.pluginId, $this.version).then(function (response) {
         var res = response.data;
 
         $this.cloudPlugin = res.plugin;
@@ -41,10 +40,10 @@ var methods = {
         $this.cloudUser = res.user;
 
         if ($this.localPlugin) {
-          $this.isShouldUpdate = utils.compareVersion($this.localPlugin.version, $this.cloudRelease.version) == -1;
+          $this.isShouldUpdate = cloud.compareVersion($this.localPlugin.version, $this.cloudRelease.version) == -1;
         }
       }).catch(function (error) {
-        utils.error(error);
+        console.log(error);
       }).then(function () {
         utils.loading($this, false);
       });
@@ -64,12 +63,14 @@ var methods = {
       var res = response.data;
 
       var text = plugin.disabled ? '启用' : '禁用';
-      utils.alertSuccess({
-        title: '插件' + text + '成功',
-        text: '插件' + text + '成功，系统需要重载页面',
-        callback: function() {
-          window.top.location.reload(true);
-        }
+      $this.apiRestart(function () {
+        utils.alertSuccess({
+          title: '插件' + text + '成功',
+          text: '插件' + text + '成功，系统需要重新加载',
+          callback: function() {
+            window.top.location.reload(true);
+          }
+        });
       });
     }).catch(function (error) {
       utils.error(error);
@@ -88,24 +89,36 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
-      setTimeout(function () {
+      $this.apiRestart(function () {
         $api.post($urlActionsDelete, {
           pluginId: plugin.pluginId
         }).then(function (response) {
-          utils.alertSuccess({
-            title: '插件卸载成功',
-            text: '插件卸载成功，系统需要重载页面',
-            callback: function() {
-              window.top.location.reload(true);
-            }
+          $this.apiRestart(function () {
+            utils.alertSuccess({
+              title: '插件卸载成功',
+              text: '插件卸载成功，系统需要重载页面',
+              callback: function() {
+                window.top.location.reload(true);
+              }
+            });
           });
         }).catch(function (error) {
           utils.error(error);
         }).then(function () {
           utils.loading($this, false);
         });
-      }, 3000);
+      });
       
+    }).catch(function (error) {
+      utils.error(error);
+    });
+  },
+
+  apiRestart: function (callback) {
+    $api.post($urlActionsRestart).then(function (response) {
+      setTimeout(function () {
+        callback();
+      }, 30000);
     }).catch(function (error) {
       utils.error(error);
     });
@@ -142,7 +155,7 @@ var methods = {
     if (this.localPlugin && this.localPlugin.homepage) {
       return this.localPlugin.homepage;
     }
-    return cloud.getPluginsUrl('/plugin.html?id=' + this.pluginId);
+    return cloud.getPluginsUrl('plugin.html?id=' + this.pluginId);
   },
 
   getIconUrl: function () {

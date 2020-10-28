@@ -5,7 +5,6 @@ var $urlActionsRestart = $url + '/actions/restart';
 
 var data = utils.init({
   pageType: utils.getQueryString("pageType"),
-  isNightly: null,
   version: null,
   allPlugins: null,
   plugins: null,
@@ -37,7 +36,6 @@ var methods = {
         return;
       }
 
-      $this.isNightly = res.isNightly;
       $this.version = res.version;
       $this.allPlugins = res.allPlugins;
 
@@ -56,7 +54,7 @@ var methods = {
 
       var pluginIds = $this.enabledPlugins.map(function(x) { return x.pluginId });
 
-      cloud.getUpdates($this.isNightly, $this.version, pluginIds).then(function (response) {
+      cloud.getUpdates($this.version, pluginIds).then(function (response) {
         var res = response.data;
   
         var plugins = res.plugins;
@@ -72,7 +70,7 @@ var methods = {
             installedPlugin.updatePlugin = releaseInfo;
 
             if (installedPlugin && installedPlugin.version) {
-              if (utils.compareVersion(installedPlugin.version, releaseInfo.version) == -1) {
+              if (cloud.compareVersion(installedPlugin.version, releaseInfo.version) == -1) {
                 $this.updatePlugins.push(installedPlugin);
                 $this.updatePluginIds.push(installedPlugin.pluginId);
               }
@@ -86,23 +84,27 @@ var methods = {
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {
-      $this.btnNavSelect('enabled');
+      $this.btnNavSelect($this.pageType || 'enabled');
       utils.loading($this, false);
     });
   },
 
-  apiRestart: function () {
+  apiRestart: function (callback) {
     utils.loading(this, true);
     $api.post($urlActionsRestart).then(function (response) {
       setTimeout(function() {
-        utils.alertSuccess({
-          title: '插件重新加载成功',
-          text: '插件重新加载成功，系统需要重载页面',
-          callback: function() {
-            window.top.location.reload(true);
-          }
-        });
-      }, 3000);
+        if (callback) {
+          callback();
+        } else {
+          utils.alertSuccess({
+            title: '插件重新加载成功',
+            text: '插件重新加载成功，系统需要重载页面',
+            callback: function() {
+              window.top.location.reload(true);
+            }
+          });
+        }
+      }, 30000);
     }).catch(function (error) {
       utils.error(error);
     });
@@ -120,12 +122,14 @@ var methods = {
       $this.plugins.splice($this.plugins.indexOf(plugin), 1);
 
       var text = plugin.disabled ? '启用' : '禁用';
-      utils.alertSuccess({
-        title: '插件' + text + '成功',
-        text: '插件' + text + '成功，系统需要重载页面',
-        callback: function() {
-          window.top.location.reload(true);
-        }
+      $this.apiRestart(function() {
+        utils.alertSuccess({
+          title: '插件' + text + '成功',
+          text: '插件' + text + '成功，系统需要重载页面',
+          callback: function() {
+            window.top.location.reload(true);
+          }
+        });
       });
     }).catch(function (error) {
       utils.error(error);
@@ -144,54 +148,71 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
-      setTimeout(function () {
+      $this.apiRestart(function () {
         $api.post($urlActionsDelete, {
           pluginId: plugin.pluginId
         }).then(function (response) {
-          utils.alertSuccess({
-            title: '插件卸载成功',
-            text: '插件卸载成功，系统需要重载页面',
-            callback: function() {
-              window.top.location.reload(true);
-            }
+          $this.apiRestart(function () {
+            utils.alertSuccess({
+              title: '插件卸载成功',
+              text: '插件卸载成功，系统需要重载页面',
+              callback: function() {
+                window.top.location.reload(true);
+              }
+            });
           });
         }).catch(function (error) {
           utils.error(error);
         }).then(function () {
           utils.loading($this, false);
         });
-      }, 3000);
+      });
       
     }).catch(function (error) {
       utils.error(error);
     });
   },
 
-  btnDisablePlugin: function (plugin) {
-    var $this = this;
-    var text = plugin.disabled ? '启用' : '禁用';
+  btnMenuClick: function(index) {
+    var ids = index.split(':');
+    var plugin = this.plugins.find(function (x) { return x.pluginId === ids[0]; });
+    if (!plugin) return;
 
-    utils.alertDelete({
-      title: text + '插件',
-      text: '此操作将会' + text + '“' + plugin.displayName + '”，确认吗？',
-      button: plugin.disabled ? '确认启用' : '确认禁用',
-      callback: function () {
-        $this.apiDisable(plugin);
-      }
-    });
-  },
-
-  btnDeletePlugin: function (plugin) {
+    var command = ids[1];
     var $this = this;
 
-    utils.alertDelete({
-      title: '卸载插件',
-      text: '此操作将会卸载插件“' + plugin.displayName + '”，确认吗？',
-      button: '确认卸载',
-      callback: function() {
-        $this.apiDelete(plugin);
-      }
-    });
+    if (command === 'config') {
+      utils.addTab('插件配置：' + plugin.pluginId, utils.getPluginsUrl('config', {pluginId: plugin.pluginId}));
+    } else if (command === 'enable') {
+      utils.alertDelete({
+        title: '启用插件',
+        text: '此操作将会启用“' + plugin.displayName + '”，确认吗？',
+        button: '确认启用',
+        callback: function () {
+          $this.apiDisable(plugin);
+        }
+      });
+    } else if (command === 'disable') {
+      utils.alertDelete({
+        title: '禁用插件',
+        text: '此操作将会禁用“' + plugin.displayName + '”，确认吗？',
+        button: '确认禁用',
+        callback: function () {
+          $this.apiDisable(plugin);
+        }
+      });
+    } else if (command === 'uninstall') {
+      utils.alertDelete({
+        title: '卸载插件',
+        text: '此操作将会卸载插件“' + plugin.displayName + '”，确认吗？',
+        button: '确认卸载',
+        callback: function() {
+          $this.apiDelete(plugin);
+        }
+      });
+    }
+
+    return false;
   },
 
   btnNavSelect: function(key) {

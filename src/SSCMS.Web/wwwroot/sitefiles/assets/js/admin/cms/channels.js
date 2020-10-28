@@ -8,8 +8,6 @@ var data = utils.init({
   groupNames: [],
   channelTemplates: [],
   contentTemplates: [],
-  contentPlugins: [],
-  relatedPlugins: [],
 
   channelIds: [],
 
@@ -21,11 +19,12 @@ var data = utils.init({
   appendForm: null,
 
   editPanel: false,
-  editChannel: null,
+  form: null,
   editLinkTypes: [],
   editTaxisTypes: [],
   editEditor: null,
   styles: [],
+  isTemplateEditable: false,
 
   deletePanel: false,
   deleteForm: null,
@@ -36,25 +35,59 @@ var data = utils.init({
 });
 
 var methods = {
-  setRuleText: function(rule, isChannel) {
-    if (isChannel) {
-      this.editChannel.channelFilePathRule = rule;
-    } else {
-      this.editChannel.contentFilePathRule = rule;
-    }
+  runFormLayerImageUploadText: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
   },
 
-  insertEditor: function(attributeName, html)
-  {
-    if (html)
-    {
-      this.editEditor.cmd.do('insertHTML', html);
-    }
+  runFormLayerImageUploadEditor: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
+  },
+
+  runMaterialLayerImageSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerFileUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerFileSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runFormLayerVideoUpload: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runMaterialLayerVideoSelect: function(attributeName, no, text) {
+    this.insertText(attributeName, no, text);
+  },
+
+  runEditorLayerImage: function(attributeName, html) {
+    this.insertEditor(attributeName, html);
   },
 
   insertText: function(attributeName, no, text) {
-    this.editChannel[attributeName] = text;
-    this.editChannel = _.assign({}, this.editChannel);
+    var count = this.form[utils.getCountName(attributeName)];
+    if (count && count < no) {
+      this.form[utils.getCountName(attributeName)] = no;
+    }
+    this.form[utils.getExtendName(attributeName, no)] = text;
+    this.form = _.assign({}, this.form);
+  },
+
+  insertEditor: function(attributeName, html) {
+    if (!attributeName) attributeName = 'Body';
+    if (!html) return;
+    UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
+  },
+  
+  setRuleText: function(rule, isChannel) {
+    if (isChannel) {
+      this.form.channelFilePathRule = rule;
+    } else {
+      this.form.contentFilePathRule = rule;
+    }
   },
 
   updateGroups: function(res, message) {
@@ -78,8 +111,6 @@ var methods = {
       $this.groupNames = res.groupNames;
       $this.channelTemplates = res.channelTemplates;
       $this.contentTemplates = res.contentTemplates;
-      $this.contentPlugins = res.contentPlugins;
-      $this.relatedPlugins = res.relatedPlugins;
       $this.expandedChannelIds = expandedChannelIds ? expandedChannelIds : [$this.siteId];
 
       if (message) {
@@ -99,17 +130,18 @@ var methods = {
     $api.get($url + '/' + this.siteId + '/' + channelId).then(function (response) {
       var res = response.data;
 
-      $this.editChannel = res.channel;
-      if (!$this.editChannel.groupNames) {
-        $this.editChannel.groupNames = [];
+      $this.form = _.assign({}, res.entity);
+      if (!$this.form.groupNames) {
+        $this.form.groupNames = [];
       }
       $this.editLinkTypes = res.linkTypes;
       $this.editTaxisTypes = res.taxisTypes;
       $this.styles = res.styles;
+      $this.isTemplateEditable = res.isTemplateEditable;
       $this.editPanel = true;
       setTimeout(function () {
         $this.loadEditor();
-      }, 100)
+      }, 100);
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {
@@ -144,7 +176,7 @@ var methods = {
     var $this = this;
 
     utils.loading(this, true);
-    $api.put($url, this.editChannel).then(function (response) {
+    $api.put($url, this.form).then(function (response) {
       var res = response.data;
 
       $this.editPanel = false;
@@ -195,8 +227,11 @@ var methods = {
   loadEditor: function () {
     var $this = this;
 
+    document.getElementById('form_Content1').innerHTML = '';
+    document.getElementById('form_Content2').innerHTML = '';
+
     var E = window.wangEditor;
-    this.editEditor = new E('#editChannel_Content1', '#editChannel_Content2');
+    this.editEditor = new E('#form_Content1', '#form_Content2');
     this.editEditor.customConfig.menus = [
       'head',  // 标题
       'bold',  // 粗体
@@ -216,10 +251,10 @@ var methods = {
       'redo'  // 重复
     ];
     this.editEditor.customConfig.onchange = function (html) {
-      $this.editChannel.content = html;
+      $this.form.content = html;
     };
     this.editEditor.create();
-    this.editEditor.txt.html(this.editChannel.content);
+    this.editEditor.txt.html(this.form.content);
   },
 
   btnSetClick: function(channelId, isChannel, rule) {
@@ -238,6 +273,24 @@ var methods = {
     });
   },
 
+  btnTemplateEditClick: function(isChannel, templateId) {
+    var templateName = '';
+    if (isChannel) {
+      templateName = this.channelTemplates.find(function(x) {
+        return x.id === templateId;
+      }).templateName;
+    } else {
+      templateName = this.contentTemplates.find(function(x) {
+        return x.id === templateId;
+      }).templateName;
+    }
+    utils.addTab('编辑:' + templateName, utils.getCmsUrl('templatesEditor', {
+      siteId: this.siteId,
+      templateId: templateId,
+      templateType: isChannel ? 'ChannelTemplate' : 'ContentTemplate',
+    }));
+  },
+
   btnEditAddGroupClick: function() {
     utils.openLayer({
       title: '新增栏目组',
@@ -245,10 +298,6 @@ var methods = {
       width: 500,
       height: 300
     });
-  },
-
-  btnPreviewClick: function(imageUrl) {
-    window.open(imageUrl);
   },
 
   handleDragStart: function(node, ev) {
@@ -298,15 +347,15 @@ var methods = {
   filterNode: function(value, data) {
     if (!value) return true;
     if (value.channelName && value.indexName && value.groupName) {
-      return data.label.indexOf(value.channelName) !== -1 && data.indexName === value.indexName && data.groupNames.indexOf(value.groupName) !== -1;
+      return (data.label.indexOf(value.channelName) !== -1 || data.value + '' === value.channelName) && data.indexName === value.indexName && data.groupNames.indexOf(value.groupName) !== -1;
     } else if (value.channelName && value.indexName) {
-      return data.label.indexOf(value.channelName) !== -1 && data.indexName === value.indexName;
+      return (data.label.indexOf(value.channelName) !== -1 || data.value + '' === value.channelName) && data.indexName === value.indexName;
     } else if (value.channelName && value.groupName) {
-      return data.label.indexOf(value.channelName) !== -1 && data.groupNames.indexOf(value.groupName) !== -1;
+      return (data.label.indexOf(value.channelName) !== -1 || data.value + '' === value.channelName) && data.groupNames.indexOf(value.groupName) !== -1;
     } else if (value.indexName && value.groupName) {
       return data.indexName === value.indexName && data.groupNames.indexOf(value.groupName) !== -1;
     } else if (value.channelName) {
-      return data.label.indexOf(value.channelName) !== -1;
+      return (data.label.indexOf(value.channelName) !== -1 || data.value + '' === value.channelName);
     } else if (value.groupName) {
       return data.groupNames.indexOf(value.groupName) !== -1;
     } else if (value.indexName) {
@@ -344,7 +393,6 @@ var methods = {
   },
 
   btnEditClick: function(row) {
-    this.editIsEditor = false;
     this.apiGet(row.value);
   },
 
@@ -527,6 +575,39 @@ var methods = {
     }
     utils.openLayer(args);
   },
+
+  btnExtendAddClick: function(style) {
+    var no = this.form[utils.getCountName(style.attributeName)] + 1;
+    this.form[utils.getCountName(style.attributeName)] = no;
+    this.form[utils.getExtendName(style.attributeName, no)] = '';
+    this.form = _.assign({}, this.form);
+  },
+
+  btnExtendRemoveClick: function(style) {
+    var no = this.form[utils.getCountName(style.attributeName)];
+    this.form[utils.getCountName(style.attributeName)] = no - 1;
+    this.form[utils.getExtendName(style.attributeName, no)] = '';
+    this.form = _.assign({}, this.form);
+  },
+
+  btnExtendPreviewClick: function(attributeName, no) {
+    var count = this.form[utils.getCountName(attributeName)];
+    var data = [];
+    for (var i = 0; i <= count; i++) {
+      var imageUrl = this.form[utils.getExtendName(attributeName, i)];
+      imageUrl = utils.getUrl(this.siteUrl, imageUrl);
+      data.push({
+        "src": imageUrl
+      });
+    }
+    layer.photos({
+      photos: {
+        "start": no,
+        "data": data
+      }
+      ,anim: 5
+    });
+  }
 };
 
 var $vue = new Vue({

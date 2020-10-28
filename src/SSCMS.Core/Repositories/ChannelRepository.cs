@@ -17,13 +17,13 @@ namespace SSCMS.Core.Repositories
     public partial class ChannelRepository : IChannelRepository
     {
         private readonly Repository<Channel> _repository;
-        private readonly ITableStyleRepository _tableStyleRepository;
+        private readonly ISettingsManager _settingsManager;
         private readonly ITemplateRepository _templateRepository;
 
-        public ChannelRepository(ISettingsManager settingsManager, ITableStyleRepository tableStyleRepository, ITemplateRepository templateRepository)
+        public ChannelRepository(ISettingsManager settingsManager, ITemplateRepository templateRepository)
         {
             _repository = new Repository<Channel>(settingsManager.Database, settingsManager.Redis);
-            _tableStyleRepository = tableStyleRepository;
+            _settingsManager = settingsManager;
             _templateRepository = templateRepository;
         }
 
@@ -82,7 +82,7 @@ namespace SSCMS.Core.Repositories
             }
         }
 
-        public async Task<int> InsertAsync(int siteId, int parentId, string channelName, string indexName, string contentModelPluginId, List<string> contentRelatedPluginIds, int channelTemplateId, int contentTemplateId)
+        public async Task<int> InsertAsync(int siteId, int parentId, string channelName, string indexName, string contentModelPluginId, int channelTemplateId, int contentTemplateId)
         {
             if (siteId > 0 && parentId == 0) return 0;
 
@@ -96,7 +96,6 @@ namespace SSCMS.Core.Repositories
                 ChannelName = channelName,
                 IndexName = indexName,
                 ContentModelPluginId = contentModelPluginId,
-                ContentRelatedPluginIds = contentRelatedPluginIds,
                 AddDate = DateTime.Now,
                 ChannelTemplateId = channelTemplateId > 0 ? channelTemplateId : defaultChannelTemplateEntity.Id,
                 ContentTemplateId = contentTemplateId > 0 ? contentTemplateId : defaultContentTemplateEntity.Id

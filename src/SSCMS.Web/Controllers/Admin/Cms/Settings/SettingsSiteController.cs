@@ -1,20 +1,20 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Datory;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
 using SSCMS.Configuration;
-using SSCMS.Core.Utils;
-using SSCMS.Dto;
 using SSCMS.Enums;
+using SSCMS.Models;
 using SSCMS.Repositories;
 using SSCMS.Services;
-using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Settings
 {
     [OpenApiIgnore]
-    [Authorize(Roles = AuthTypes.Roles.Administrator)]
+    [Authorize(Roles = Types.Roles.Administrator)]
     [Route(Constants.ApiAdminPrefix)]
     public partial class SettingsSiteController : ControllerBase
     {
@@ -33,112 +33,59 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Settings
             _tableStyleRepository = tableStyleRepository;
         }
 
-        [HttpGet, Route(Route)]
-        public async Task<ActionResult<GetResult>> GetConfig([FromQuery] SiteRequest request)
+        public class GetResult
         {
-            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, AuthTypes.SitePermissions.SettingsSite))
-            {
-                return Unauthorized();
-            }
-
-            var site = await _siteRepository.GetAsync(request.SiteId);
-            var styles = new List<InputStyle>();
-            foreach (var style in await _tableStyleRepository.GetSiteStylesAsync(request.SiteId))
-            {
-                styles.Add(new InputStyle(style));
-
-                if (style.InputType == InputType.Image || 
-                    style.InputType == InputType.Video ||
-                    style.InputType == InputType.File)
-                {
-                    site.Set(ColumnsManager.GetCountName(style.AttributeName), site.Get(ColumnsManager.GetCountName(style.AttributeName), 0));
-                }
-                else if (style.InputType == InputType.CheckBox || 
-                         style.InputType == InputType.SelectMultiple)
-                {
-                    var list = ListUtils.GetStringList(site.Get(style.AttributeName,
-                        string.Empty));
-                    site.Set(style.AttributeName, list);
-                }
-            }
-
-            return new GetResult
-            {
-                Site = site,
-                Styles = styles
-            };
+            public string SiteUrl { get; set; }
+            public Entity Entity { get; set; }
+            public IEnumerable<InputStyle> Styles { get; set; }
         }
 
-        [HttpPost, Route(Route)]
-        public async Task<ActionResult<BoolResult>> Submit([FromBody] SubmitRequest request)
+        public class SubmitRequest : Entity
         {
-            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, AuthTypes.SitePermissions.SettingsSite))
-            {
-                return Unauthorized();
-            }
+            public int SiteId { get; set; }
+        }
 
-            var site = await _siteRepository.GetAsync(request.SiteId);
-            var styles = await _tableStyleRepository.GetSiteStylesAsync(request.SiteId);
-
-            foreach (var style in styles)
+        private async Task<List<InputStyle>> GetInputStylesAsync(int siteId)
+        {
+            var styles = new List<InputStyle>
             {
-                
-                var inputType = style.InputType;
-                if (inputType == InputType.TextEditor)
+                new InputStyle
                 {
-                    var value = request.Get(style.AttributeName, string.Empty);
-                    value = await _pathManager.EncodeTextEditorAsync(site, value);
-                    value = UEditorUtils.TranslateToStlElement(value);
-                    site.Set(style.AttributeName, value);
-                }
-                else if (inputType == InputType.Image || 
-                         inputType == InputType.Video || 
-                         inputType == InputType.File)
-                {
-                    var count = request.Get(ColumnsManager.GetCountName(style.AttributeName), 0);
-                    site.Set(ColumnsManager.GetCountName(style.AttributeName), count);
-                    for (var n = 1; n <= count; n++)
+                    AttributeName = nameof(Site.SiteName),
+                    DisplayName = "站点名称",
+                    InputType = InputType.Text,
+                    Rules = new List<InputStyleRule>
                     {
-                        site.Set(ColumnsManager.GetExtendName(style.AttributeName, n), request.Get(ColumnsManager.GetExtendName(style.AttributeName, n), string.Empty));
+                        new InputStyleRule
+                        {
+                            Type = ValidateType.Required,
+                            Message = "请输入站点名称"
+                        }
                     }
-                }
-                else if (inputType == InputType.CheckBox || 
-                    style.InputType == InputType.SelectMultiple)
+                },
+                new InputStyle
                 {
-                    var list = request.Get<IEnumerable<object>>(style.AttributeName);
-                    site.Set(style.AttributeName, ListUtils.ToString(list));
-                }
-                else
+                    AttributeName = nameof(Site.ImageUrl),
+                    DisplayName = "站点图片/LOGO",
+                    InputType = InputType.Image
+                },
+                new InputStyle
                 {
-                    var value = request.Get(style.AttributeName, string.Empty);
-                    site.Set(style.AttributeName, value);
-                }
-
-                if (style.IsFormatString)
+                    AttributeName = nameof(Site.Keywords),
+                    DisplayName = "站点关键字",
+                    InputType = InputType.Text
+                },
+                new InputStyle
                 {
-                    var formatStrong = request.Get($"{style.AttributeName}_formatStrong", false);
-                    var formatEm = request.Get($"{style.AttributeName}_formatEM", false);
-                    var formatU = request.Get($"{style.AttributeName}_formatU", false);
-                    var formatColor = request.Get($"{style.AttributeName}_formatColor", string.Empty);
-                    var formatString = ContentUtility.GetTitleFormatString(formatStrong, formatEm, formatU, formatColor);
-
-                    site.Set(ColumnsManager.GetFormatStringAttributeName(style.AttributeName), formatString);
+                    AttributeName = nameof(Site.Description),
+                    DisplayName = "站点描述",
+                    InputType = InputType.TextArea
                 }
-            }
-
-            site.SiteName = request.SiteName;
-            site.ImageUrl = request.ImageUrl;
-            site.Keywords = request.Keywords;
-            site.Description = request.Description;
-            
-            await _siteRepository.UpdateAsync(site);
-
-            await _authManager.AddSiteLogAsync(request.SiteId, "修改站点设置");
-
-            return new BoolResult
-            {
-                Value = true
             };
+            var tableStyles = await _tableStyleRepository.GetSiteStylesAsync(siteId);
+            styles.AddRange(tableStyles.Select(x => new InputStyle(x)));
+
+            return styles;
         }
     }
 }

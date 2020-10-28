@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
 
@@ -11,8 +12,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
         public async Task<ActionResult<BoolResult>> Insert([FromBody] SaveRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    AuthTypes.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, AuthTypes.ContentPermissions.Add))
+                    Types.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add))
             {
                 return Unauthorized();
             }
@@ -35,14 +36,18 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
                 content.CheckedLevel = 0;
             }
 
-            await _contentRepository.InsertAsync(site, channel, content);
+            var contentId = await _contentRepository.InsertAsync(site, channel, content);
 
-            if (request.Translations != null && request.Translations.Count > 0)
+            await _contentTagRepository.UpdateTagsAsync(null, content.TagNames, request.SiteId, contentId);
+
+            var translates = await _translateRepository.GetTranslatesAsync(request.SiteId, request.ChannelId);
+            if (request.Translates != null && request.Translates.Count > 0)
             {
-                foreach (var translation in request.Translations)
-                {
-                    await ContentUtility.TranslateAsync(_pathManager, _databaseManager, _pluginManager, site, content.ChannelId, content.Id, translation.TransSiteId, translation.TransChannelId, translation.TransType, _createManager, _authManager.AdminId);
-                }
+                translates.AddRange(request.Translates);
+            }
+            foreach (var translate in translates)
+            {
+                await ContentUtility.TranslateAsync(_pathManager, _databaseManager, _pluginManager, site, content.ChannelId, content.Id, translate.TargetSiteId, translate.TargetChannelId, translate.TranslateType, _createManager, _authManager.AdminId);
             }
 
             await _createManager.CreateContentAsync(request.SiteId, channel.Id, content.Id);

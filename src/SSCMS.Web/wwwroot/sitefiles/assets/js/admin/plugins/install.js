@@ -8,8 +8,10 @@ var data = utils.init({
   pageType: utils.getQueryBoolean('isUpdate') ? '升级' : '安装',
   active: 0,
   success: false,
-  isNightly: false,
   version: null,
+  pluginPathDict: null,
+
+  percentage: 0,
 
   listPackages: [],
   listPackageIds: [],
@@ -27,26 +29,45 @@ var methods = {
   apiGet: function () {
     var $this = this;
 
-    $api.get($url).then(function (response) {
+    setInterval(function () {
+      if ($this.percentage > 95) return;
+      $this.percentage += 1;
+    }, 1000);
+
+    $api.get($url, {
+      params: {
+        pluginIds: utils.getQueryString('pluginIds')
+      }
+    }).then(function (response) {
       var res = response.data;
 
-      $this.isNightly = res.isNightly;
       $this.version = res.version;
+      $this.pluginPathDict = res.pluginPathDict;
 
       $this.getPackages();
     }).catch(function (error) {
       utils.error(error);
+    }).then(function () {
+      utils.loading($this, false);
     });
   },
 
   apiDownload: function (pluginId, version) {
     var $this = this;
 
+    var path = this.pluginPathDict[pluginId];
     $api.post($urlActionsDownload, {
       pluginId: pluginId,
-      version: version
+      version: version,
+      path: path
     }).then(function (response) {
       var res = response.data;
+      if (!res.value) {
+        setTimeout(function () {
+          $this.apiDownload(pluginId, version);
+        }, 1000);
+        return;
+      }
 
       $this.currentDownloadingId = 0;
       $this.currentDownloadIds.push(pluginId);
@@ -77,18 +98,23 @@ var methods = {
   apiRestart: function (callback) {
     var $this = this;
 
-    $api.post($urlActionsRestart).then(function (response) {
-      if (callback) {
-        callback();
-      } else {
-        utils.alertSuccess({
-          title: '插件' + $this.pageType + '成功',
-          text: '插件' + $this.pageType + '成功，系统需要重载页面',
-          callback: function() {
-            window.top.location.reload(true);
-          }
-        });
-      }
+    $api.post($urlActionsRestart, {
+      isDisablePlugins: callback ? true : false
+    }).then(function (response) {
+      setTimeout(function () {
+        if (callback) {
+          callback();
+        } else {
+          $this.percentage = 100;
+          utils.alertSuccess({
+            title: '插件' + $this.pageType + '成功',
+            text: '插件' + $this.pageType + '成功，系统需要重载页面',
+            callback: function() {
+              window.top.location.reload(true);
+            }
+          });
+        }
+      }, 30000);
     }).catch(function (error) {
       utils.error(error);
     });
@@ -97,7 +123,7 @@ var methods = {
   getPackages: function () {
     var $this = this;
 
-    cloud.getUpdates($this.isNightly, $this.version, $this.pluginIds).then(function (response) {
+    cloud.getUpdates($this.version, $this.pluginIds).then(function (response) {
       var res = response.data;
 
       var plugins = res.plugins;
@@ -143,7 +169,7 @@ var methods = {
       $this.apiRestart(function() {
         setTimeout(function() {
           $this.installListPackage();
-        }, 3000);
+        }, 10000);
       });
       
     }).catch(function (error) {
@@ -210,6 +236,11 @@ var methods = {
     $this.currentUpdatedIds = [];
 
     $this.installListPackage();
+  },
+
+  format: function(percentage) {
+    if (percentage === 100) return '插件' + this.pageType + '成功！';
+    return utils.getQueryBoolean('isUpdate') ? '插件升级中，升级过程可能需要持续几分钟，请勿关闭此页面' : '插件安装中...';
   }
 };
 
@@ -218,7 +249,6 @@ var $vue = new Vue({
   data: data,
   methods: methods,
   created: function () {
-    utils.loading(this, true);
     this.apiGet();
   }
 });

@@ -5,18 +5,20 @@ var data = utils.init({
   returnUrl: utils.getQueryString('returnUrl'),
   checkedChannelIds: utils.getQueryIntList("channelIds"),
   channels: null,
-  transSites: null,
-  translateTypes: null,
-
   expandedChannelIds: [],
   filterText: '',
 
-  channelIds: [],
-  transSiteId: null,
-  transChannelIds: null,
+  channelIds: utils.getQueryIntList("channelIds"),
+  transSites: null,
   transChannels: null,
-  translateType: 'Content',
-  isDeleteAfterTranslate: false,
+  translateTypes: null,
+
+  form: {
+    transSiteId: null,
+    transChannelIds: null,
+    translateType: 'Content',
+    isDeleteAfterTranslate: false,
+  }
 });
 
 var methods = {
@@ -48,7 +50,7 @@ var methods = {
     utils.loading(this, true);
     $api.post($url + '/actions/options', {
       siteId: this.siteId,
-      transSiteId: this.transSiteId
+      transSiteId: this.form.transSiteId
     }).then(function (response) {
       var res = response.data;
 
@@ -67,7 +69,8 @@ var methods = {
     $api.post($url, data).then(function (response) {
       var res = response.data;
 
-      utils.success('批量转移成功！');
+      utils.success('批量复制成功！');
+      location.href = $this.returnUrl;
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {
@@ -84,10 +87,7 @@ var methods = {
 
   filterNode: function(value, data) {
     if (!value) return true;
-    if (value.channelName) {
-      return data.label.indexOf(value.channelName) !== -1;
-    }
-    return true;
+    return data.label.indexOf(value) !== -1 || data.value + '' === value;
   },
 
   handleTransSiteIdChange: function() {
@@ -99,13 +99,18 @@ var methods = {
   },
 
   btnTranslateClick: function() {
-    this.apiSubmit({
-      siteId: this.siteId,
-      channelIds: this.channelIds,
-      transSiteId: this.transSiteId,
-      transChannelId: this.transChannelIds[this.transChannelIds.length - 1],
-      translateType: this.translateType,
-      isDeleteAfterTranslate: this.isDeleteAfterTranslate
+    var $this = this;
+    this.$refs.form.validate(function(valid) {
+      if (valid) {
+        $this.apiSubmit({
+          siteId: $this.siteId,
+          channelIds: $this.channelIds,
+          transSiteId: $this.form.transSiteId,
+          transChannelId: $this.form.transChannelIds[$this.form.transChannelIds.length - 1],
+          translateType: $this.form.translateType,
+          isDeleteAfterTranslate: $this.form.isDeleteAfterTranslate
+        });
+      }
     });
   },
 
@@ -120,9 +125,7 @@ var $vue = new Vue({
   methods: methods,
   watch: {
     filterText: function(val) {
-      this.$refs.tree.filter({
-        channelName: val
-      });
+      this.$refs.tree.filter(val);
     }
   },
   created: function () {

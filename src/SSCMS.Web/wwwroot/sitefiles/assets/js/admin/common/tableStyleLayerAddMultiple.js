@@ -2,7 +2,8 @@
 
 var data = utils.init({
   tableName: utils.getQueryString('tableName'),
-  relatedIdentities: utils.getQueryIntList('relatedIdentities'),
+  relatedIdentities: utils.getQueryString('relatedIdentities'),
+  excludes: utils.getQueryStringList('excludes'),
   inputTypes: null,
   form: {
     styles: []
@@ -22,7 +23,10 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
-      $this.inputTypes = res.inputTypes;
+      $this.inputTypes = res.inputTypes.filter(function (x) {
+        return $this.excludes.indexOf(x.key) == -1;
+      });
+      
       $this.form.styles = res.styles;
     }).catch(function (error) {
       utils.error(error);
@@ -43,7 +47,9 @@ var methods = {
       var res = response.data;
 
       utils.closeLayer();
-      parent.$vue.apiList();
+      if (parent.$vue.runTableStyleLayerAddMultiple) {
+        parent.$vue.runTableStyleLayerAddMultiple();
+      }
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {

@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Mono.Options;
 using Semver;
 using SSCMS.Cli.Abstractions;
 using SSCMS.Cli.Core;
+using SSCMS.Configuration;
 using SSCMS.Core.Plugins;
+using SSCMS.Plugins;
 using SSCMS.Repositories;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -16,7 +17,6 @@ namespace SSCMS.Cli.Jobs
     {
         public string CommandName => "update";
 
-        private bool? _isNightly;
         private bool _isHelp;
 
         private readonly IApiService _apiService;
@@ -36,21 +36,7 @@ namespace SSCMS.Cli.Jobs
             _options = new OptionSet
             {
                 {
-                    "nightly", "Update to nightly version",
-                    v =>
-                    {
-                        if (string.IsNullOrEmpty(v))
-                        {
-                            _isNightly = null;
-                        }
-                        else
-                        {
-                            _isNightly = true;
-                        }
-                    }
-                },
-                {
-                    "h|help", "命令说明",
+                    "h|help", "Display help",
                     v => _isHelp = v != null
                 }
             };
@@ -65,7 +51,7 @@ namespace SSCMS.Cli.Jobs
             Console.WriteLine();
         }
 
-        public async Task ExecuteAsync(IJobContext context)
+        public async Task ExecuteAsync(IPluginJobContext context)
         {
             if (!CliUtils.ParseArgs(_options, context.Args)) return;
 
@@ -82,9 +68,7 @@ namespace SSCMS.Cli.Jobs
                 return;
             }
 
-            var isNightly = _isNightly ?? _settingsManager.IsNightlyUpdate;
-
-            var (success, result, failureMessage) = _apiService.GetReleases(isNightly, _settingsManager.Version, null);
+            var (success, result, failureMessage) = _apiService.GetReleases(_settingsManager.Version, null);
             if (!success)
             {
                 await WriteUtils.PrintErrorAsync(failureMessage);
@@ -93,37 +77,81 @@ namespace SSCMS.Cli.Jobs
 
             if (!SemVersion.TryParse(result.Cms.Version, out var version) || version <= _settingsManager.Version)
             {
-                await WriteUtils.PrintErrorAsync("SS CMS is the latest version and no update is required");
-                return;
+                Console.WriteLine($"SS CMS {result.Cms.Version} is the latest version and no update is required");
+                var proceed = ReadUtils.GetYesNo("do you still want to update?");
+                if (!proceed) return;
+            }
+            else
+            {
+                var proceed = ReadUtils.GetYesNo($"New version {result.Cms.Version} found, do you want to update?");
+                if (!proceed) return;
             }
 
-            var proceed = ReadUtils.GetYesNo($"New version {result.Cms.Version} found, do you want to update?");
-            if (!proceed) return;
+            Console.WriteLine($"Downloading SS CMS {result.Cms.Version}...");
+            var directoryPath = CloudUtils.Dl.DownloadCms(_pathManager, _settingsManager.OSArchitecture, result.Cms.Version);
 
-            Console.WriteLine($"Downloading {result.Cms.Version}...");
-            CloudUtils.Dl.DownloadCms(_pathManager, result.Cms.Version);
-            var name = CloudUtils.Dl.GetCmsDownloadName(result.Cms.Version);
-            var packagePath = _pathManager.GetPackagesPath(name);
+            FileUtils.DeleteFileIfExists(PathUtils.Combine(directoryPath, Constants.ConfigFileName));
+            FileUtils.DeleteFileIfExists(PathUtils.Combine(directoryPath, "wwwroot/404.html"));
+            FileUtils.DeleteFileIfExists(PathUtils.Combine(directoryPath, "wwwroot/favicon.ico"));
+            FileUtils.DeleteFileIfExists(PathUtils.Combine(directoryPath, "wwwroot/index.html"));
 
-            var offlinePath = PathUtils.Combine(_settingsManager.ContentRootPath, "app_offline.htm");
+            await WriteUtils.PrintSuccessAsync($"{result.Cms.Version} download successfully!");
+            Console.WriteLine();
+            Console.WriteLine();
+
+            Console.WriteLine("Please stop website and override files and directories ");
+            Console.WriteLine($"     {directoryPath}");
+            Console.WriteLine("to");
+            Console.WriteLine($"     {contentRootPath}");
+
+            var offlinePath = _pathManager.GetPackagesPath("app_offline.htm");
             FileUtils.WriteText(offlinePath, "down for maintenance");
 
-            foreach (var fileName in DirectoryUtils.GetFileNames(packagePath).Where(fileName =>
-                !StringUtils.EqualsIgnoreCase(fileName, $"{name}.zip") &&
-                !StringUtils.EqualsIgnoreCase(fileName, Constants.ConfigFileName)))
-            {
-                FileUtils.CopyFile(PathUtils.Combine(packagePath, fileName),
-                    PathUtils.Combine(contentRootPath, fileName), true);
-            }
+            //var unOverrides = new List<string>();
+            //foreach (var fileName in DirectoryUtils.GetFileNames(directoryPath))
+            //{
+            //    if (!FileUtils.CopyFile(PathUtils.Combine(directoryPath, fileName),
+            //        PathUtils.Combine(contentRootPath, fileName), true))
+            //    {
+            //        unOverrides.Add(fileName);
+            //    }
+            //}
 
-            foreach (var directoryName in DirectoryUtils.GetDirectoryNames(packagePath))
-            {
-                DirectoryUtils.Copy(PathUtils.Combine(packagePath, directoryName), PathUtils.Combine(contentRootPath, directoryName), true);
-            }
+            //foreach (var directoryName in DirectoryUtils.GetDirectoryNames(directoryPath))
+            //{
+            //    DirectoryUtils.Copy(PathUtils.Combine(directoryPath, directoryName), PathUtils.Combine(contentRootPath, directoryName), true);
+            //}
 
-            FileUtils.DeleteFileIfExists(offlinePath);
+            //if (unOverrides.Count > 0)
+            //{
+            //    Replacing(contentRootPath, directoryPath, unOverrides);
+            //}
 
-            await WriteUtils.PrintSuccessAsync($"Congratulations, SS CMS was updated to {result.Cms.Version} successfully!");
+            //FileUtils.DeleteFileIfExists(offlinePath);
+
+            //await WriteUtils.PrintSuccessAsync($"Congratulations, SS CMS was updated to {result.Cms.Version} successfully!");
         }
+
+        //public static void Replacing(string contentRootPath, string directoryPath, List<string> unOverrides)
+        //{
+        //    Thread.Sleep(1000);
+        //    var list = new List<string>();
+
+        //    foreach (var unOverride in unOverrides)
+        //    {
+        //        Console.WriteLine($"Replacing {unOverride}...");
+
+        //        if (!FileUtils.CopyFile(PathUtils.Combine(directoryPath, unOverride),
+        //            PathUtils.Combine(contentRootPath, unOverride), true))
+        //        {
+        //            list.Add(unOverride);
+        //        }
+        //    }
+
+        //    if (list.Count > 0)
+        //    {
+        //        Replacing(contentRootPath, directoryPath, list);
+        //    }
+        //}
     }
 }

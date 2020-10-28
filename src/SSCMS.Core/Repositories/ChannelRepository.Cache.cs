@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using SSCMS.Configuration;
-using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Enums;
 using SSCMS.Models;
@@ -402,8 +400,8 @@ namespace SSCMS.Core.Repositories
 
         public async Task<bool> IsExistsAsync(int channelId)
         {
-            var nodeInfo = await GetAsync(channelId);
-            return nodeInfo != null;
+            var channel = await GetAsync(channelId);
+            return channel != null;
         }
 
         public async Task<string> GetTableNameAsync(Site site, int channelId)
@@ -413,17 +411,23 @@ namespace SSCMS.Core.Repositories
 
         public string GetTableName(Site site, IChannelSummary channel)
         {
-            return channel != null ? GetTableName(site, channel.ContentModelPluginId) : string.Empty;
+            return channel != null ? GetTableName(site, channel.TableName) : string.Empty;
         }
 
-        private string GetTableName(Site site, string contentModelPluginId)
+        private string GetTableName(Site site, string tableName)
         {
-            return string.IsNullOrEmpty(contentModelPluginId) ? site.TableName : contentModelPluginId;
+            if (string.IsNullOrEmpty(tableName))
+            {
+                return site.TableName;
+            }
+
+            var tableNames = _settingsManager.GetContentTableNames();
+            return ListUtils.ContainsIgnoreCase(tableNames, tableName) ? tableName : site.TableName;
         }
 
-        public bool IsContentModelPlugin(Site site, Channel node)
+        public bool IsContentModelPlugin(Site site, Channel channel)
         {
-            return !string.IsNullOrEmpty(node.ContentModelPluginId);
+            return !string.IsNullOrEmpty(channel.TableName);
         }
 
         public async Task<List<string>> GetGroupNamesAsync(int channelId)
@@ -536,26 +540,6 @@ namespace SSCMS.Core.Repositories
             //}
 
             return ListUtils.ToString(channelNames, " > ");
-        }
-
-        public async Task<List<InputStyle>> GetInputStylesAsync(Site site, Channel channel)
-        {
-            var items = new List<InputStyle>();
-
-            var tableName = GetTableName(site, channel);
-            var styleList = ColumnsManager.GetContentListStyles(await _tableStyleRepository.GetContentStylesAsync(channel, tableName));
-
-            foreach (var style in styleList)
-            {
-                var listitem = new InputStyle
-                {
-                    DisplayName = style.DisplayName,
-                    AttributeName = style.AttributeName
-                };
-                items.Add(listitem);
-            }
-
-            return items;
         }
 
         public async Task<bool> IsAncestorOrSelfAsync(int siteId, int parentId, int childId)

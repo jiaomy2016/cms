@@ -55,7 +55,7 @@ var methods = {
     }).then(function(response) {
       var res = response.data;
 
-      $this.root = res.root;
+      $this.root = [res.root];
       if (!reload) {
         $this.siteUrl = res.siteUrl;
         $this.groupNames = res.groupNames;
@@ -199,7 +199,13 @@ var methods = {
   },
 
   btnMoreClick: function(command) {
-    if (command === 'ExportAll') {
+    if (command === 'Group') {
+      this.btnLayerClick({title: '批量设置分组', name: 'Group', width: 700, height: 400, withContents: true});
+    } else if (command === 'Tag') {
+      this.btnLayerClick({title: '批量设置标签', name: 'Tag', width: 700, height: 400, withContents: true});
+    } else if (command === 'Copy') {
+      this.btnLayerClick({title: '批量复制', name: 'Copy', withContents: true});
+    } else if (command === 'ExportAll') {
       this.btnLayerClick({title: '导出全部', name: 'Export', full: true});
     } else if (command === 'ExportSelected') {
       this.btnLayerClick({title: '导出选中', name: 'Export', full: true, withContents: true});
@@ -357,7 +363,7 @@ var methods = {
 
   filterNode: function(value, data) {
     if (!value) return true;
-    return data.label.indexOf(value) !== -1;
+    return data.label.indexOf(value) !== -1 || data.value + '' === value;
   },
 
   handleSelectionChange: function(val) {

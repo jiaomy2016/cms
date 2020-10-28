@@ -1,9 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Datory;
 using Microsoft.AspNetCore.Mvc;
+using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
-using SSCMS.Extensions;
 using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin
@@ -39,8 +39,8 @@ namespace SSCMS.Web.Controllers.Admin
                 redisConnectionString = InstallUtils.GetRedisConnectionString(request.RedisHost, request.IsRedisDefaultPort, request.RedisPort, request.IsSsl, request.RedisPassword);
             }
 
-            _settingsManager.SaveSettings(false, request.IsProtectData, request.DatabaseType, databaseConnectionString,
-                redisConnectionString);
+            _settingsManager.SaveSettings(request.IsProtectData, false, request.DatabaseType, databaseConnectionString,
+                redisConnectionString, string.Empty, null, null);
 
             return new StringResult
             {

@@ -1,7 +1,6 @@
 ﻿var $url = '/plugins/add';
 
 var data = utils.init({
-  isNightly: null,
   version: null,
   packageIds: null,
   q: utils.getQueryString('q'),
@@ -37,7 +36,6 @@ var methods = {
         return;
       }
 
-      $this.isNightly = res.isNightly;
       $this.version = res.version;
       $this.packageIds = res.packageIds;
 
@@ -45,6 +43,9 @@ var methods = {
         var plugins = response.data;
   
         $this.plugins = plugins;
+      }).catch(function (error) {
+        utils.error(error);
+      }).then(function () {
         utils.loading($this, false);
       });
     }).catch(function (error) {
@@ -53,11 +54,11 @@ var methods = {
   },
 
   getLatestVersion: function(plugin) {
-    return this.isNightly ? plugin.latestNightlyVersion : plugin.latestStableVersion;
+    return plugin.latestStableVersion;
   },
 
   getLatestPublished: function(plugin) {
-    return this.isNightly ? plugin.latestNightlyPublished : plugin.latestStablePublished;;
+    return plugin.latestStablePublished;
   },
 
   btnSearchClick: function () {

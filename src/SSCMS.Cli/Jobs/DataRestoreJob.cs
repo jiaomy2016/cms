@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Datory;
 using Mono.Options;
 using SSCMS.Cli.Abstractions;
 using SSCMS.Cli.Core;
+using SSCMS.Configuration;
+using SSCMS.Plugins;
 using SSCMS.Repositories;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -15,7 +18,6 @@ namespace SSCMS.Cli.Jobs
         public string CommandName => "data restore";
 
         private string _directory;
-        private string _configFile;
         private List<string> _includes;
         private List<string> _excludes;
         private bool _dataOnly;
@@ -35,17 +37,15 @@ namespace SSCMS.Cli.Jobs
             _restoreService = restoreService;
 
             _options = new OptionSet {
-                { "d|directory=", "从指定的文件夹中恢复数据",
+                { "d|directory=", "Restore folder name",
                     v => _directory = v },
-                { "c|config-file=", "指定配置文件Web.config路径或文件名",
-                    v => _configFile = v },
-                { "includes=", "指定需要还原的表，多个表用英文逗号隔开，默认还原所有表",
+                { "includes=", "Include table names, separated by commas, default restore all tables",
                     v => _includes = v == null ? null : ListUtils.GetStringList(v) },
-                { "excludes=", "指定需要排除的表，多个表用英文逗号隔开",
+                { "excludes=", "Exclude table names, separated by commas",
                     v => _excludes = v == null ? null : ListUtils.GetStringList(v) },
-                { "data-only",  "仅恢复数据",
+                { "data-only",  "Restore data only",
                     v => _dataOnly = v != null },
-                { "h|help",  "命令说明",
+                { "h|help",  "Display help",
                     v => _isHelp = v != null }
             };
         }
@@ -59,7 +59,7 @@ namespace SSCMS.Cli.Jobs
             Console.WriteLine();
         }
 
-        public async Task ExecuteAsync(IJobContext context)
+        public async Task ExecuteAsync(IPluginJobContext context)
         {
             if (!CliUtils.ParseArgs(_options, context.Args)) return;
 
@@ -71,7 +71,7 @@ namespace SSCMS.Cli.Jobs
 
             if (string.IsNullOrEmpty(_directory))
             {
-                await WriteUtils.PrintErrorAsync("需要指定恢复数据的文件夹名称：directory");
+                await WriteUtils.PrintErrorAsync("Restore folder name not specified: --directory");
                 return;
             }
 
@@ -90,10 +90,10 @@ namespace SSCMS.Cli.Jobs
                 return;
             }
 
-            var webConfigPath = CliUtils.GetWebConfigPath(_configFile, _settingsManager);
-            if (!FileUtils.IsFileExists(webConfigPath))
+            var configPath = CliUtils.GetConfigPath(_settingsManager);
+            if (!FileUtils.IsFileExists(configPath))
             {
-                await WriteUtils.PrintErrorAsync($"系统配置文件不存在：{webConfigPath}！");
+                await WriteUtils.PrintErrorAsync($"The sscms.json file does not exist: {configPath}");
                 return;
             }
 
@@ -109,34 +109,49 @@ namespace SSCMS.Cli.Jobs
             //await Console.Out.WriteLineAsync($"连接字符串: {WebConfigUtils.ConnectionString}");
             //await Console.Out.WriteLineAsync($"恢复文件夹: {treeInfo.DirectoryPath}");
 
+            await Console.Out.WriteLineAsync($"Database type: {_settingsManager.Database.DatabaseType.GetDisplayName()}");
+            await Console.Out.WriteLineAsync($"Database connection string: {_settingsManager.Database.ConnectionString}");
+            await Console.Out.WriteLineAsync($"Restore folder: {treeInfo.DirectoryPath}");
+
             var (isConnectionWorks, errorMessage) = await _settingsManager.Database.IsConnectionWorksAsync();
             if (!isConnectionWorks)
             {
-                await WriteUtils.PrintErrorAsync($"数据库连接错误：{errorMessage}");
+                await WriteUtils.PrintErrorAsync($"Unable to connect to database, error message:{errorMessage}");
                 return;
             }
 
-            if (!_dataOnly)
-            {
-                if (!await _configRepository.IsNeedInstallAsync())
-                {
-                    await WriteUtils.PrintErrorAsync("数据无法在已安装系统的数据库中恢复，命令执行失败");
-                    return;
-                }
+            //if (!_dataOnly)
+            //{
+            //    if (!await _configRepository.IsNeedInstallAsync())
+            //    {
+            //        await WriteUtils.PrintErrorAsync("The data could not be restored on the installed sscms database");
+            //        return;
+            //    }
 
-                // 恢复前先创建表，确保系统在恢复的数据库中能够使用
-                await _databaseManager.CreateSiteServerTablesAsync();
-            }
+            //    // 恢复前先创建表，确保系统在恢复的数据库中能够使用
+            //    //await _databaseManager.CreateSiteServerTablesAsync();
+
+            //    if (_settingsManager.DatabaseType == DatabaseType.SQLite)
+            //    {
+            //        var filePath = PathUtils.Combine(_settingsManager.ContentRootPath, Constants.DefaultLocalDbFileName);
+            //        if (!FileUtils.IsFileExists(filePath))
+            //        {
+            //            await FileUtils.WriteTextAsync(filePath, string.Empty);
+            //        }
+            //    }
+
+            //    await _databaseManager.SyncDatabaseAsync();
+            //}
 
             await WriteUtils.PrintRowLineAsync();
-            await WriteUtils.PrintRowAsync("恢复表名称", "总条数");
+            await WriteUtils.PrintRowAsync("Restore table name", "Count");
             await WriteUtils.PrintRowLineAsync();
 
             var errorLogFilePath = CliUtils.CreateErrorLogFile(CommandName, _settingsManager);
 
             await _restoreService.RestoreAsync(_includes, _excludes, _dataOnly, tablesFilePath, treeInfo, errorLogFilePath);
 
-            await Console.Out.WriteLineAsync($"恭喜，成功从文件夹：{treeInfo.DirectoryPath} 恢复数据！");
+            await Console.Out.WriteLineAsync($"恭喜，成功从文件夹：{treeInfo.DirectoryPath} 恢复数据!");
         }
     }
 }

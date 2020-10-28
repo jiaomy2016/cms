@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using SSCMS.Configuration;
 using SSCMS.Core.Plugins;
+using SSCMS.Plugins;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -22,35 +22,44 @@ namespace SSCMS.Core.Services
             _settingsManager = settingsManager;
 
             _directoryPath = PathUtils.Combine(settingsManager.ContentRootPath, Constants.PluginsDirectory);
-            DirectoryUtils.CreateDirectoryIfNotExists(_directoryPath);
         }
 
         public void Load()
         {
+            var plugins = new List<Plugin>();
             Plugins = new List<IPlugin>();
             var configurations = new List<IConfiguration>
             {
                 _config
             };
-            foreach (var folderPath in Directory.GetDirectories(_directoryPath))
+            if (!_settingsManager.IsDisablePlugins && DirectoryUtils.IsDirectoryExists(_directoryPath))
             {
-                if (string.IsNullOrEmpty(folderPath)) continue;
-                var configPath = PathUtils.Combine(folderPath, Constants.PackageFileName);
-                if (!FileUtils.IsFileExists(configPath)) continue;
-
-                var plugin = new Plugin(folderPath, true);
-                if (!StringUtils.IsStrictName(plugin.Publisher) || !StringUtils.IsStrictName(plugin.Name)) continue;
-                if (Path.GetFileName(folderPath) != plugin.PluginId) continue;
-
-                Plugins.Add(plugin);
-                if (!plugin.Disabled)
+                foreach (var folderPath in DirectoryUtils.GetDirectoryPaths(_directoryPath))
                 {
-                    var (success, errorMessage) = plugin.LoadAssembly();
-                    plugin.Success = success;
-                    plugin.ErrorMessage = errorMessage;
-                    if (success)
+                    if (string.IsNullOrEmpty(folderPath)) continue;
+                    var configPath = PathUtils.Combine(folderPath, Constants.PackageFileName);
+                    if (!FileUtils.IsFileExists(configPath)) continue;
+
+                    var plugin = new Plugin(folderPath, true);
+                    if (!StringUtils.IsStrictName(plugin.Publisher) || !StringUtils.IsStrictName(plugin.Name)) continue;
+                    if (PathUtils.GetFileName(folderPath) != plugin.PluginId) continue;
+
+                    plugins.Add(plugin);
+
+                }
+
+                foreach (var plugin in plugins.OrderBy(x => x.Taxis == 0 ? int.MaxValue : x.Taxis))
+                {
+                    Plugins.Add(plugin);
+                    if (!plugin.Disabled)
                     {
-                        configurations.Add(plugin.Configuration);
+                        var (success, errorMessage) = plugin.LoadAssembly();
+                        plugin.Success = success;
+                        plugin.ErrorMessage = errorMessage;
+                        if (success)
+                        {
+                            configurations.Add(plugin.Configuration);
+                        }
                     }
                 }
             }
@@ -60,25 +69,60 @@ namespace SSCMS.Core.Services
             {
                 builder.AddConfiguration(configuration);
             }
-            Configuration = builder.Build();
+            _settingsManager.Configuration = builder.Build();
         }
 
-        public IPlugin Current
-        {
-            get
-            {
-                var assembly = Assembly.GetCallingAssembly();
-                return assembly == null ? null : NetCorePlugins.FirstOrDefault(x => x.Assembly.FullName == assembly.FullName);
-            }
-        }
-
-        public IConfiguration Configuration { get; private set; }
+        //public IPlugin Current
+        //{
+        //    get
+        //    {
+        //        var assembly = Assembly.GetCallingAssembly();
+        //        return assembly == null ? null : NetCorePlugins.FirstOrDefault(x => x.Assembly.FullName == assembly.FullName);
+        //    }
+        //}
 
         public List<IPlugin> Plugins { get; private set; }
 
         public List<IPlugin> EnabledPlugins => Plugins.Where(x => x.Success && !x.Disabled).ToList();
 
         public List<IPlugin> NetCorePlugins => EnabledPlugins.Where(x => x.Assembly != null).ToList();
+
+        public List<IPlugin> GetPlugins(int siteId)
+        {
+            return EnabledPlugins.Where(plugin => IsEnabled(plugin, siteId)).ToList();
+        }
+
+        public List<IPlugin> GetPlugins(int siteId, int channelId)
+        {
+            var plugins = GetPlugins(siteId);
+            return plugins.Where(plugin => IsEnabled(plugin, siteId, channelId)).ToList();
+        }
+
+        private static bool IsEnabled(IPlugin plugin, int siteId)
+        {
+            if (plugin == null || plugin.Disabled) return false;
+            return plugin.ApplyToSites && (plugin.AllSites || ListUtils.Contains(plugin.SiteIds, siteId));
+        }
+
+        private static bool IsEnabled(IPlugin plugin, int siteId, int channelId)
+        {
+            if (!IsEnabled(plugin, siteId)) return false;
+            var siteConfig = plugin.SiteConfigs?.FirstOrDefault(x => x.SiteId == siteId);
+            if (siteConfig == null) return false;
+            return siteConfig.AllChannels || ListUtils.Contains(siteConfig.ChannelIds, channelId);
+        }
+
+        public bool IsEnabled(string pluginId, int siteId)
+        {
+            var plugin = GetPlugin(pluginId);
+            return IsEnabled(plugin, siteId);
+        }
+
+        public bool IsEnabled(string pluginId, int siteId, int channelId)
+        {
+            var plugin = GetPlugin(pluginId);
+            return IsEnabled(plugin, siteId, channelId);
+        }
 
         public IPlugin GetPlugin(string pluginId)
         {

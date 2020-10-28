@@ -44,7 +44,7 @@
           </el-table>
 
           <el-row style="text-align: center; padding: 10px 0;">
-            请使用命令行 <el-link type="primary">sscms-cli update</el-link> 进行升级
+            <el-link type="primary" href="https://sscms.com/docs/v7/getting-started/update.html" target="_blank">请参考系统升级帮助文档进行升级</el-link>
           </el-row>
         </div>
         <div v-if="newPlugins.length > 0">
@@ -79,7 +79,7 @@
         </el-link>
       </el-popover>
 
-      <el-dropdown v-on:command="btnCultureClick">
+      <!-- <el-dropdown v-on:command="btnCultureClick">
         <span class="el-dropdown-link">
           <i class="fa fa-language"></i>
         </span>
@@ -87,15 +87,14 @@
           <el-dropdown-item command="en-US" :disabled="culture === 'en-US'">English</el-dropdown-item>
           <el-dropdown-item command="zh-CN" :disabled="culture === 'zh-CN'">中文</el-dropdown-item>
         </el-dropdown-menu>
-      </el-dropdown>
+      </el-dropdown> -->
 
-      <form v-if="siteId > 0" id="search" class="search" :action="utils.getCmsUrl('contentsSearch')" target="right" method="get">
-        <input name="siteId" type="hidden" :value="siteId">
-        <input name="keyword" type="text" placeholder="内容搜索..." class="form-control">
-        <a href="javascript:;" onclick="$('#search').submit();">
+      <div v-if="siteId > 0" class="search">
+        <input type="text" v-model="keyword" placeholder="内容搜索..." class="form-control">
+        <a href="javascript:;" v-on:click="btnSearchClick">
           <i class="ion-search"></i>
         </a>
-      </form>
+      </div>
 
       <el-dropdown v-on:command="btnUserMenuClick">
         <span class="el-dropdown-link" style="top: 7px;position: inherit;">

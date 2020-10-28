@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
+using SSCMS.Configuration;
 
 namespace SSCMS.Utils
 {
@@ -46,6 +47,12 @@ namespace SSCMS.Utils
         public static string TrimSlash(string text)
         {
             return Trim(text, '/');
+        }
+
+        public static string TrimEndSlash(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length == 1) return text;
+            return TrimEnd(text, "/");
         }
 
         public static string TrimEnd(string text, string end)
@@ -141,6 +148,18 @@ namespace SSCMS.Utils
             if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
 
             return a.Equals(b, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool Contains(string content, string val)
+        {
+            if (string.IsNullOrEmpty(content) || string.IsNullOrEmpty(val)) return false;
+            return content == val || content.Contains(val);
+        }
+
+        public static bool ContainsIgnoreCase(string content, string val)
+        {
+            if (string.IsNullOrEmpty(content) || string.IsNullOrEmpty(val)) return false;
+            return content == val || content.Contains(val, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool Equals(string a, string b)
@@ -531,6 +550,16 @@ namespace SSCMS.Utils
             return retVal;
         }
 
+        public static string ToJsonString(string value)
+        {
+            var retVal = string.Empty;
+            if (!string.IsNullOrEmpty(value))
+            {
+                retVal = value.Replace("\\", "\\\\");
+            }
+            return retVal;
+        }
+
         public static string ParseReplace(string parsedContent, string replace, string to)
         {
             if (replace.IndexOf(',') != -1)
@@ -699,7 +728,7 @@ namespace SSCMS.Utils
             return Regex.IsMatch(chr.ToString(), pattern);
         }
 
-        public const string StrictNameRegex = "^[a-z][a-z0-9\\-]*$";
+        public const string StrictNameRegex = "^[a-z][a-z0-9\\-_]*$";
 
         public static bool IsStrictName(string name)
         {
