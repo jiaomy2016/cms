@@ -2,9 +2,9 @@ using System;
 using System.Collections.Specialized;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.StlParser.Utility
 {
@@ -48,30 +48,30 @@ namespace SiteServer.CMS.StlParser.Utility
 
             if (_contextType == EContextType.Channel)
             {
-                var channelItemInfo = new ChannelItemInfo(SqlUtils.EvalInt(container.DataItem, nameof(Channel.Id)), container.ItemIndex);
+                var channelItemInfo = new ChannelItemInfo(SqlUtils.EvalInt(container.DataItem, ChannelAttribute.Id), container.ItemIndex);
                 _pageInfo.ChannelItems.Push(channelItemInfo);
-                literal.Text = TemplateUtility.GetChannelsItemTemplateStringAsync(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo).GetAwaiter().GetResult();
+                literal.Text = TemplateUtility.GetChannelsItemTemplateString(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo);
             }
             else if (_contextType == EContextType.Content)
             {
                 var contentItemInfo = new ContentItemInfo(SqlUtils.EvalInt(container.DataItem, ContentAttribute.ChannelId), SqlUtils.EvalInt(container.DataItem, ContentAttribute.Id), container.ItemIndex);
                 _pageInfo.ContentItems.Push(contentItemInfo);
-                literal.Text = TemplateUtility.GetContentsItemTemplateStringAsync(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo).GetAwaiter().GetResult();
+                literal.Text = TemplateUtility.GetContentsItemTemplateString(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo);
             }
             else if (_contextType == EContextType.SqlContent)
             {
                 _pageInfo.SqlItems.Push(itemInfo);
-                literal.Text = TemplateUtility.GetSqlContentsTemplateStringAsync(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo).GetAwaiter().GetResult();
+                literal.Text = TemplateUtility.GetSqlContentsTemplateString(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo);
             }
             else if (_contextType == EContextType.Site)
             {
                 _pageInfo.SiteItems.Push(itemInfo);
-                literal.Text = TemplateUtility.GetSitesTemplateStringAsync(_templateString, container.ClientID, _pageInfo, _contextType, _contextInfo).GetAwaiter().GetResult();
+                literal.Text = TemplateUtility.GetSitesTemplateString(_templateString, container.ClientID, _pageInfo, _contextType, _contextInfo);
             }
             else if (_contextType == EContextType.Each)
             {
                 _pageInfo.EachItems.Push(itemInfo);
-                literal.Text = TemplateUtility.GetEachsTemplateStringAsync(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo).GetAwaiter().GetResult();
+                literal.Text = TemplateUtility.GetEachsTemplateString(_templateString, _selectedItems, _selectedValues, container.ClientID, _pageInfo, _contextType, _contextInfo);
             }
 
             if (_separatorRepeat > 1)

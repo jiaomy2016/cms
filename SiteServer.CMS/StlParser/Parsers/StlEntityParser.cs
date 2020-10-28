@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Text;
-using System.Threading.Tasks;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.StlEntity;
 using SiteServer.CMS.StlParser.Utility;
@@ -19,7 +18,7 @@ namespace SiteServer.CMS.StlParser.Parsers
         /// <summary>
         /// 将原始内容中的STL实体替换为实际内容
         /// </summary>
-        public static async Task ReplaceStlEntitiesAsync(StringBuilder parsedBuilder, PageInfo pageInfo, ContextInfo contextInfo)
+        public static void ReplaceStlEntities(StringBuilder parsedBuilder, PageInfo pageInfo, ContextInfo contextInfo)
         {
             var stlEntityList = StlParserUtility.GetStlEntityList(parsedBuilder.ToString());
 
@@ -28,7 +27,7 @@ namespace SiteServer.CMS.StlParser.Parsers
                 var startIndex = parsedBuilder.ToString().IndexOf(stlEntity, StringComparison.Ordinal);
                 if (startIndex == -1) continue;
 
-                var resultContent = await ParseStlEntityAsync(stlEntity, pageInfo, contextInfo);
+                var resultContent = ParseStlEntity(stlEntity, pageInfo, contextInfo);
                 parsedBuilder.Replace(stlEntity, resultContent, startIndex, stlEntity.Length);
             }
         }
@@ -52,7 +51,7 @@ namespace SiteServer.CMS.StlParser.Parsers
         //    return parsedBuilder.ToString();
         //}
 
-        internal static async Task<string> ParseStlEntityAsync(string stlEntity, PageInfo pageInfo, ContextInfo contextInfo)
+        internal static string ParseStlEntity(string stlEntity, PageInfo pageInfo, ContextInfo contextInfo)
         {
             var parsedContent = string.Empty;
 
@@ -60,46 +59,46 @@ namespace SiteServer.CMS.StlParser.Parsers
 
             if (entityType == EStlEntityType.Stl)
             {
-                parsedContent = await StlStlEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlStlEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.StlElement)
             {
-                parsedContent = await StlElementEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlElementEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.Content)
             {
-                parsedContent = await StlContentEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlContentEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.Channel)
             {
-                parsedContent = await StlChannelEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlChannelEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.Request)
             {
-                parsedContent = await StlRequestEntities.ParseAsync(stlEntity, pageInfo);
+                parsedContent = StlRequestEntities.Parse(stlEntity, pageInfo);
             }
             else if (entityType == EStlEntityType.Navigation)
             {
-                parsedContent = await StlNavigationEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlNavigationEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.Sql)
             {
-                parsedContent = await StlSqlEntities.ParseAsync(stlEntity, pageInfo, contextInfo);
+                parsedContent = StlSqlEntities.Parse(stlEntity, pageInfo, contextInfo);
             }
             else if (entityType == EStlEntityType.User)
             {
-                parsedContent = await StlUserEntities.ParseAsync(stlEntity, pageInfo);
+                parsedContent = StlUserEntities.Parse(stlEntity, pageInfo);
             }
 
             return parsedContent;
         }
 
-        internal static async Task<string> ReplaceStlEntitiesForAttributeValueAsync(string attrValue, PageInfo pageInfo, ContextInfo contextInfo)
+        internal static string ReplaceStlEntitiesForAttributeValue(string attrValue, PageInfo pageInfo, ContextInfo contextInfo)
         {
             if (!StlParserUtility.IsStlEntityInclude(attrValue)) return attrValue;
 
             var contentBuilder = new StringBuilder(attrValue);
-            await ReplaceStlEntitiesAsync(contentBuilder, pageInfo, contextInfo);
+            ReplaceStlEntities(contentBuilder, pageInfo, contextInfo);
             return contentBuilder.ToString();
         }
 	}

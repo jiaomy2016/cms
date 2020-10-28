@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using NuGet.Packaging;
 using NuGet.Versioning;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Packaging
 {
-    public class PackageMetadata : SiteServer.Abstractions.IPackageMetadata
+    public class PackageMetadata : IMetadata
     {
         private readonly Dictionary<string, string> _metadata;
         private readonly IReadOnlyCollection<PackageDependencyGroup> _dependencyGroups;
@@ -17,7 +19,7 @@ namespace SiteServer.CMS.Packaging
         {
             Id = directoryName;
             Title = directoryName;
-            IconUrl = new Uri("https://www.siteserver.cn/assets/images/favicon.png");
+            IconUrl = new Uri(CloudUtils.Root.IconUrl);
             Version = "0.0.0";
         }
 
@@ -159,7 +161,7 @@ namespace SiteServer.CMS.Packaging
             return new PackageMetadata(
                 nuspecReader.GetMetadata().ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                 nuspecReader.GetDependencyGroups(true),
-                nuspecReader.GetFrameworkAssemblyGroups(),
+                nuspecReader.GetFrameworkReferenceGroups(),
                 nuspecReader.GetPackageTypes(),
                 nuspecReader.GetMinClientVersion()
            );

@@ -1,43 +1,52 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Collections.Specialized;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.DataCache.Stl
 {
     public static class StlTagCache
     {
-        public static async Task<List<int>> GetContentIdListByTagCollectionAsync(List<string> tagCollection, int siteId)
+        private static readonly object LockObject = new object();
+
+        public static List<int> GetContentIdListByTagCollection(List<string> tagCollection, int siteId)
         {
             var cacheKey = StlCacheManager.GetCacheKey(nameof(StlTagCache),
-                       nameof(GetContentIdListByTagCollectionAsync), TranslateUtils.ObjectCollectionToString(tagCollection),
+                       nameof(GetContentIdListByTagCollection), TranslateUtils.ObjectCollectionToString(tagCollection),
                        siteId.ToString());
             var retVal = StlCacheManager.Get<List<int>>(cacheKey);
             if (retVal != null) return retVal;
 
-            retVal = StlCacheManager.Get<List<int>>(cacheKey);
-            if (retVal == null)
+            lock (LockObject)
             {
-                retVal = await DataProvider.ContentTagRepository.GetContentIdListByTagCollectionAsync(tagCollection, siteId);
-                StlCacheManager.Set(cacheKey, retVal);
+                retVal = StlCacheManager.Get<List<int>>(cacheKey);
+                if (retVal == null)
+                {
+                    retVal = DataProvider.TagDao.GetContentIdListByTagCollection(tagCollection, siteId);
+                    StlCacheManager.Set(cacheKey, retVal);
+                }
             }
 
             return retVal;
         }
 
-        public static async Task<List<ContentTag>> GetTagListAsync(int siteId, int contentId, bool isOrderByCount, int totalNum)
+        public static List<TagInfo> GetTagInfoList(int siteId, int contentId, bool isOrderByCount, int totalNum)
         {
             var cacheKey = StlCacheManager.GetCacheKey(nameof(StlTagCache),
-                       nameof(GetTagListAsync), siteId.ToString(), contentId.ToString(), isOrderByCount.ToString(), totalNum.ToString());
-            var retVal = StlCacheManager.Get<List<ContentTag>>(cacheKey);
+                       nameof(GetTagInfoList), siteId.ToString(), contentId.ToString(), isOrderByCount.ToString(), totalNum.ToString());
+            var retVal = StlCacheManager.Get<List<TagInfo>>(cacheKey);
             if (retVal != null) return retVal;
 
-            retVal = StlCacheManager.Get<List<ContentTag>>(cacheKey);
-            if (retVal == null)
+            lock (LockObject)
             {
-                retVal = await DataProvider.ContentTagRepository.GetTagListAsync(siteId, contentId, isOrderByCount, totalNum);
-                StlCacheManager.Set(cacheKey, retVal);
+                retVal = StlCacheManager.Get<List<TagInfo>>(cacheKey);
+                if (retVal == null)
+                {
+                    retVal = DataProvider.TagDao.GetTagInfoList(siteId, contentId, isOrderByCount, totalNum);
+                    StlCacheManager.Set(cacheKey, retVal);
+                }
             }
 
             return retVal;

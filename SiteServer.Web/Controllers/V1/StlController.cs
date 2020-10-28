@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Api.V1;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.API.Controllers.V1
 {
@@ -14,25 +13,22 @@ namespace SiteServer.API.Controllers.V1
     {
         private const string Route = "{elementName}";
 
+        [OpenApiOperation("STL 模板语言 API", "https://sscms.com/docs/v6/api/guide/stl/")]
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> Get(string elementName)
+        public IHttpActionResult Get(string elementName)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeStl);
-
                 var stlRequest = new StlRequest();
-                await stlRequest.LoadAsync(request, isApiAuthorized);
 
                 if (!stlRequest.IsApiAuthorized)
                 {
                     return Unauthorized();
                 }
 
-                var site = stlRequest.Site;
+                var siteInfo = stlRequest.SiteInfo;
 
-                if (site == null)
+                if (siteInfo == null)
                 {
                     return NotFound();
                 }
@@ -43,9 +39,10 @@ namespace SiteServer.API.Controllers.V1
 
                 if (StlElementParser.ElementsToParseDic.ContainsKey(elementName))
                 {
-                    if (StlElementParser.ElementsToParseDic.TryGetValue(elementName, out var func))
+                    Func<PageInfo, ContextInfo, object> func;
+                    if (StlElementParser.ElementsToParseDic.TryGetValue(elementName, out func))
                     {
-                        var obj = await func(stlRequest.PageInfo, stlRequest.ContextInfo);
+                        var obj = func(stlRequest.PageInfo, stlRequest.ContextInfo);
 
                         if (obj is string)
                         {
@@ -65,7 +62,7 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

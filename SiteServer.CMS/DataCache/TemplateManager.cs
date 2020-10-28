@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.CMS.Model;
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.DataCache
 {
@@ -14,56 +14,56 @@ namespace SiteServer.CMS.DataCache
         private static readonly string CacheKey = DataCacheManager.GetCacheKey(nameof(TemplateManager));
         private static readonly object SyncRoot = new object();
 
-        public static async Task<Template> GetTemplateAsync(int siteId, int templateId)
+        public static TemplateInfo GetTemplateInfo(int siteId, int templateId)
         {
-            Template template = null;
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
+            TemplateInfo templateInfo = null;
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
 
-            if (templateDictionary != null && templateDictionary.ContainsKey(templateId))
+            if (templateInfoDictionary != null && templateInfoDictionary.ContainsKey(templateId))
             {
-                template = templateDictionary[templateId];
+                templateInfo = templateInfoDictionary[templateId];
             }
-            return template;
+            return templateInfo;
         }
 
-        public static async Task<string> GetCreatedFileFullNameAsync(int siteId, int templateId)
+        public static string GetCreatedFileFullName(int siteId, int templateId)
         {
             var createdFileFullName = string.Empty;
 
-            var template = await GetTemplateAsync(siteId, templateId);
-            if (template != null)
+            var templateInfo = GetTemplateInfo(siteId, templateId);
+            if (templateInfo != null)
             {
-                createdFileFullName = template.CreatedFileFullName;
+                createdFileFullName = templateInfo.CreatedFileFullName;
             }
 
             return createdFileFullName;
         }
 
-        public static async Task<string> GetTemplateNameAsync(int siteId, int templateId)
+        public static string GetTemplateName(int siteId, int templateId)
         {
             var templateName = string.Empty;
 
-            var template = await GetTemplateAsync(siteId, templateId);
-            if (template != null)
+            var templateInfo = GetTemplateInfo(siteId, templateId);
+            if (templateInfo != null)
             {
-                templateName = template.TemplateName;
+                templateName = templateInfo.TemplateName;
             }
 
             return templateName;
         }
 
-        public static async Task<Template> GetTemplateByTemplateNameAsync(int siteId, TemplateType templateType, string templateName)
+        public static TemplateInfo GetTemplateInfoByTemplateName(int siteId, TemplateType templateType, string templateName)
         {
-            Template info = null;
+            TemplateInfo info = null;
 
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
-            if (templateDictionary != null)
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
+            if (templateInfoDictionary != null)
             {
-                foreach (var template in templateDictionary.Values)
+                foreach (var templateInfo in templateInfoDictionary.Values)
                 {
-                    if (template.Type == templateType && template.TemplateName == templateName)
+                    if (templateInfo.TemplateType == templateType && templateInfo.TemplateName == templateName)
                     {
-                        info = template;
+                        info = templateInfo;
                         break;
                     }
                 }
@@ -72,42 +72,42 @@ namespace SiteServer.CMS.DataCache
             return info;
         }
 
-        public static async Task<Template> GetDefaultTemplateAsync(int siteId, TemplateType templateType)
+        public static TemplateInfo GetDefaultTemplateInfo(int siteId, TemplateType templateType)
         {
-            Template info = null;
+            TemplateInfo info = null;
 
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
-            if (templateDictionary != null)
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
+            if (templateInfoDictionary != null)
             {
-                foreach (var template in templateDictionary.Values)
+                foreach (var templateInfo in templateInfoDictionary.Values)
                 {
-                    if (template.Type == templateType && template.Default)
+                    if (templateInfo.TemplateType == templateType && templateInfo.IsDefault)
                     {
-                        info = template;
+                        info = templateInfo;
                         break;
                     }
                 }
             }
 
-            return info ?? new Template
+            return info ?? new TemplateInfo
             {
                 SiteId = siteId,
-                Type = templateType
+                TemplateType = templateType
             };
         }
 
-        public static async Task<int> GetDefaultTemplateIdAsync(int siteId, TemplateType templateType)
+        public static int GetDefaultTemplateId(int siteId, TemplateType templateType)
         {
             var id = 0;
 
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
-            if (templateDictionary != null)
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
+            if (templateInfoDictionary != null)
             {
-                foreach (var template in templateDictionary.Values)
+                foreach (var templateInfo in templateInfoDictionary.Values)
                 {
-                    if (template.Type == templateType && template.Default)
+                    if (templateInfo.TemplateType == templateType && templateInfo.IsDefault)
                     {
-                        id = template.Id;
+                        id = templateInfo.Id;
                         break;
                     }
                 }
@@ -116,18 +116,18 @@ namespace SiteServer.CMS.DataCache
             return id;
         }
 
-        public static async Task<int> GetTemplateIdByTemplateNameAsync(int siteId, TemplateType templateType, string templateName)
+        public static int GetTemplateIdByTemplateName(int siteId, TemplateType templateType, string templateName)
         {
             var id = 0;
 
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
-            if (templateDictionary != null)
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
+            if (templateInfoDictionary != null)
             {
-                foreach (var template in templateDictionary.Values)
+                foreach (var templateInfo in templateInfoDictionary.Values)
                 {
-                    if (template.Type == templateType && template.TemplateName == templateName)
+                    if (templateInfo.TemplateType == templateType && templateInfo.TemplateName == templateName)
                     {
-                        id = template.Id;
+                        id = templateInfo.Id;
                         break;
                     }
                 }
@@ -136,52 +136,52 @@ namespace SiteServer.CMS.DataCache
             return id;
         }
 
-        public static async Task<List<int>> GetAllFileTemplateIdListAsync(int siteId)
+        public static List<int> GetAllFileTemplateIdList(int siteId)
         {
             var list = new List<int>();
 
-            var templateDictionary = await GetTemplateDictionaryBySiteIdAsync(siteId);
-            if (templateDictionary == null) return list;
+            var templateInfoDictionary = GetTemplateInfoDictionaryBySiteId(siteId);
+            if (templateInfoDictionary == null) return list;
 
-            foreach (var template in templateDictionary.Values)
+            foreach (var templateInfo in templateInfoDictionary.Values)
             {
-                if (template.Type == TemplateType.FileTemplate)
+                if (templateInfo.TemplateType == TemplateType.FileTemplate)
                 {
-                    list.Add(template.Id);
+                    list.Add(templateInfo.Id);
                 }
             }
 
             return list;
         }
 
-	    private static async Task<Dictionary<int, Template>> GetTemplateDictionaryBySiteIdAsync(int siteId, bool flush = false)
+	    private static Dictionary<int, TemplateInfo> GetTemplateInfoDictionaryBySiteId(int siteId, bool flush = false)
         {
             var dictionary = GetCacheDictionary();
 
-            Dictionary<int, Template> templateDictionary = null;
+            Dictionary<int, TemplateInfo> templateInfoDictionary = null;
 
             if (!flush && dictionary.ContainsKey(siteId))
             {
-                templateDictionary = dictionary[siteId];
+                templateInfoDictionary = dictionary[siteId];
             }
 
-            if (templateDictionary == null)
+            if (templateInfoDictionary == null)
             {
-                templateDictionary = await DataProvider.TemplateRepository.GetTemplateDictionaryBySiteIdAsync(siteId);
+                templateInfoDictionary = DataProvider.TemplateDao.GetTemplateInfoDictionaryBySiteId(siteId);
 
-                if (templateDictionary != null)
+                if (templateInfoDictionary != null)
                 {
-                    UpdateCache(dictionary, templateDictionary, siteId);
+                    UpdateCache(dictionary, templateInfoDictionary, siteId);
                 }
             }
-            return templateDictionary;
+            return templateInfoDictionary;
         }
 
-        private static void UpdateCache(Dictionary<int, Dictionary<int, Template>> dictionary, Dictionary<int, Template> templateDictionary, int siteId)
+        private static void UpdateCache(Dictionary<int, Dictionary<int, TemplateInfo>> dictionary, Dictionary<int, TemplateInfo> templateInfoDictionary, int siteId)
         {
             lock (SyncRoot)
             {
-                dictionary[siteId] = templateDictionary;
+                dictionary[siteId] = templateInfoDictionary;
             }
         }
 
@@ -195,135 +195,126 @@ namespace SiteServer.CMS.DataCache
             }
         }
 
-        private static Dictionary<int, Dictionary<int, Template>> GetCacheDictionary()
+        private static Dictionary<int, Dictionary<int, TemplateInfo>> GetCacheDictionary()
         {
-            var dictionary = DataCacheManager.Get<Dictionary<int, Dictionary<int, Template>>>(CacheKey);
+            var dictionary = DataCacheManager.Get<Dictionary<int, Dictionary<int, TemplateInfo>>>(CacheKey);
             if (dictionary == null)
             {
-                dictionary = new Dictionary<int, Dictionary<int, Template>>();
+                dictionary = new Dictionary<int, Dictionary<int, TemplateInfo>>();
                 DataCacheManager.InsertHours(CacheKey, dictionary, 24);
             }
             return dictionary;
         }
 
-        public static string GetTemplateFilePath(Site site, Template template)
+        public static string GetTemplateFilePath(SiteInfo siteInfo, TemplateInfo templateInfo)
         {
             string filePath;
-            if (template.Type == TemplateType.IndexPageTemplate)
+            if (templateInfo.TemplateType == TemplateType.IndexPageTemplate)
             {
-                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir, template.RelatedFileName);
+                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteInfo.SiteDir, templateInfo.RelatedFileName);
             }
-            else if (template.Type == TemplateType.ContentTemplate)
+            else if (templateInfo.TemplateType == TemplateType.ContentTemplate)
             {
-                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir, DirectoryUtils.PublishmentSytem.Template, DirectoryUtils.PublishmentSytem.Content, template.RelatedFileName);
+                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteInfo.SiteDir, DirectoryUtils.PublishmentSytem.Template, DirectoryUtils.PublishmentSytem.Content, templateInfo.RelatedFileName);
             }
             else
             {
-                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir, DirectoryUtils.PublishmentSytem.Template, template.RelatedFileName);
+                filePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteInfo.SiteDir, DirectoryUtils.PublishmentSytem.Template, templateInfo.RelatedFileName);
             }
             return filePath;
         }
 
-	    public static async Task<Template> GetIndexPageTemplateAsync(int siteId)
+	    public static TemplateInfo GetIndexPageTemplateInfo(int siteId)
 	    {
-	        var templateId = await GetDefaultTemplateIdAsync(siteId, TemplateType.IndexPageTemplate);
-            Template template = null;
+	        var templateId = GetDefaultTemplateId(siteId, TemplateType.IndexPageTemplate);
+            TemplateInfo templateInfo = null;
             if (templateId != 0)
             {
-                template = await GetTemplateAsync(siteId, templateId);
+                templateInfo = GetTemplateInfo(siteId, templateId);
             }
 
-            return template ?? await GetDefaultTemplateAsync(siteId, TemplateType.IndexPageTemplate);
+            return templateInfo ?? GetDefaultTemplateInfo(siteId, TemplateType.IndexPageTemplate);
         }
 
-        public static async Task<Template> GetChannelTemplateAsync(int siteId, int channelId)
+        public static TemplateInfo GetChannelTemplateInfo(int siteId, int channelId)
         {
             var templateId = 0;
             if (siteId == channelId)
             {
-                templateId = await GetDefaultTemplateIdAsync(siteId, TemplateType.IndexPageTemplate);
+                templateId = GetDefaultTemplateId(siteId, TemplateType.IndexPageTemplate);
             }
             else
             {
-                var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (nodeInfo != null)
                 {
                     templateId = nodeInfo.ChannelTemplateId;
                 }
             }
 
-            Template template = null;
+            TemplateInfo templateInfo = null;
             if (templateId != 0)
             {
-                template = await GetTemplateAsync(siteId, templateId);
+                templateInfo = GetTemplateInfo(siteId, templateId);
             }
 
-            return template ?? await GetDefaultTemplateAsync(siteId, TemplateType.ChannelTemplate);
+            return templateInfo ?? GetDefaultTemplateInfo(siteId, TemplateType.ChannelTemplate);
         }
 
-        public static async Task<Template> GetContentTemplateAsync(int siteId, int channelId)
+        public static TemplateInfo GetContentTemplateInfo(int siteId, int channelId)
         {
             var templateId = 0;
-            var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 templateId = nodeInfo.ContentTemplateId;
             }
 
-            Template template = null;
+            TemplateInfo templateInfo = null;
             if (templateId != 0)
             {
-                template = await GetTemplateAsync(siteId, templateId);
+                templateInfo = GetTemplateInfo(siteId, templateId);
             }
 
-            return template ?? await GetDefaultTemplateAsync(siteId, TemplateType.ContentTemplate);
+            return templateInfo ?? GetDefaultTemplateInfo(siteId, TemplateType.ContentTemplate);
         }
 
-        public static async Task<Template> GetFileTemplateAsync(int siteId, int fileTemplateId)
+        public static TemplateInfo GetFileTemplateInfo(int siteId, int fileTemplateId)
         {
             var templateId = fileTemplateId;
 
-            Template template = null;
+            TemplateInfo templateInfo = null;
             if (templateId != 0)
             {
-                template = await GetTemplateAsync(siteId, templateId);
+                templateInfo = GetTemplateInfo(siteId, templateId);
             }
 
-            return template ?? await GetDefaultTemplateAsync(siteId, TemplateType.FileTemplate);
+            return templateInfo ?? GetDefaultTemplateInfo(siteId, TemplateType.FileTemplate);
         }
 
-        public static async Task WriteContentToTemplateFileAsync(Site site, Template template, string content, string administratorName)
+        public static void WriteContentToTemplateFile(SiteInfo siteInfo, TemplateInfo templateInfo, string content, string administratorName)
         {
             if (content == null) content = string.Empty;
-            var filePath = GetTemplateFilePath(site, template);
-            FileUtils.WriteText(filePath, content);
+            var filePath = GetTemplateFilePath(siteInfo, templateInfo);
+            FileUtils.WriteText(filePath, templateInfo.Charset, content);
 
-            if (template.Id > 0)
+            if (templateInfo.Id > 0)
             {
-                var logInfo = new TemplateLog
-                {
-                    Id = 0,
-                    TemplateId = template.Id,
-                    SiteId = template.SiteId,
-                    AddDate = DateTime.Now,
-                    AddUserName = administratorName,
-                    ContentLength = content.Length,
-                    TemplateContent = content
-                };
-                await DataProvider.TemplateLogRepository.InsertAsync(logInfo);
+                var logInfo = new TemplateLogInfo(0, templateInfo.Id, templateInfo.SiteId, DateTime.Now, administratorName, content.Length, content);
+                DataProvider.TemplateLogDao.Insert(logInfo);
             }
         }
 
-        public static async Task<int> GetIndexTemplateIdAsync(int siteId)
+        public static int GetIndexTempalteId(int siteId)
         {
-            return await GetDefaultTemplateIdAsync(siteId, TemplateType.IndexPageTemplate);
+            return GetDefaultTemplateId(siteId, TemplateType.IndexPageTemplate);
         }
 
-        public static async Task<int> GetChannelTemplateIdAsync(int siteId, int channelId)
+        public static int GetChannelTempalteId(int siteId, int channelId)
         {
             var templateId = 0;
 
-            var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 templateId = nodeInfo.ChannelTemplateId;
@@ -331,17 +322,17 @@ namespace SiteServer.CMS.DataCache
 
             if (templateId == 0)
             {
-                templateId = await GetDefaultTemplateIdAsync(siteId, TemplateType.ChannelTemplate);
+                templateId = GetDefaultTemplateId(siteId, TemplateType.ChannelTemplate);
             }
 
             return templateId;
         }
 
-        public static async Task<int> GetContentTemplateIdAsync(int siteId, int channelId)
+        public static int GetContentTempalteId(int siteId, int channelId)
         {
             var templateId = 0;
 
-            var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 templateId = nodeInfo.ContentTemplateId;
@@ -349,25 +340,25 @@ namespace SiteServer.CMS.DataCache
 
             if (templateId == 0)
             {
-                templateId = await GetDefaultTemplateIdAsync(siteId, TemplateType.ContentTemplate);
+                templateId = GetDefaultTemplateId(siteId, TemplateType.ContentTemplate);
             }
 
             return templateId;
         }
 
-        public static string GetTemplateContent(Site site, Template template)
+        public static string GetTemplateContent(SiteInfo siteInfo, TemplateInfo templateInfo)
         {
-            var filePath = GetTemplateFilePath(site, template);
-            return GetContentByFilePath(filePath);
+            var filePath = GetTemplateFilePath(siteInfo, templateInfo);
+            return GetContentByFilePath(filePath, templateInfo.Charset);
         }
 
-        public static string GetIncludeContent(Site site, string file)
+        public static string GetIncludeContent(SiteInfo siteInfo, string file, ECharset charset)
         {
-            var filePath = PathUtility.MapPath(site, PathUtility.AddVirtualToPath(file));
-            return GetContentByFilePath(filePath);
+            var filePath = PathUtility.MapPath(siteInfo, PathUtility.AddVirtualToPath(file));
+            return GetContentByFilePath(filePath, charset);
         }
 
-        public static string GetContentByFilePath(string filePath)
+        public static string GetContentByFilePath(string filePath, ECharset charset = ECharset.utf_8)
         {
             try
             {
@@ -376,7 +367,7 @@ namespace SiteServer.CMS.DataCache
                 
                 if (FileUtils.IsFileExists(filePath))
                 {
-                    content = FileUtils.ReadText(filePath);
+                    content = FileUtils.ReadText(filePath, charset);
                 }
 
                 DataCacheManager.Insert(filePath, content, TimeSpan.FromHours(12), filePath);

@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
-using TableStyle = SiteServer.Abstractions.TableStyle;
-using WebUtils = SiteServer.BackgroundPages.Core.WebUtils;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Plugin.Impl;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -20,7 +20,7 @@ namespace SiteServer.BackgroundPages.Cms
         public Literal LtlAttributes;
         public Button BtnSubmit;
 
-        private List<TableStyle> _styleList;
+        private List<TableStyleInfo> _styleInfoList;
 
         public static string GetRedirectUrl(int siteId)
         {
@@ -33,19 +33,19 @@ namespace SiteServer.BackgroundPages.Cms
 
             PageUtils.CheckRequestParameter("siteId");
 
-            _styleList = TableStyleManager.GetSiteStyleListAsync(SiteId).GetAwaiter().GetResult();
+            _styleInfoList = TableStyleManager.GetSiteStyleInfoList(SiteId);
 
             if (!IsPostBack)
 			{
-                VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+                VerifySitePermissions(ConfigManager.SitePermissions.ConfigAttributes);
 
-                TbSiteName.Text = Site.SiteName;
+                TbSiteName.Text = SiteInfo.SiteName;
 
-			    var nameValueCollection = TranslateUtils.DictionaryToNameValueCollection(Site.ToDictionary());
+			    var nameValueCollection = TranslateUtils.DictionaryToNameValueCollection(SiteInfo.Additional.ToDictionary());
 
                 LtlAttributes.Text = GetAttributesHtml(nameValueCollection);
 
-                BtnSubmit.Attributes.Add("onClick", InputParserUtils.GetValidateSubmitOnClickScript("myForm"));
+                BtnSubmit.Attributes.Add("onclick", InputParserUtils.GetValidateSubmitOnClickScript("myForm"));
             }
             else
             {
@@ -62,23 +62,23 @@ namespace SiteServer.BackgroundPages.Cms
 
             var pageScripts = new NameValueCollection();
 
-            if (_styleList == null) return string.Empty;
+            if (_styleInfoList == null) return string.Empty;
 
-            var attributes = TranslateUtils.NameValueCollectionToDictionary(formCollection);
+            var attributes = new AttributesImpl(formCollection);
 
             var builder = new StringBuilder();
-            foreach (var style in _styleList)
+            foreach (var styleInfo in _styleInfoList)
             {
                 string extra;
-                var value = BackgroundInputTypeParser.Parse(Site, 0, style, attributes, pageScripts, out extra);
+                var value = BackgroundInputTypeParser.Parse(SiteInfo, 0, styleInfo, attributes, pageScripts, out extra);
                 if (string.IsNullOrEmpty(value) && string.IsNullOrEmpty(extra)) continue;
 
-                if (InputTypeUtils.Equals(style.InputType, InputType.TextEditor))
+                if (InputTypeUtils.Equals(styleInfo.InputType, InputType.TextEditor))
                 {
-                    var commands = WebUtils.GetTextEditorCommands(Site, style.AttributeName);
+                    var commands = WebUtils.GetTextEditorCommands(SiteInfo, 0, styleInfo.AttributeName);
                     builder.Append($@"
 <div class=""form-group"">
-    <label class=""control-label"">{style.DisplayName}</label>
+    <label class=""control-label"">{styleInfo.DisplayName}</label>
     {commands}
     <hr />
     {value}
@@ -89,7 +89,7 @@ namespace SiteServer.BackgroundPages.Cms
                 {
                     builder.Append($@"
 <div class=""form-group"">
-    <label class=""control-label"">{style.DisplayName}</label>
+    <label class=""control-label"">{styleInfo.DisplayName}</label>
     {value}
     {extra}
 </div>");
@@ -108,18 +108,15 @@ namespace SiteServer.BackgroundPages.Cms
 		{
 		    if (!Page.IsPostBack || !Page.IsValid) return;
 
-		    Site.SiteName = TbSiteName.Text;
+		    SiteInfo.SiteName = TbSiteName.Text;
 
-            var dict = BackgroundInputTypeParser.SaveAttributesAsync(Site, _styleList, Page.Request.Form, null).GetAwaiter().GetResult();
+            var dict = BackgroundInputTypeParser.SaveAttributes(SiteInfo, _styleInfoList, Page.Request.Form, null);
 
-            foreach (var o in dict)
-            {
-                Site.Set(o.Key, o.Value);
-            }
+		    SiteInfo.Additional.Load(dict);
 
-            DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
+            DataProvider.SiteDao.Update(SiteInfo);
 
-            AuthRequest.AddSiteLogAsync(SiteId, "修改站点设置").GetAwaiter().GetResult();
+            AuthRequest.AddSiteLog(SiteId, "修改站点设置");
 
             SuccessMessage("站点设置修改成功！");
         }

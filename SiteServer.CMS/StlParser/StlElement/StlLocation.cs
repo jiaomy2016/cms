@@ -1,8 +1,6 @@
 ﻿using System.Text;
-using System.Threading.Tasks;
 using System.Web.UI.HtmlControls;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
 using SiteServer.CMS.StlParser.Model;
@@ -31,7 +29,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         private const string IsContainSelf = nameof(IsContainSelf);
 
         //对“当前位置”（stl:location）元素进行解析
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
             var separator = " - ";
             var target = string.Empty;
@@ -65,34 +63,34 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, separator, target, linkClass, wordNum,isContainSelf);
+            return ParseImpl(pageInfo, contextInfo, separator, target, linkClass, wordNum,isContainSelf);
         }
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, string separator, string target, string linkClass, int wordNum, bool isContainSelf)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string separator, string target, string linkClass, int wordNum, bool isContainSelf)
         {
             if (!string.IsNullOrEmpty(contextInfo.InnerHtml))
             {
                 separator = contextInfo.InnerHtml;
             }
 
-            var nodeInfo = await ChannelManager.GetChannelAsync(pageInfo.SiteId, contextInfo.ChannelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, contextInfo.ChannelId);
 
             var builder = new StringBuilder();
 
             var parentsPath = nodeInfo.ParentsPath;
             var parentsCount = nodeInfo.ParentsCount;
-            if (!string.IsNullOrEmpty(parentsPath))
+            if (parentsPath.Length != 0)
             {
                 var nodePath = parentsPath;
                 if (isContainSelf)
                 {
                     nodePath = nodePath + "," + contextInfo.ChannelId;
                 }
-                var channelIdArrayList = StringUtils.GetStringList(nodePath);
+                var channelIdArrayList = TranslateUtils.StringCollectionToStringList(nodePath);
                 foreach (var channelIdStr in channelIdArrayList)
                 {
                     var currentId = int.Parse(channelIdStr);
-                    var currentNodeInfo = await ChannelManager.GetChannelAsync(pageInfo.SiteId, currentId);
+                    var currentNodeInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, currentId);
                     if (currentId == pageInfo.SiteId)
                     {
                         var stlAnchor = new HtmlAnchor();
@@ -104,13 +102,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = await PageUtility.GetIndexPageUrlAsync(pageInfo.Site, pageInfo.IsLocal);
+                        var url = PageUtility.GetIndexPageUrl(pageInfo.SiteInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = WebUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 
@@ -132,13 +130,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = await PageUtility.GetChannelUrlAsync(pageInfo.Site, currentNodeInfo, pageInfo.IsLocal);
+                        var url = PageUtility.GetChannelUrl(pageInfo.SiteInfo, currentNodeInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = WebUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 
@@ -155,13 +153,13 @@ namespace SiteServer.CMS.StlParser.StlElement
                         {
                             stlAnchor.Attributes.Add("class", linkClass);
                         }
-                        var url = await PageUtility.GetChannelUrlAsync(pageInfo.Site, currentNodeInfo, pageInfo.IsLocal);
+                        var url = PageUtility.GetChannelUrl(pageInfo.SiteInfo, currentNodeInfo, pageInfo.IsLocal);
                         if (url.Equals(PageUtils.UnclickedUrl))
                         {
                             stlAnchor.Target = string.Empty;
                         }
                         stlAnchor.HRef = url;
-                        stlAnchor.InnerHtml = WebUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
+                        stlAnchor.InnerHtml = StringUtils.MaxLengthText(currentNodeInfo.ChannelName, wordNum);
 
                         ControlUtils.AddAttributesIfNotExists(stlAnchor, contextInfo.Attributes);
 

@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
+using SiteServer.BackgroundPages.Settings;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.CMS.DataCache;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -22,9 +22,9 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Create);
+            VerifySitePermissions(ConfigManager.SitePermissions.CreateFiles);
 
-            var templateInfoList = DataProvider.TemplateRepository.GetTemplateListByTypeAsync(SiteId, TemplateType.FileTemplate).GetAwaiter().GetResult();
+            var templateInfoList = DataProvider.TemplateDao.GetTemplateInfoListOfFile(SiteId);
 
             foreach (var templateInfo in templateInfoList)
             {
@@ -54,7 +54,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             foreach (var templateId in templateIdList)
             {
-                CreateManager.CreateFileAsync(SiteId, templateId).GetAwaiter().GetResult();
+                CreateManager.CreateFile(SiteId, templateId);
             }
 
             PageUtils.Redirect(CmsPages.GetCreateStatusUrl(SiteId));

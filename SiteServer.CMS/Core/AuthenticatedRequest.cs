@@ -2,96 +2,89 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System.Web;
-using System.Web.Http;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Plugin.Apis;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Auth;
 
 namespace SiteServer.CMS.Core
 {
-    public class AuthenticatedRequest
+    public class AuthenticatedRequest : IAuthenticatedRequest
     {
-        private AuthenticatedRequest()
+        public AuthenticatedRequest(): this(HttpContext.Current.Request)
         {
             
         }
 
-        public static async Task<AuthenticatedRequest> GetAuthAsync()
+        public AuthenticatedRequest(HttpRequest request)
         {
-            var authRequest = new AuthenticatedRequest();
             try
             {
-                authRequest.HttpRequest = HttpContext.Current.Request;
+                HttpRequest = request;
 
-                var apiToken = authRequest.ApiToken;
+                var apiToken = ApiToken;
                 if (!string.IsNullOrEmpty(apiToken))
                 {
-                    var tokenInfo = await DataProvider.AccessTokenRepository.GetByTokenAsync(apiToken);
+                    var tokenInfo = AccessTokenManager.GetAccessTokenInfo(apiToken);
                     if (tokenInfo != null)
                     {
                         if (!string.IsNullOrEmpty(tokenInfo.AdminName))
                         {
-                            var adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(tokenInfo.AdminName);
+                            var adminInfo = AdminManager.GetAdminInfoByUserName(tokenInfo.AdminName);
                             if (adminInfo != null && !adminInfo.Locked)
                             {
-                                authRequest.Administrator = adminInfo;
-                                authRequest.IsAdminLoggin = true;
+                                AdminInfo = adminInfo;
+                                IsAdminLoggin = true;
                             }
                         }
 
-                        authRequest.IsApiAuthenticated = true;
+                        IsApiAuthenticated = true;
                     }
                 }
 
-                var userToken = authRequest.UserToken;
+                var userToken = UserToken;
                 if (!string.IsNullOrEmpty(userToken))
                 {
                     var tokenImpl = UserApi.Instance.ParseAccessToken(userToken);
                     if (tokenImpl.UserId > 0 && !string.IsNullOrEmpty(tokenImpl.UserName))
                     {
-                        var user = await DataProvider.UserRepository.GetByUserIdAsync(tokenImpl.UserId);
-                        if (user != null && !user.Locked && user.Checked && user.UserName == tokenImpl.UserName)
+                        var userInfo = UserManager.GetUserInfoByUserId(tokenImpl.UserId);
+                        if (userInfo != null && !userInfo.Locked && userInfo.Checked && userInfo.UserName == tokenImpl.UserName)
                         {
-                            authRequest.User = user;
-                            authRequest.IsUserLoggin = true;
+                            UserInfo = userInfo;
+                            IsUserLoggin = true;
                         }
                     }
                 }
 
-                var adminToken = authRequest.AdminToken;
+                var adminToken = AdminToken;
                 if (!string.IsNullOrEmpty(adminToken))
                 {
                     var tokenImpl = AdminApi.Instance.ParseAccessToken(adminToken);
                     if (tokenImpl.UserId > 0 && !string.IsNullOrEmpty(tokenImpl.UserName))
                     {
-                        var adminInfo = await DataProvider.AdministratorRepository.GetByUserIdAsync(tokenImpl.UserId);
+                        var adminInfo = AdminManager.GetAdminInfoByUserId(tokenImpl.UserId);
                         if (adminInfo != null && !adminInfo.Locked && adminInfo.UserName == tokenImpl.UserName)
                         {
-                            authRequest.Administrator = adminInfo;
-                            authRequest.IsAdminLoggin = true;
+                            AdminInfo = adminInfo;
+                            IsAdminLoggin = true;
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
             }
-
-            return authRequest;
         }
 
-        public bool IsApiAuthenticated { get; private set; }
+        public bool IsApiAuthenticated { get; }
 
-        public bool IsUserLoggin { get; private set; }
+        public bool IsUserLoggin { get; }
 
         public bool IsAdminLoggin { get; private set; }
 
@@ -113,9 +106,9 @@ namespace SiteServer.CMS.Core
                     accessTokenStr = CookieUtils.GetCookie(Constants.AuthKeyApiCookie);
                 }
 
-                if (StringUtils.EndsWith(accessTokenStr, WebConfigUtils.EncryptStingIndicator))
+                if (StringUtils.EndsWith(accessTokenStr, TranslateUtils.EncryptStingIndicator))
                 {
-                    accessTokenStr = WebConfigUtils.DecryptStringBySecretKey(accessTokenStr);
+                    accessTokenStr = TranslateUtils.DecryptStringBySecretKey(accessTokenStr);
                 }
 
                 return accessTokenStr;
@@ -140,9 +133,9 @@ namespace SiteServer.CMS.Core
                     accessTokenStr = HttpRequest.QueryString[Constants.AuthKeyUserQuery];
                 }
 
-                if (StringUtils.EndsWith(accessTokenStr, WebConfigUtils.EncryptStingIndicator))
+                if (StringUtils.EndsWith(accessTokenStr, TranslateUtils.EncryptStingIndicator))
                 {
-                    accessTokenStr = WebConfigUtils.DecryptStringBySecretKey(accessTokenStr);
+                    accessTokenStr = TranslateUtils.DecryptStringBySecretKey(accessTokenStr);
                 }
 
                 return accessTokenStr;
@@ -167,9 +160,9 @@ namespace SiteServer.CMS.Core
                     accessTokenStr = HttpRequest.QueryString[Constants.AuthKeyAdminQuery];
                 }
 
-                if (StringUtils.EndsWith(accessTokenStr, WebConfigUtils.EncryptStingIndicator))
+                if (StringUtils.EndsWith(accessTokenStr, TranslateUtils.EncryptStingIndicator))
                 {
-                    accessTokenStr = WebConfigUtils.DecryptStringBySecretKey(accessTokenStr);
+                    accessTokenStr = TranslateUtils.DecryptStringBySecretKey(accessTokenStr);
                 }
 
                 return accessTokenStr;
@@ -202,7 +195,7 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public HttpRequest HttpRequest { get; private set; }
+        public HttpRequest HttpRequest { get; }
 
         public NameValueCollection QueryString => HttpRequest.QueryString;
 
@@ -227,7 +220,7 @@ namespace SiteServer.CMS.Core
         public int GetQueryInt(string name, int defaultValue = 0)
         {
             return !string.IsNullOrEmpty(HttpRequest.QueryString[name])
-                ? TranslateUtils.ToIntWithNegative(HttpRequest.QueryString[name])
+                ? TranslateUtils.ToIntWithNagetive(HttpRequest.QueryString[name])
                 : defaultValue;
         }
 
@@ -286,7 +279,7 @@ namespace SiteServer.CMS.Core
             var value = GetPostObject(name);
             if (value == null) return defaultValue;
             if (value is int) return (int)value;
-            return TranslateUtils.ToIntWithNegative(value.ToString(), defaultValue);
+            return TranslateUtils.ToIntWithNagetive(value.ToString(), defaultValue);
         }
 
         public decimal GetPostDecimal(string name, decimal defaultValue = 0)
@@ -315,34 +308,34 @@ namespace SiteServer.CMS.Core
 
         #region Log
 
-        public async Task AddSiteLogAsync(int siteId, string action)
+        public void AddSiteLog(int siteId, string action)
         {
-            await AddSiteLogAsync(siteId, 0, 0, action, string.Empty);
+            AddSiteLog(siteId, 0, 0, action, string.Empty);
         }
 
-        public async Task AddSiteLogAsync(int siteId, string action, string summary)
+        public void AddSiteLog(int siteId, string action, string summary)
         {
-            await AddSiteLogAsync(siteId, 0, 0, action, summary);
+            AddSiteLog(siteId, 0, 0, action, summary);
         }
 
-        public async Task AddSiteLogAsync(int siteId, int channelId, string action, string summary)
+        public void AddSiteLog(int siteId, int channelId, string action, string summary)
         {
-            await LogUtils.AddSiteLogAsync(siteId, channelId, 0, Administrator, action, summary);
+            LogUtils.AddSiteLog(siteId, channelId, 0, AdminInfo, action, summary);
         }
 
-        public async Task AddSiteLogAsync(int siteId, int channelId, int contentId, string action, string summary)
+        public void AddSiteLog(int siteId, int channelId, int contentId, string action, string summary)
         {
-            await LogUtils.AddSiteLogAsync(siteId, channelId, contentId, Administrator, action, summary);
+            LogUtils.AddSiteLog(siteId, channelId, contentId, AdminInfo, action, summary);
         }
 
-        public async Task AddAdminLogAsync(string action, string summary)
+        public void AddAdminLog(string action, string summary)
         {
-            await LogUtils.AddAdminLogAsync(Administrator, action, summary);
+            LogUtils.AddAdminLog(AdminInfo, action, summary);
         }
 
-        public async Task AddAdminLogAsync(string action)
+        public void AddAdminLog(string action)
         {
-            await LogUtils.AddAdminLogAsync(Administrator, action);
+            LogUtils.AddAdminLog(AdminInfo, action);
         }
 
         #endregion
@@ -379,22 +372,22 @@ namespace SiteServer.CMS.Core
             {
                 if (_userPermissionsImpl != null) return _userPermissionsImpl;
 
-                if (User != null)
+                if (UserInfo != null)
                 {
-                    var groupInfo = UserGroupManager.GetUserGroupAsync(User.GroupId).GetAwaiter().GetResult();
+                    var groupInfo = UserGroupManager.GetUserGroupInfo(UserInfo.GroupId);
                     if (groupInfo != null)
                     {
-                        Administrator = DataProvider.AdministratorRepository.GetByUserNameAsync(groupInfo.AdminName).GetAwaiter().GetResult();
+                        AdminInfo = AdminManager.GetAdminInfoByUserName(groupInfo.AdminName);
                     }
                 }
 
-                _userPermissionsImpl = new PermissionsImpl(Administrator);
+                _userPermissionsImpl = new PermissionsImpl(AdminInfo);
 
                 return _userPermissionsImpl;
             }
         }
 
-        public PermissionsImpl UserPermissions => UserPermissionsImpl;
+        public IPermissions UserPermissions => UserPermissionsImpl;
 
         private PermissionsImpl _adminPermissionsImpl;
 
@@ -404,30 +397,30 @@ namespace SiteServer.CMS.Core
             {
                 if (_adminPermissionsImpl != null) return _adminPermissionsImpl;
 
-                _adminPermissionsImpl = new PermissionsImpl(Administrator);
+                _adminPermissionsImpl = new PermissionsImpl(AdminInfo);
 
                 return _adminPermissionsImpl;
             }
         }
 
-        public PermissionsImpl AdminPermissions => AdminPermissionsImpl;
+        public IPermissions AdminPermissions => AdminPermissionsImpl;
 
         #region Administrator
 
-        public int AdminId => Administrator?.Id ?? 0;
+        public int AdminId => AdminInfo?.Id ?? 0;
 
         public string AdminName
         {
             get
             {
-                if (Administrator != null)
+                if (AdminInfo != null)
                 {
-                    return Administrator.UserName;
+                    return AdminInfo.UserName;
                 }
 
-                if (User != null)
+                if (UserInfo != null)
                 {
-                    var groupInfo = UserGroupManager.GetUserGroupAsync(User.GroupId).GetAwaiter().GetResult();
+                    var groupInfo = UserGroupManager.GetUserGroupInfo(UserInfo.GroupId);
                     if (groupInfo != null)
                     {
                         return groupInfo.AdminName;
@@ -438,21 +431,21 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public Administrator Administrator { get; private set; }
+        public AdministratorInfo AdminInfo { get; private set; }
 
-        public async Task<string> AdminLoginAsync(string userName, bool isAutoLogin)
+        public string AdminLogin(string userName, bool isAutoLogin)
         {
             if (string.IsNullOrEmpty(userName)) return null;
-            var adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(userName);
+            var adminInfo = AdminManager.GetAdminInfoByUserName(userName);
             if (adminInfo == null || adminInfo.Locked) return null;
 
-            Administrator = adminInfo;
+            AdminInfo = adminInfo;
             IsAdminLoggin = true;
 
             var expiresAt = TimeSpan.FromDays(Constants.AccessTokenExpireDays);
             var accessToken = AdminApi.Instance.GetAccessToken(adminInfo.Id, adminInfo.UserName, expiresAt);
 
-            await LogUtils.AddAdminLogAsync(adminInfo, "管理员登录");
+            LogUtils.AddAdminLog(adminInfo, "管理员登录");
 
             if (isAutoLogin)
             {
@@ -475,26 +468,26 @@ namespace SiteServer.CMS.Core
 
         #region User
 
-        public int UserId => User?.Id ?? 0;
+        public int UserId => UserInfo?.Id ?? 0;
 
-        public string UserName => User?.UserName ?? string.Empty;
+        public string UserName => UserInfo?.UserName ?? string.Empty;
 
-        public User User { get; private set; }
+        public UserInfo UserInfo { get; private set; }
 
-        public async Task<string> UserLoginAsync(string userName, bool isAutoLogin)
+        public string UserLogin(string userName, bool isAutoLogin)
         {
             if (string.IsNullOrEmpty(userName)) return null;
 
-            var user = await DataProvider.UserRepository.GetByUserNameAsync(userName);
-            if (user == null || user.Locked || !user.Checked) return null;
+            var userInfo = UserManager.GetUserInfoByUserName(userName);
+            if (userInfo == null || userInfo.Locked || !userInfo.Checked) return null;
 
-            User = user;
+            UserInfo = userInfo;
 
             var expiresAt = TimeSpan.FromDays(Constants.AccessTokenExpireDays);
             var accessToken = UserApi.Instance.GetAccessToken(UserId, UserName, expiresAt);
 
-            await DataProvider.UserRepository.UpdateLastActivityDateAndCountOfLoginAsync(User);
-            await LogUtils.AddUserLoginLogAsync(userName);
+            DataProvider.UserDao.UpdateLastActivityDateAndCountOfLogin(UserInfo);
+            LogUtils.AddUserLoginLog(userName);
 
             if (isAutoLogin)
             {
@@ -510,35 +503,33 @@ namespace SiteServer.CMS.Core
 
         public void UserLogout()
         {
-            User = null;
+            UserInfo = null;
             CookieUtils.Erase(Constants.AuthKeyUserCookie);
         }
 
         #endregion
 
-        public async Task<object> AdminRedirectCheckAsync(bool checkInstall = false, bool checkDatabaseVersion = false,
+        public object AdminRedirectCheck(bool checkInstall = false, bool checkDatabaseVersion = false,
             bool checkLogin = false)
         {
             var redirect = false;
             var redirectUrl = string.Empty;
-
-            var config = await DataProvider.ConfigRepository.GetAsync();
 
             if (checkInstall && string.IsNullOrEmpty(WebConfigUtils.ConnectionString))
             {
                 redirect = true;
                 redirectUrl = PageUtils.GetAdminUrl("Installer/");
             }
-            else if (checkDatabaseVersion && config.Initialized &&
-                     config.DatabaseVersion != SystemManager.ProductVersion)
+            else if (checkDatabaseVersion && ConfigManager.Instance.IsInitialized &&
+                     ConfigManager.Instance.DatabaseVersion != SystemManager.ProductVersion)
             {
                 redirect = true;
-                redirectUrl = PageUtils.GetAdminUrl("syncDatabase.cshtml");
+                redirectUrl = PageUtils.GetAdminUrl("pageSyncDatabase.aspx");
             }
-            else if (checkLogin && (!IsAdminLoggin || Administrator == null || Administrator.Locked))
+            else if (checkLogin && (!IsAdminLoggin || AdminInfo == null || AdminInfo.IsLockedOut))
             {
                 redirect = true;
-                redirectUrl = PageUtils.GetAdminUrl("login.cshtml");
+                redirectUrl = PageUtils.GetAdminUrl("pageLogin.cshtml");
             }
 
             if (redirect)
@@ -600,48 +591,6 @@ namespace SiteServer.CMS.Core
             }
 
             return new AccessTokenImpl();
-        }
-
-        public void CheckAdminLoggin(HttpRequestMessage request)
-        {
-            if (!IsAdminLoggin)
-            {
-                Unauthorized(request);
-            }
-        }
-
-        public async Task CheckSettingsPermissions(HttpRequestMessage request, params string[] permissions)
-        {
-            if (!IsAdminLoggin ||
-                !await AdminPermissionsImpl.HasSystemPermissionsAsync(permissions))
-            {
-                Unauthorized(request);
-            }
-        }
-
-        public async Task CheckSitePermissionsAsync(HttpRequestMessage request, int siteId, params string[] permissions)
-        {
-            if (!IsAdminLoggin ||
-                !await AdminPermissionsImpl.HasSitePermissionsAsync(siteId, permissions))
-            {
-                Unauthorized(request);
-            }
-        }
-
-        public void NotFound(HttpRequestMessage request)
-        {
-            throw new HttpResponseException(request.CreateErrorResponse(
-                HttpStatusCode.NotFound,
-                Constants.NotFound
-            ));
-        }
-
-        public void Unauthorized(HttpRequestMessage request)
-        {
-            throw new HttpResponseException(request.CreateErrorResponse(
-                HttpStatusCode.Unauthorized,
-                Constants.Unauthorized
-            ));
         }
     }
 }

@@ -1,8 +1,8 @@
 using System.Collections.Specialized;
-using System.Threading.Tasks;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.CMS.StlParser.Model
 {
@@ -10,7 +10,7 @@ namespace SiteServer.CMS.StlParser.Model
     {
         public ContextInfo(PageInfo pageInfo)
         {
-            Site = pageInfo.Site;
+            SiteInfo = pageInfo.SiteInfo;
             ChannelId = pageInfo.PageChannelId;
             ContentId = pageInfo.PageContentId;
         }
@@ -19,11 +19,11 @@ namespace SiteServer.CMS.StlParser.Model
         private ContextInfo(ContextInfo contextInfo)
         {
             ContextType = contextInfo.ContextType;
-            Site = contextInfo.Site;
+            SiteInfo = contextInfo.SiteInfo;
             ChannelId = contextInfo.ChannelId;
             ContentId = contextInfo.ContentId;
-            _channel = contextInfo._channel;
-            _content = contextInfo._content;
+            _channelInfo = contextInfo._channelInfo;
+            _contentInfo = contextInfo._contentInfo;
 
             IsInnerElement = contextInfo.IsInnerElement;
             IsStlEntity = contextInfo.IsStlEntity;
@@ -55,7 +55,7 @@ namespace SiteServer.CMS.StlParser.Model
 
         public EContextType ContextType { get; set; } = EContextType.Undefined;
 
-        public Site Site { get; set; }
+        public SiteInfo SiteInfo { get; set; }
 
         public int ChannelId { get; set; }
 
@@ -67,30 +67,30 @@ namespace SiteServer.CMS.StlParser.Model
 
         public NameValueCollection Attributes { get; set; }
 
-        private Channel _channel;
-        public async Task<Channel> GetChannelAsync()
+        private ChannelInfo _channelInfo;
+        public ChannelInfo ChannelInfo
         {
-            if (_channel != null) return _channel;
-            if (ChannelId <= 0) return null;
-            _channel = await ChannelManager.GetChannelAsync(Site.Id, ChannelId);
-            return _channel;
-        }
-        public void SetChannel(Channel value)
-        {
-            _channel = value;
+            get
+            {
+                if (_channelInfo != null) return _channelInfo;
+                if (ChannelId <= 0) return null;
+                _channelInfo = ChannelManager.GetChannelInfo(SiteInfo.Id, ChannelId);
+                return _channelInfo;
+            }
+            set { _channelInfo = value; }
         }
 
-        private Content _content;
-        public async Task<Content> GetContentAsync()
+        private ContentInfo _contentInfo;
+        public ContentInfo ContentInfo
         {
-            if (_content != null) return _content;
-            if (ContentId <= 0) return null;
-            _content = await DataProvider.ContentRepository.GetAsync(Site, ChannelId, ContentId);
-            return _content;
-        }
-        public void SetContentInfo(Content value)
-        {
-            _content = value;
+            get
+            {
+                if (_contentInfo != null) return _contentInfo;
+                if (ContentId <= 0) return null;
+                _contentInfo = ContentManager.GetContentInfo(SiteInfo, ChannelId, ContentId);
+                return _contentInfo;
+            }
+            set { _contentInfo = value; }
         }
 
         public bool IsInnerElement { get; set; }

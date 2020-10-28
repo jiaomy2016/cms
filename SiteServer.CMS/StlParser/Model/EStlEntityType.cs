@@ -34,7 +34,7 @@
             }
             if (type == EStlEntityType.Content)
             {
-                return "Body";
+                return "Content";
             }
             if (type == EStlEntityType.Channel)
             {

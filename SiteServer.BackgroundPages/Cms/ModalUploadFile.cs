@@ -2,10 +2,9 @@
 using System.Collections.Specialized;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -21,7 +20,7 @@ namespace SiteServer.BackgroundPages.Cms
 
         public static string GetOpenWindowStringToTextBox(int siteId, EUploadType uploadType, string textBoxClientId)
         {
-            return LayerUtils.GetOpenScript("上传附件", PageUtils.GetCmsUrl(siteId, nameof(ModalUploadFile), new NameValueCollection
+            return LayerUtils.GetOpenScript2("上传附件", PageUtils.GetCmsUrl(siteId, nameof(ModalUploadFile), new NameValueCollection
             {
                 {"uploadType", EUploadTypeUtils.GetValue(uploadType)},
                 {"TextBoxClientID", textBoxClientId}
@@ -49,7 +48,7 @@ namespace SiteServer.BackgroundPages.Cms
             if (IsPostBack) return;
 
             EBooleanUtils.AddListItems(DdlIsFileUploadChangeFileName, "采用系统生成文件名", "采用原有文件名");
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsFileUploadChangeFileName, Site.IsFileUploadChangeFileName.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsFileUploadChangeFileName, SiteInfo.Additional.IsFileUploadChangeFileName.ToString());
         }
 
         public override void Submit_OnClick(object sender, EventArgs e)
@@ -61,10 +60,10 @@ namespace SiteServer.BackgroundPages.Cms
             try
             {
                 var fileExtName = PathUtils.GetExtension(filePath).ToLower();
-                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(Site, fileExtName);
+                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(SiteInfo, fileExtName);
                 if (!string.IsNullOrEmpty(_realtedPath))
                 {
-                    localDirectoryPath = PathUtility.MapPath(Site, _realtedPath);
+                    localDirectoryPath = PathUtility.MapPath(SiteInfo, _realtedPath);
                     DirectoryUtils.CreateDirectoryIfNotExists(localDirectoryPath);
                 }
                 var localFileName = PathUtility.GetUploadFileName(filePath, TranslateUtils.ToBool(DdlIsFileUploadChangeFileName.SelectedValue));
@@ -81,13 +80,13 @@ namespace SiteServer.BackgroundPages.Cms
                     FailMessage("此格式不允许上传，此文件夹只允许上传图片以及音视频文件！");
                     return;
                 }
-                if (_uploadType == EUploadType.File && !PathUtility.IsFileExtensionAllowed(Site, fileExtName))
+                if (_uploadType == EUploadType.File && !PathUtility.IsFileExtenstionAllowed(SiteInfo, fileExtName))
                 {
                     FailMessage("此格式不允许上传，请选择有效的文件！");
                     return;
                 }
                     
-                if (!PathUtility.IsFileSizeAllowed(Site, HifUpload.PostedFile.ContentLength))
+                if (!PathUtility.IsFileSizeAllowed(SiteInfo, HifUpload.PostedFile.ContentLength))
                 {
                     FailMessage("上传失败，上传文件超出规定文件大小！");
                     return;
@@ -95,10 +94,10 @@ namespace SiteServer.BackgroundPages.Cms
 
                 HifUpload.PostedFile.SaveAs(localFilePath);
 
-                FileUtility.AddWaterMark(Site, localFilePath);
+                FileUtility.AddWaterMark(SiteInfo, localFilePath);
 
-                var fileUrl = PageUtility.GetSiteUrlByPhysicalPathAsync(Site, localFilePath, true).GetAwaiter().GetResult();
-                var textBoxUrl = PageUtility.GetVirtualUrl(Site, fileUrl);
+                var fileUrl = PageUtility.GetSiteUrlByPhysicalPath(SiteInfo, localFilePath, true);
+                var textBoxUrl = PageUtility.GetVirtualUrl(SiteInfo, fileUrl);
 
                 if (string.IsNullOrEmpty(_textBoxClientId))
                 {

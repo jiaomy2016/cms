@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -44,12 +45,12 @@ namespace SiteServer.BackgroundPages.Cms
             _relatedFieldId = AuthRequest.GetQueryInt("RelatedFieldID");
             _parentId = AuthRequest.GetQueryInt("ParentID");
             _level = AuthRequest.GetQueryInt("Level");
-            _totalLevel = DataProvider.RelatedFieldRepository.GetRelatedFieldAsync(_relatedFieldId).GetAwaiter().GetResult().TotalLevel;
+            _totalLevel = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(_relatedFieldId).TotalLevel;
 
             if (AuthRequest.IsQueryExists("Delete") && AuthRequest.IsQueryExists("ID"))
             {
                 var id = AuthRequest.GetQueryInt("ID");
-                DataProvider.RelatedFieldItemRepository.DeleteAsync(id).GetAwaiter().GetResult();
+                DataProvider.RelatedFieldItemDao.Delete(id);
                 if (_level != _totalLevel)
                 {
                     AddScript($@"parent.location.href = '{PageRelatedFieldMain.GetRedirectUrl(SiteId, _relatedFieldId, _totalLevel)}';");
@@ -61,11 +62,11 @@ namespace SiteServer.BackgroundPages.Cms
                 var isDown = AuthRequest.IsQueryExists("Down");
                 if (isDown)
                 {
-                    DataProvider.RelatedFieldItemRepository.UpdateTaxisToUpAsync(id, _parentId).GetAwaiter().GetResult();
+                    DataProvider.RelatedFieldItemDao.UpdateTaxisToUp(id, _parentId);
                 }
                 else
                 {
-                    DataProvider.RelatedFieldItemRepository.UpdateTaxisToDownAsync(id, _parentId).GetAwaiter().GetResult();
+                    DataProvider.RelatedFieldItemDao.UpdateTaxisToDown(id, _parentId);
                 }
             }
             else if (_level != _totalLevel)
@@ -75,23 +76,23 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigTableStyles);
 
             //if (_totalLevel >= 5)
             //{
             //    RptContents.Columns[1].Visible = false;
             //}
 
-            RptContents.DataSource = DataProvider.RelatedFieldItemRepository.GetRelatedFieldItemInfoListAsync(_relatedFieldId, _parentId).GetAwaiter().GetResult();
+            RptContents.DataSource = DataProvider.RelatedFieldItemDao.GetRelatedFieldItemInfoList(_relatedFieldId, _parentId);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
-            BtnAdd.Attributes.Add("onClick", ModalRelatedFieldItemAdd.GetOpenWindowString(SiteId, _relatedFieldId, _parentId, _level));
+            BtnAdd.Attributes.Add("onclick", ModalRelatedFieldItemAdd.GetOpenWindowString(SiteId, _relatedFieldId, _parentId, _level));
 
             if (_level == 1)
             {
                 var urlReturn = PageRelatedField.GetRedirectUrl(SiteId);
-                BtnReturn.Attributes.Add("onClick", $"parent.location.href = '{urlReturn}';return false;");
+                BtnReturn.Attributes.Add("onclick", $"parent.location.href = '{urlReturn}';return false;");
             }
             else
             {
@@ -103,7 +104,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var itemInfo = (RelatedFieldItem)e.Item.DataItem;
+            var itemInfo = (RelatedFieldItemInfo)e.Item.DataItem;
 
             var ltlItemName = (Literal)e.Item.FindControl("ltlItemName");
             var ltlItemValue = (Literal)e.Item.FindControl("ltlItemValue");
@@ -128,7 +129,7 @@ namespace SiteServer.BackgroundPages.Cms
             hlDown.NavigateUrl = GetRedirectUrl(SiteId, _relatedFieldId, _parentId, _level) + "&Down=True&ID=" + itemInfo.Id;
 
             ltlEditUrl.Text =
-                $@"<a href='javascript:;' onClick=""{ModalRelatedFieldItemEdit.GetOpenWindowString(
+                $@"<a href='javascript:;' onclick=""{ModalRelatedFieldItemEdit.GetOpenWindowString(
                     SiteId, _relatedFieldId, _parentId, _level, itemInfo.Id)}"">编辑</a>";
 
             ltlDeleteUrl.Text =

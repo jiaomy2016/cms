@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.BackgroundPages.Cms;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.DataCache.Content;
 using SiteServer.CMS.Packaging;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Pages
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("pages/dashboard")]
     public class PagesDashboardController : ApiController
     {
@@ -19,19 +20,17 @@ namespace SiteServer.API.Controllers.Pages
         private const string RouteUnCheckedList = "unCheckedList";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> Get()
+        public IHttpActionResult Get()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin)
                 {
                     return Unauthorized();
                 }
 
-                var lastActivityDate = request.Administrator.LastActivityDate ?? Constants.SqlMinValue;
-
-                var config = await DataProvider.ConfigRepository.GetAsync();
+                var lastActivityDate = request.AdminInfo.LastActivityDate ?? DateUtils.SqlMinValue;
 
                 return Ok(new
                 {
@@ -39,8 +38,8 @@ namespace SiteServer.API.Controllers.Pages
                     {
                         Version = SystemManager.ProductVersion == PackageUtils.VersionDev ? "dev" : SystemManager.ProductVersion,
                         LastActivityDate = DateUtils.GetDateString(lastActivityDate, EDateFormatType.Chinese),
-                        UpdateDate = DateUtils.GetDateString(config.UpdateDate, EDateFormatType.Chinese),
-                        config.AdminWelcomeHtml
+                        UpdateDate = DateUtils.GetDateString(ConfigManager.Instance.UpdateDate, EDateFormatType.Chinese),
+                        ConfigManager.SystemConfigInfo.AdminWelcomeHtml
                     }
                 });
             }
@@ -51,11 +50,11 @@ namespace SiteServer.API.Controllers.Pages
         }
 
         [HttpGet, Route(RouteUnCheckedList)]
-        public async Task<IHttpActionResult> GetUnCheckedList()
+        public IHttpActionResult GetUnCheckedList()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin)
                 {
                     return Unauthorized();
@@ -63,36 +62,36 @@ namespace SiteServer.API.Controllers.Pages
 
                 var checkingList = new List<object>();
 
-                if (await request.AdminPermissionsImpl.IsSuperAdminAsync())
+                if (request.AdminPermissionsImpl.IsConsoleAdministrator)
                 {
-                    foreach(var site in await DataProvider.SiteRepository.GetSiteListAsync())
+                    foreach(var siteInfo in SiteManager.GetSiteInfoList())
                     {
-                        var count = await DataProvider.ContentRepository.GetCountCheckingAsync(site);
+                        var count = ContentManager.GetCountChecking(siteInfo);
                         if (count > 0)
                         {
                             checkingList.Add(new
                             {
-                                Url = PageContentSearch.GetRedirectUrlCheck(site.Id),
-                                site.SiteName,
+                                Url = PageContentSearch.GetRedirectUrlCheck(siteInfo.Id),
+                                siteInfo.SiteName,
                                 Count = count
                             });
                         }
                     }
                 }
-                else if (await request.AdminPermissionsImpl.IsSiteAdminAsync())
+                else if (request.AdminPermissionsImpl.IsSystemAdministrator)
                 {
-                    foreach (var siteId in request.Administrator.SiteIds)
+                    foreach (var siteId in TranslateUtils.StringCollectionToIntList(request.AdminInfo.SiteIdCollection))
                     {
-                        var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                        if (site == null) continue;
+                        var siteInfo = SiteManager.GetSiteInfo(siteId);
+                        if (siteInfo == null) continue;
 
-                        var count = await DataProvider.ContentRepository.GetCountCheckingAsync(site);
+                        var count = ContentManager.GetCountChecking(siteInfo);
                         if (count > 0)
                         {
                             checkingList.Add(new
                             {
-                                Url = PageContentSearch.GetRedirectUrlCheck(site.Id),
-                                site.SiteName,
+                                Url = PageContentSearch.GetRedirectUrlCheck(siteInfo.Id),
+                                siteInfo.SiteName,
                                 Count = count
                             });
                         }

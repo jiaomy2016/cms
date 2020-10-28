@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -27,9 +28,9 @@ namespace SiteServer.BackgroundPages.Cms
 			
 				try
 				{
-                    DataProvider.ChannelGroupRepository.DeleteAsync(SiteId, groupName).GetAwaiter().GetResult();
+                    DataProvider.ChannelGroupDao.Delete(SiteId, groupName);
 
-                    AuthRequest.AddSiteLogAsync(SiteId, "删除栏目组", $"栏目组:{groupName}").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, "删除栏目组", $"栏目组:{groupName}");
 				}
 				catch(Exception ex)
 				{
@@ -44,10 +45,10 @@ namespace SiteServer.BackgroundPages.Cms
                 switch (direction.ToUpper())
                 {
                     case "UP":
-                        DataProvider.ChannelGroupRepository.UpdateTaxisToUpAsync(SiteId, groupName).GetAwaiter().GetResult();
+                        DataProvider.ChannelGroupDao.UpdateTaxisToUp(SiteId, groupName);
                         break;
                     case "DOWN":
-                        DataProvider.ChannelGroupRepository.UpdateTaxisToDownAsync(SiteId, groupName).GetAwaiter().GetResult();
+                        DataProvider.ChannelGroupDao.UpdateTaxisToDown(SiteId, groupName);
                         break;
                 }
                 AddWaitAndRedirectScript(GetRedirectUrl(SiteId));
@@ -55,20 +56,20 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);    
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigGroups);    
 
-            RptContents.DataSource = DataProvider.ChannelGroupRepository.GetChannelGroupListAsync(SiteId).GetAwaiter().GetResult();
+            RptContents.DataSource = ChannelGroupManager.GetChannelGroupInfoList(SiteId);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
-            BtnAddGroup.Attributes.Add("onClick", ModalNodeGroupAdd.GetOpenWindowString(SiteId));
+            BtnAddGroup.Attributes.Add("onclick", ModalNodeGroupAdd.GetOpenWindowString(SiteId));
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var groupInfo = (ChannelGroup)e.Item.DataItem;
+            var groupInfo = (ChannelGroupInfo)e.Item.DataItem;
 
             var ltlNodeGroupName = (Literal)e.Item.FindControl("ltlNodeGroupName");
             var ltlDescription = (Literal)e.Item.FindControl("ltlDescription");

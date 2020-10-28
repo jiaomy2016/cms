@@ -7,10 +7,11 @@ using System.Threading.Tasks;
 using NDesk.Options;
 using Quartz;
 using Quartz.Impl;
-using SiteServer.Abstractions;
 using SiteServer.Cli.Core;
 using SiteServer.Cli.Jobs;
 using SiteServer.CMS.Plugin;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.Cli
 {
@@ -67,7 +68,7 @@ namespace SiteServer.Cli
                     }
                 }
             }
-            CommandName = StringUtils.Join(commandNames, " ");
+            CommandName = string.Join(" ", commandNames);
             CommandArgs = commandArgs.ToArray();
 
             Console.WriteLine("欢迎使用 SiteServer Cli 命令行工具");
@@ -92,8 +93,8 @@ namespace SiteServer.Cli
                 {TestJob.CommandName, testJob.Execute}
             };
 
-            PluginManager.LoadPluginsAsync(CliUtils.PhysicalApplicationPath).GetAwaiter().GetResult();
-            var pluginJobs = PluginJobManager.GetJobsAsync().GetAwaiter().GetResult();
+            PluginManager.LoadPlugins(CliUtils.PhysicalApplicationPath);
+            var pluginJobs = PluginJobManager.GetJobs();
             if (pluginJobs != null && pluginJobs.Count > 0)
             {
                 foreach (var command in pluginJobs.Keys)
@@ -154,7 +155,7 @@ namespace SiteServer.Cli
                 }
 
                 await CliUtils.PrintRowLine();
-                await CliUtils.PrintRow("https://www.siteserver.cn/docs/cli");
+                await CliUtils.PrintRow(CloudUtils.Root.DocsCliUrl);
                 await CliUtils.PrintRowLine();
                 Console.ReadLine();
             }

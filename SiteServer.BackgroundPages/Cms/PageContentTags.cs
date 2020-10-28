@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -31,22 +33,22 @@ namespace SiteServer.BackgroundPages.Cms
 
                 try
                 {
-                    var contentIdList = DataProvider.ContentTagRepository.GetContentIdListByTagAsync(tagName, SiteId).GetAwaiter().GetResult();
+                    var contentIdList = DataProvider.TagDao.GetContentIdListByTag(tagName, SiteId);
                     if (contentIdList.Count > 0)
                     {
                         foreach (var contentId in contentIdList)
                         {
-                            var tags = DataProvider.ContentRepository.GetValueAsync(Site.TableName, contentId, ContentAttribute.Tags).GetAwaiter().GetResult();
-                            if (!string.IsNullOrEmpty(tags))
+                            var tuple = DataProvider.ContentDao.GetValue(SiteInfo.TableName, contentId, ContentAttribute.Tags);
+                            if (tuple != null)
                             {
-                                var contentTagList = StringUtils.GetStringList(tags);
+                                var contentTagList = TranslateUtils.StringCollectionToStringList(tuple.Item2);
                                 contentTagList.Remove(tagName);
-                                DataProvider.ContentRepository.UpdateAsync(Site.TableName, contentId, ContentAttribute.Tags, TranslateUtils.ObjectCollectionToString(contentTagList)).GetAwaiter().GetResult();
+                                DataProvider.ContentDao.Update(SiteInfo.TableName, tuple.Item1, contentId, ContentAttribute.Tags, TranslateUtils.ObjectCollectionToString(contentTagList));
                             }
                         }
                     }
-                    DataProvider.ContentTagRepository.DeleteTagAsync(tagName, SiteId).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "删除内容标签", $"内容标签:{tagName}").GetAwaiter().GetResult();
+                    DataProvider.TagDao.DeleteTag(tagName, SiteId);
+                    AuthRequest.AddSiteLog(SiteId, "删除内容标签", $"内容标签:{tagName}");
                     SuccessDeleteMessage();
                 }
                 catch (Exception ex)
@@ -56,31 +58,31 @@ namespace SiteServer.BackgroundPages.Cms
             }
 
             SpContents.ControlToPaginate = RptContents;
-            SpContents.ItemsPerPage = Site.PageSize;
+            SpContents.ItemsPerPage = SiteInfo.Additional.PageSize;
 
-            SpContents.SelectCommand = DataProvider.ContentTagRepository.GetSqlString(SiteId, 0, true, 0);
-            SpContents.SortField = nameof(ContentTag.UseNum);
+            SpContents.SelectCommand = DataProvider.TagDao.GetSqlString(SiteId, 0, true, 0);
+            SpContents.SortField = nameof(TagInfo.UseNum);
             SpContents.SortMode = SortMode.DESC;
 
             RptContents.ItemDataBound += RptContents_ItemDataBound;
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigGroups);
 
             SpContents.DataBind();
 
             var showPopWinString = ModalContentTagAdd.GetOpenWindowStringToAdd(SiteId);
-            BtnAddTag.Attributes.Add("onClick", showPopWinString);
+            BtnAddTag.Attributes.Add("onclick", showPopWinString);
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var tag = SqlUtils.EvalString(e.Item.DataItem, nameof(ContentTag.Tag));
-            var level = SqlUtils.EvalInt(e.Item.DataItem, nameof(ContentTag.Level));
-            var useNum = SqlUtils.EvalInt(e.Item.DataItem, nameof(ContentTag.UseNum));
+            var tag = SqlUtils.EvalString(e.Item.DataItem, nameof(TagInfo.Tag));
+            var level = SqlUtils.EvalInt(e.Item.DataItem, nameof(TagInfo.Level));
+            var useNum = SqlUtils.EvalInt(e.Item.DataItem, nameof(TagInfo.UseNum));
 
             var ltlTagName = (Literal)e.Item.FindControl("ltlTagName");
             var ltlCount = (Literal)e.Item.FindControl("ltlCount");

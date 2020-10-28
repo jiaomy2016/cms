@@ -1,16 +1,15 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
 using SiteServer.CMS.Packaging;
 using SiteServer.CMS.Plugin;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Pages.Plugins
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("pages/plugins/install")]
     public class PagesInstallController : ApiController
     {
@@ -20,13 +19,13 @@ namespace SiteServer.API.Controllers.Pages.Plugins
         private const string RouteCache = "cache";
 
         [HttpGet, Route(RouteConfig)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.PluginsPermissions.Add))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.PluginsPermissions.Add))
                 {
                     return Unauthorized();
                 }
@@ -45,13 +44,13 @@ namespace SiteServer.API.Controllers.Pages.Plugins
         }
 
         [HttpPost, Route(RouteDownload)]
-        public async Task<IHttpActionResult> Download()
+        public IHttpActionResult Download()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.PluginsPermissions.Add))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.PluginsPermissions.Add))
                 {
                     return Unauthorized();
                 }
@@ -80,13 +79,13 @@ namespace SiteServer.API.Controllers.Pages.Plugins
         }
 
         [HttpPost, Route(RouteUpdate)]
-        public async Task<IHttpActionResult> Update()
+        public IHttpActionResult Update()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.PluginsPermissions.Add))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.PluginsPermissions.Add))
                 {
                     return Unauthorized();
                 }
@@ -115,19 +114,19 @@ namespace SiteServer.API.Controllers.Pages.Plugins
 
         
         [HttpPost, Route(RouteCache)]
-        public async Task<IHttpActionResult> Cache()
+        public IHttpActionResult Cache()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.PluginsPermissions.Add))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.PluginsPermissions.Add))
                 {
                     return Unauthorized();
                 }
 
                 CacheUtils.ClearAll();
-                await DataProvider.DbCacheRepository.ClearAsync();
+                CacheDbUtils.Clear();
 
                 return Ok(new { });
             }

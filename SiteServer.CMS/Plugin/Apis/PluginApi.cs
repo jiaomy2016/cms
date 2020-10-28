@@ -1,21 +1,18 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.Api;
-using SiteServer.CMS.Context;
+﻿using SiteServer.CMS.Api;
 using SiteServer.CMS.Core;
-
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class PluginApi
+    public class PluginApi : IPluginApi
     {
         private PluginApi() { }
 
         private static PluginApi _instance;
-        public static PluginApi Instance => _instance ??= new PluginApi();
+        public static PluginApi Instance => _instance ?? (_instance = new PluginApi());
 
-        public async Task<string> GetPluginUrlAsync(string pluginId, string relatedUrl = "")
+        public string GetPluginUrl(string pluginId, string relatedUrl = "")
         {
             if (PageUtils.IsProtocolUrl(relatedUrl)) return relatedUrl;
 
@@ -29,26 +26,24 @@ namespace SiteServer.CMS.Plugin.Apis
                 return PageUtils.GetAdminUrl(relatedUrl.Substring(1));
             }
 
-            var config = await DataProvider.ConfigRepository.GetAsync();
-
-            return PageUtility.GetSiteFilesUrl(config.GetApiUrl(), PageUtils.Combine(DirectoryUtils.SiteFiles.Plugins, pluginId, relatedUrl));
+            return PageUtility.GetSiteFilesUrl(ApiManager.InnerApiUrl, PageUtils.Combine(DirectoryUtils.SiteFiles.Plugins, pluginId, relatedUrl));
         }
 
-        public async Task<string> GetPluginApiUrlAsync(string pluginId)
+        public string GetPluginApiUrl(string pluginId)
         {
-            return await ApiManager.GetApiUrlAsync($"plugins/{pluginId}");
+            return ApiManager.GetInnerApiUrl($"plugins/{pluginId}");
         }
 
         public string GetPluginPath(string pluginId, string relatedPath = "")
         {
-            var path = PathUtils.Combine(WebUtils.GetPluginPath(pluginId), relatedPath);
+            var path = PathUtils.Combine(PathUtils.GetPluginPath(pluginId), relatedPath);
             DirectoryUtils.CreateDirectoryIfNotExists(path);
             return path;
         }
 
-        public async Task<T> GetPluginAsync<T>() where T : PluginBase
+        public T GetPlugin<T>() where T : PluginBase
         {
-            var pluginInfo = await PluginManager.GetPluginInfoAsync<T>();
+            var pluginInfo = PluginManager.GetPluginInfo<T>();
             return pluginInfo?.Plugin as T;
         }
     }

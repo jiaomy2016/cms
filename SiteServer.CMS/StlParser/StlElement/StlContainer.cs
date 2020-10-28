@@ -1,6 +1,5 @@
 ﻿using System.Text;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
@@ -31,7 +30,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "所处上下文")]
         private const string Context = nameof(Context);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
             if (contextInfo.IsStlEntity || string.IsNullOrWhiteSpace(contextInfo.InnerHtml)) return string.Empty;
 
@@ -47,11 +46,11 @@ namespace SiteServer.CMS.StlParser.StlElement
 
                 if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
                 {
-                    channelIndex = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelIndex = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ChannelName))
                 {
-                    channelName = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelName = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Parent))
                 {
@@ -74,9 +73,9 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            var channelId = await StlDataUtility.GetChannelIdByLevelAsync(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
+            var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
 
-            channelId = await StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelNameAsync(pageInfo.SiteId, channelId, channelIndex, channelName);
+            channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, channelIndex, channelName);
 
             contextInfo.ContextType = context;
             contextInfo.ChannelId = channelId;
@@ -84,7 +83,7 @@ namespace SiteServer.CMS.StlParser.StlElement
             var innerHtml = RegexUtils.GetInnerContent(ElementName, contextInfo.OuterHtml);
 
             var builder = new StringBuilder(innerHtml);
-            await StlParserManager.ParseInnerContentAsync(builder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(builder, pageInfo, contextInfo);
 
             return builder.ToString();
         }

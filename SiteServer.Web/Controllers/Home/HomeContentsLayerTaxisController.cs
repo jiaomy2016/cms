@@ -1,47 +1,48 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerTaxis")]
     public class HomeContentsLayerTaxisController : ApiController
     {
         private const string Route = "";
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
-                var contentIdList = StringUtils.GetIntList(request.GetPostString("contentIds"));
+                var contentIdList = TranslateUtils.StringCollectionToIntList(request.GetPostString("contentIds"));
                 var isUp = request.GetPostBool("isUp");
                 var taxis = request.GetPostInt("taxis");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                if (ETaxisTypeUtils.Equals(channelInfo.DefaultTaxisType, ETaxisType.OrderByTaxis))
+                if (ETaxisTypeUtils.Equals(channelInfo.Additional.DefaultTaxisType, ETaxisType.OrderByTaxis))
                 {
                     isUp = !isUp;
                 }
@@ -51,26 +52,26 @@ namespace SiteServer.API.Controllers.Home
                     contentIdList.Reverse();
                 }
 
-                var tableName = await ChannelManager.GetTableNameAsync(site, channelInfo);
+                var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
 
                 foreach (var contentId in contentIdList)
                 {
-                    var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                    var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                     if (contentInfo == null) continue;
 
-                    var isTop = contentInfo.Top;
+                    var isTop = contentInfo.IsTop;
                     for (var i = 1; i <= taxis; i++)
                     {
                         if (isUp)
                         {
-                            if (await DataProvider.ContentRepository.SetTaxisToUpAsync(tableName, channelId, contentId, isTop) == false)
+                            if (DataProvider.ContentDao.SetTaxisToUp(siteId, tableName, channelId, contentId, isTop) == false)
                             {
                                 break;
                             }
                         }
                         else
                         {
-                            if (await DataProvider.ContentRepository.SetTaxisToDownAsync(tableName, channelId, contentId, isTop) == false)
+                            if (DataProvider.ContentDao.SetTaxisToDown(siteId, tableName, channelId, contentId, isTop) == false)
                             {
                                 break;
                             }
@@ -78,9 +79,9 @@ namespace SiteServer.API.Controllers.Home
                     }
                 }
 
-                await CreateManager.TriggerContentChangedEventAsync(siteId, channelId);
+                CreateManager.TriggerContentChangedEvent(siteId, channelId);
 
-                await request.AddSiteLogAsync(siteId, channelId, 0, "对内容排序", string.Empty);
+                request.AddSiteLog(siteId, channelId, 0, "对内容排序", string.Empty);
 
                 return Ok(new
                 {
@@ -89,7 +90,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

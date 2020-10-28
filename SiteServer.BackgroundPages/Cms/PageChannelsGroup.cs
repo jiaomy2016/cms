@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -30,12 +30,12 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigGroups);
 
             LtlChannelGroupName.Text = "栏目组：" + _nodeGroupName;
 
-            var channelInfo = ChannelManager.GetChannelAsync(SiteId, SiteId).GetAwaiter().GetResult();
-            RptContents.DataSource = ChannelManager.GetChannelIdListAsync(channelInfo, EScopeType.All, _nodeGroupName, string.Empty, string.Empty).GetAwaiter().GetResult();
+            var channelInfo = ChannelManager.GetChannelInfo(SiteId, SiteId);
+            RptContents.DataSource = ChannelManager.GetChannelIdList(channelInfo, EScopeType.All, _nodeGroupName, string.Empty, string.Empty);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
         }
@@ -45,7 +45,7 @@ namespace SiteServer.BackgroundPages.Cms
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
             var channelId = (int)e.Item.DataItem;
-            var nodeInfo = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
+            var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
             if (nodeInfo == null)
             {
@@ -57,15 +57,15 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlItemChannelIndex = (Literal)e.Item.FindControl("ltlItemChannelIndex");
             var ltlItemAddDate = (Literal)e.Item.FindControl("ltlItemAddDate");
 
-            ltlItemChannelName.Text = ChannelManager.GetChannelNameNavigationAsync(SiteId, channelId).GetAwaiter().GetResult();
+            ltlItemChannelName.Text = ChannelManager.GetChannelNameNavigation(SiteId, channelId);
             ltlItemChannelIndex.Text = nodeInfo.IndexName;
             ltlItemAddDate.Text = DateUtils.GetDateString(nodeInfo.AddDate);
 
             if (IsOwningChannelId(channelId))
             {
-                if (HasChannelPermissions(nodeInfo.Id, Constants.ChannelPermissions.ChannelEdit))
+                if (HasChannelPermissions(nodeInfo.Id, ConfigManager.ChannelPermissions.ChannelEdit))
                 {
-                    ltlItemChannelName.Text = $@"<a href=""javascript:;"" onClick=""{ModalChannelEdit.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id, GetRedirectUrl(nodeInfo.SiteId, _nodeGroupName))}"">{ltlItemChannelName.Text}</a>";
+                    ltlItemChannelName.Text = $@"<a href=""javascript:;"" onclick=""{ModalChannelEdit.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id, GetRedirectUrl(nodeInfo.SiteId, _nodeGroupName))}"">{ltlItemChannelName.Text}</a>";
                 }
             }
         }

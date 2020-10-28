@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.CMS.Model;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -44,7 +43,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Template);
+            VerifySitePermissions(ConfigManager.SitePermissions.Templates);
 
             DdlTemplateType.Items.Add(new ListItem("<所有类型>", string.Empty));
             TemplateTypeUtils.AddListItems(DdlTemplateType);
@@ -58,13 +57,13 @@ namespace SiteServer.BackgroundPages.Cms
 
                 try
                 {
-                    var templateInfo = TemplateManager.GetTemplateAsync(SiteId, templateId).GetAwaiter().GetResult();
+                    var templateInfo = TemplateManager.GetTemplateInfo(SiteId, templateId);
                     if (templateInfo != null)
                     {
-                        DataProvider.TemplateRepository.DeleteAsync(SiteId, templateId).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId,
-                            $"删除{TemplateTypeUtils.GetText(templateInfo.Type)}",
-                            $"模板名称:{templateInfo.TemplateName}").GetAwaiter().GetResult();
+                        DataProvider.TemplateDao.Delete(SiteId, templateId);
+                        AuthRequest.AddSiteLog(SiteId,
+                            $"删除{TemplateTypeUtils.GetText(templateInfo.TemplateType)}",
+                            $"模板名称:{templateInfo.TemplateName}");
                     }
                     SuccessDeleteMessage();
                 }
@@ -79,13 +78,13 @@ namespace SiteServer.BackgroundPages.Cms
 			
                 try
                 {
-                    var templateInfo = TemplateManager.GetTemplateAsync(SiteId, templateId).GetAwaiter().GetResult();
+                    var templateInfo = TemplateManager.GetTemplateInfo(SiteId, templateId);
                     if (templateInfo != null)
                     {
-                        DataProvider.TemplateRepository.SetDefaultAsync(SiteId, templateId).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId,
-                            $"设置默认{TemplateTypeUtils.GetText(templateInfo.Type)}",
-                            $"模板名称:{templateInfo.TemplateName}").GetAwaiter().GetResult();
+                        DataProvider.TemplateDao.SetDefault(SiteId, templateId);
+                        AuthRequest.AddSiteLog(SiteId,
+                            $"设置默认{TemplateTypeUtils.GetText(templateInfo.TemplateType)}",
+                            $"模板名称:{templateInfo.TemplateName}");
                     }
                     SuccessMessage();
                 }
@@ -112,7 +111,7 @@ namespace SiteServer.BackgroundPages.Cms
 ";
             }
 
-            RptContents.DataSource = DataProvider.TemplateRepository.GetTemplateListAsync(SiteId, _keywords, _templateType).GetAwaiter().GetResult();
+            RptContents.DataSource = DataProvider.TemplateDao.GetDataSource(SiteId, _keywords, _templateType);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
         }
@@ -139,12 +138,12 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var templateId = SqlUtils.EvalInt(e.Item.DataItem, nameof(Template.Id));
-            var templateType = TemplateTypeUtils.GetEnumType(SqlUtils.EvalString(e.Item.DataItem, nameof(Template.TemplateType)));
-            var templateName = SqlUtils.EvalString(e.Item.DataItem, nameof(Template.TemplateName));
-            var relatedFileName = SqlUtils.EvalString(e.Item.DataItem, nameof(Template.RelatedFileName));
-            var createdFileFullName = SqlUtils.EvalString(e.Item.DataItem, nameof(Template.CreatedFileFullName));
-            var isDefault = TranslateUtils.ToBool(SqlUtils.EvalString(e.Item.DataItem, nameof(Template.Default)));
+            var templateId = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateInfo.Id));
+            var templateType = TemplateTypeUtils.GetEnumType(SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateInfo.TemplateType)));
+            var templateName = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateInfo.TemplateName));
+            var relatedFileName = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateInfo.RelatedFileName));
+            var createdFileFullName = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateInfo.CreatedFileFullName));
+            var isDefault = TranslateUtils.ToBool(SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateInfo.IsDefault)));
 
             var ltlTemplateName = (Literal)e.Item.FindControl("ltlTemplateName");
             var ltlRelatedFileName = (Literal)e.Item.FindControl("ltlRelatedFileName");
@@ -163,11 +162,11 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (templateType == TemplateType.IndexPageTemplate || templateType == TemplateType.FileTemplate)
             {
-                var url = PageUtility.ParseNavigationUrl(Site, createdFileFullName, false);
+                var url = PageUtility.ParseNavigationUrl(SiteInfo, createdFileFullName, false);
                 ltlFileName.Text = $"<a href='{url}' target='_blank'>{createdFileFullName}</a>";
             }
 
-            ltlUseCount.Text = DataProvider.ChannelRepository.GetTemplateUseCount(SiteId, templateId, templateType, isDefault).ToString();
+            ltlUseCount.Text = DataProvider.ChannelDao.GetTemplateUseCount(SiteId, templateId, templateType, isDefault).ToString();
 
             ltlTemplateType.Text = TemplateTypeUtils.GetText(templateType);
 

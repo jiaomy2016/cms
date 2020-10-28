@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
 using SiteServer.CMS.StlParser.Model;
@@ -19,7 +18,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "文件路径")]
         private const string File = nameof(File);
         
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
 		    var file = string.Empty;
             var parameters = new Dictionary<string, string>();
@@ -31,28 +30,28 @@ namespace SiteServer.CMS.StlParser.StlElement
                 if (StringUtils.EqualsIgnoreCase(name, File))
                 {
                     file = StringUtils.ReplaceIgnoreCase(value, "{Stl.SiteUrl}", "@");
-                    file = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(file, pageInfo, contextInfo);
+                    file = StlEntityParser.ReplaceStlEntitiesForAttributeValue(file, pageInfo, contextInfo);
                     file = PageUtility.AddVirtualToUrl(file);
                 }
                 else
                 {
-                    parameters[name] = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    parameters[name] = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, file, parameters);
+            return ParseImpl(pageInfo, contextInfo, file, parameters);
 		}
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, string file, Dictionary<string, string> parameters)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string file, Dictionary<string, string> parameters)
         {
             if (string.IsNullOrEmpty(file)) return string.Empty;
 
             var pageParameters = pageInfo.Parameters;
             pageInfo.Parameters = parameters;
 
-            var content = TemplateManager.GetIncludeContent(pageInfo.Site, file);
+            var content = TemplateManager.GetIncludeContent(pageInfo.SiteInfo, file, pageInfo.TemplateInfo.Charset);
             var contentBuilder = new StringBuilder(content);
-            await StlParserManager.ParseTemplateContentAsync(contentBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseTemplateContent(contentBuilder, pageInfo, contextInfo);
             var parsedContent = contentBuilder.ToString();
 
             pageInfo.Parameters = pageParameters;

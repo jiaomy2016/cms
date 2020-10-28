@@ -1,70 +1,72 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
 using SiteServer.CMS.ImportExport.Components;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Atom.Atom.Core;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
+using SiteServer.Utils.IO;
 
 namespace SiteServer.CMS.ImportExport
 {
     public class ExportObject
     {
-        private readonly int _siteId;
+        private readonly SiteInfo _siteInfo;
+        private readonly string _sitePath;
         private readonly string _adminName;
 
         public ExportObject(int siteId, string adminName)
         {
-            _siteId = siteId;
+            _siteInfo = SiteManager.GetSiteInfo(siteId);
+            _sitePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, _siteInfo.SiteDir);
             _adminName = adminName;
         }
 
-        public async Task ExportFilesToSiteAsync(string siteTemplatePath, bool isAllFiles, IList<string> directories, IList<string> files, bool isCreateMetadataDirectory)
+        /// <summary>
+        /// 将发布系统文件保存到站点模板中
+        /// </summary>
+        public void ExportFilesToSite(string siteTemplatePath, bool isSaveAll, ArrayList lowerFileSystemArrayList, bool isCreateMetadataDirectory)
         {
             DirectoryUtils.CreateDirectoryIfNotExists(siteTemplatePath);
 
-            var siteDirList = await DataProvider.SiteRepository.GetSiteDirListAsync(0);
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var sitePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir);
-            var fileSystems = FileManager.GetFileSystemInfoExtendCollection(PathUtility.GetSitePath(site), true);
+            var siteDirList = DataProvider.SiteDao.GetLowerSiteDirListThatNotIsRoot();
+
+            var fileSystems = FileManager.GetFileSystemInfoExtendCollection(PathUtility.GetSitePath(_siteInfo), true);
             foreach (FileSystemInfoExtend fileSystem in fileSystems)
             {
-                var srcPath = PathUtils.Combine(sitePath, fileSystem.Name);
-                var destPath = PathUtils.Combine(siteTemplatePath, fileSystem.Name);
-
-                if (fileSystem.IsDirectory)
+                if (isSaveAll || lowerFileSystemArrayList.Contains(fileSystem.Name.ToLower()))
                 {
-                    if (!isAllFiles && !StringUtils.ContainsIgnoreCase(directories, fileSystem.Name)) continue;
+                    var srcPath = PathUtils.Combine(_sitePath, fileSystem.Name);
+                    var destPath = PathUtils.Combine(siteTemplatePath, fileSystem.Name);
 
-                    var isSiteDirectory = false;
-
-                    if (site.Root)
+                    if (fileSystem.IsDirectory)
                     {
-                        foreach (var siteDir in siteDirList)
+                        var isSiteDirectory = false;
+
+                        if (_siteInfo.IsRoot)
                         {
-                            if (StringUtils.EqualsIgnoreCase(siteDir, fileSystem.Name))
+                            foreach (var siteDir in siteDirList)
                             {
-                                isSiteDirectory = true;
+                                if (StringUtils.EqualsIgnoreCase(siteDir, fileSystem.Name))
+                                {
+                                    isSiteDirectory = true;
+                                }
                             }
                         }
+                        if (!isSiteDirectory && !DirectoryUtils.IsSystemDirectory(fileSystem.Name))
+                        {
+                            DirectoryUtils.CreateDirectoryIfNotExists(destPath);
+                            DirectoryUtils.MoveDirectory(srcPath, destPath, false);
+                        }
                     }
-                    if (!isSiteDirectory && !WebUtils.IsSystemDirectory(fileSystem.Name))
+                    else
                     {
-                        DirectoryUtils.CreateDirectoryIfNotExists(destPath);
-                        DirectoryUtils.MoveDirectory(srcPath, destPath, false);
-                    }
-                }
-                else
-                {
-                    if (!isAllFiles && !StringUtils.ContainsIgnoreCase(files, fileSystem.Name)) continue;
-
-                    if (!PathUtility.IsSystemFile(fileSystem.Name))
-                    {
-                        FileUtils.CopyFile(srcPath, destPath);
+                        if (!PathUtility.IsSystemFile(fileSystem.Name))
+                        {
+                            FileUtils.CopyFile(srcPath, destPath);
+                        }
                     }
                 }
             }
@@ -76,29 +78,25 @@ namespace SiteServer.CMS.ImportExport
             }
         }
 
-        public async Task ExportFilesAsync(string filePath)
+        public void ExportFiles(string filePath)
         {
             var filesDirectoryPath = PathUtils.Combine(DirectoryUtils.GetDirectoryPath(filePath), PathUtils.GetFileNameWithoutExtension(filePath));
 
             DirectoryUtils.DeleteDirectoryIfExists(filesDirectoryPath);
             FileUtils.DeleteFileIfExists(filePath);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var sitePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir);
-            DirectoryUtils.Copy(sitePath, filesDirectoryPath);
+            DirectoryUtils.Copy(_sitePath, filesDirectoryPath);
 
             ZipUtils.CreateZip(filePath, filesDirectoryPath);
 
             DirectoryUtils.DeleteDirectoryIfExists(filesDirectoryPath);
         }
 
-        public async Task<string> ExportSingleTableStyleAsync(string tableName, int relatedIdentity)
+        public string ExportSingleTableStyle(string tableName, int relatedIdentity)
         {
             var filePath = PathUtils.GetTemporaryFilesPath("tableStyle.zip");
             var styleDirectoryPath = PathUtils.GetTemporaryFilesPath("TableStyle");
-
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            await TableStyleIe.SingleExportTableStylesAsync(tableName, site.Id, relatedIdentity, styleDirectoryPath);
+            TableStyleIe.SingleExportTableStyles(tableName, _siteInfo.Id, relatedIdentity, styleDirectoryPath);
             ZipUtils.CreateZip(filePath, styleDirectoryPath);
 
             DirectoryUtils.DeleteDirectoryIfExists(styleDirectoryPath);
@@ -106,11 +104,11 @@ namespace SiteServer.CMS.ImportExport
             return PathUtils.GetFileName(filePath);
         }
 
-        public static async Task<string> ExportRootSingleTableStyleAsync(string tableName)
+        public static string ExportRootSingleTableStyle(string tableName)
         {
             var filePath = PathUtils.GetTemporaryFilesPath("tableStyle.zip");
             var styleDirectoryPath = PathUtils.GetTemporaryFilesPath("TableStyle");
-            await TableStyleIe.SingleExportTableStylesAsync(tableName, styleDirectoryPath);
+            TableStyleIe.SingleExportTableStyles(tableName, styleDirectoryPath);
             ZipUtils.CreateZip(filePath, styleDirectoryPath);
 
             DirectoryUtils.DeleteDirectoryIfExists(styleDirectoryPath);
@@ -118,38 +116,41 @@ namespace SiteServer.CMS.ImportExport
             return PathUtils.GetFileName(filePath);
         }
 
-        public async Task ExportConfigurationAsync(string configurationFilePath)
+        public void ExportConfiguration(string configurationFilePath)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var configIe = new ConfigurationIe(site.Id, configurationFilePath);
-            await configIe.ExportAsync();
+            var configIe = new ConfigurationIe(_siteInfo.Id, configurationFilePath);
+            configIe.Export();
         }
 
         /// <summary>
         /// 导出网站模板至指定的文件地址
         /// </summary>
         /// <param name="filePath"></param>
-        public async Task ExportTemplatesAsync(string filePath)
+        public void ExportTemplates(string filePath)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var templateIe = new TemplateIe(site.Id, filePath);
-            await templateIe.ExportTemplatesAsync();
+            var templateIe = new TemplateIe(_siteInfo.Id, filePath);
+            templateIe.ExportTemplates();
         }
 
-        public async Task ExportRelatedFieldAsync(string relatedFieldDirectoryPath)
+        public void ExportTemplates(string filePath, List<int> templateIdList)
+        {
+            var templateIe = new TemplateIe(_siteInfo.Id, filePath);
+            templateIe.ExportTemplates(templateIdList);
+        }
+
+        public void ExportRelatedField(string relatedFieldDirectoryPath)
         {
             DirectoryUtils.CreateDirectoryIfNotExists(relatedFieldDirectoryPath);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var relatedFieldIe = new RelatedFieldIe(site.Id, relatedFieldDirectoryPath);
-            var relatedFieldInfoList = await DataProvider.RelatedFieldRepository.GetRelatedFieldListAsync(site.Id);
+            var relatedFieldIe = new RelatedFieldIe(_siteInfo.Id, relatedFieldDirectoryPath);
+            var relatedFieldInfoList = DataProvider.RelatedFieldDao.GetRelatedFieldInfoList(_siteInfo.Id);
             foreach (var relatedFieldInfo in relatedFieldInfoList)
             {
-                await relatedFieldIe.ExportRelatedFieldAsync(relatedFieldInfo);
+                relatedFieldIe.ExportRelatedField(relatedFieldInfo);
             }
         }
 
-        public async Task<string> ExportRelatedFieldAsync(int relatedFieldId)
+        public string ExportRelatedField(int relatedFieldId)
         {
             var directoryPath = PathUtils.GetTemporaryFilesPath("relatedField");
             var filePath = PathUtils.GetTemporaryFilesPath("relatedField.zip");
@@ -158,12 +159,10 @@ namespace SiteServer.CMS.ImportExport
             DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(directoryPath);
 
-            var relatedFieldInfo = await DataProvider.RelatedFieldRepository.GetRelatedFieldAsync(relatedFieldId);
+            var relatedFieldInfo = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(relatedFieldId);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-
-            var relatedFieldIe = new RelatedFieldIe(site.Id, directoryPath);
-            await relatedFieldIe.ExportRelatedFieldAsync(relatedFieldInfo);
+            var relatedFieldIe = new RelatedFieldIe(_siteInfo.Id, directoryPath);
+            relatedFieldIe.ExportRelatedField(relatedFieldInfo);
 
             ZipUtils.CreateZip(filePath, directoryPath);
 
@@ -174,39 +173,39 @@ namespace SiteServer.CMS.ImportExport
 
 
         // 导出网站所有相关辅助表以及除提交表单外的所有表样式
-        public async Task ExportTablesAndStylesAsync(string tableDirectoryPath)
+        public void ExportTablesAndStyles(string tableDirectoryPath)
         {
             DirectoryUtils.CreateDirectoryIfNotExists(tableDirectoryPath);
             var styleIe = new TableStyleIe(tableDirectoryPath, _adminName);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var tableNameList = await DataProvider.SiteRepository.GetTableNameListAsync(site);
+            var siteInfo = SiteManager.GetSiteInfo(_siteInfo.Id);
+            var tableNameList = SiteManager.GetTableNameList(siteInfo);
 
             foreach (var tableName in tableNameList)
             {
-                await styleIe.ExportTableStylesAsync(site.Id, tableName);
+                styleIe.ExportTableStyles(siteInfo.Id, tableName);
             }
 
-            await styleIe.ExportTableStylesAsync(site.Id, DataProvider.ChannelRepository.TableName);
-            await styleIe.ExportTableStylesAsync(site.Id, DataProvider.SiteRepository.TableName);
+            styleIe.ExportTableStyles(siteInfo.Id, DataProvider.ChannelDao.TableName);
+            styleIe.ExportTableStyles(siteInfo.Id, DataProvider.SiteDao.TableName);
         }
 
 
         /// <summary>
         /// 导出网站内容至默认的临时文件地址
         /// </summary>
-        public async Task ExportSiteContentAsync(string siteContentDirectoryPath, bool isSaveContents, bool isSaveAllChannels, IList<int> channelIdArrayList)
+        public void ExportSiteContent(string siteContentDirectoryPath, bool isSaveContents, bool isSaveAllChannels, List<int> channelIdArrayList)
         {
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            var allChannelIdList = await ChannelManager.GetChannelIdListAsync(_siteId);
+            var allChannelIdList = ChannelManager.GetChannelIdList(_siteInfo.Id);
 
             var includeChannelIdArrayList = new ArrayList();
             foreach (int channelId in channelIdArrayList)
             {
-                var nodeInfo = await ChannelManager.GetChannelAsync(_siteId, channelId);
-                var parentIdArrayList = StringUtils.GetIntList(nodeInfo.ParentsPath);
+                var nodeInfo = ChannelManager.GetChannelInfo(_siteInfo.Id, channelId);
+                var parentIdArrayList = TranslateUtils.StringCollectionToIntList(nodeInfo.ParentsPath);
                 foreach (int parentId in parentIdArrayList)
                 {
                     if (!includeChannelIdArrayList.Contains(parentId))
@@ -220,16 +219,14 @@ namespace SiteServer.CMS.ImportExport
                 }
             }
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-
-            var siteIe = new SiteIe(site, siteContentDirectoryPath);
+            var siteIe = new SiteIe(_siteInfo, siteContentDirectoryPath);
             foreach (var channelId in allChannelIdList)
             {
                 if (!isSaveAllChannels)
                 {
                     if (!includeChannelIdArrayList.Contains(channelId)) continue;
                 }
-                await siteIe.ExportAsync(_siteId, channelId, isSaveContents);
+                siteIe.Export(_siteInfo.Id, channelId, isSaveContents);
             }
         }
 
@@ -244,16 +241,17 @@ namespace SiteServer.CMS.ImportExport
             };
 
             var xmlPath = PathUtils.Combine(metadataPath, DirectoryUtils.SiteTemplates.FileMetadata);
-            Serializer.SaveAsXml(siteTemplateInfo, xmlPath);
+            Serializer.SaveAsXML(siteTemplateInfo, xmlPath);
         }
 
-        public async Task<string> ExportChannelsAsync(List<int> channelIdList)
+
+        public string ExportChannels(List<int> channelIdList)
         {
             var filePath = PathUtils.GetTemporaryFilesPath(EBackupTypeUtils.GetValue(EBackupType.ChannelsAndContents) + ".zip");
-            return await ExportChannelsAsync(channelIdList, filePath);
+            return ExportChannels(channelIdList, filePath);
         }
 
-        public async Task<string> ExportChannelsAsync(List<int> channelIdList, string filePath)
+        public string ExportChannels(List<int> channelIdList, string filePath)
         {
             var siteContentDirectoryPath = PathUtils.Combine(DirectoryUtils.GetDirectoryPath(filePath), PathUtils.GetFileNameWithoutExtension(filePath));
 
@@ -266,37 +264,35 @@ namespace SiteServer.CMS.ImportExport
                 if (!allChannelIdList.Contains(channelId))
                 {
                     allChannelIdList.Add(channelId);
-                    var nodeInfo = await ChannelManager.GetChannelAsync(_siteId, channelId);
-                    var childChannelIdList = await ChannelManager.GetChannelIdListAsync(nodeInfo, EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
+                    var nodeInfo = ChannelManager.GetChannelInfo(_siteInfo.Id, channelId);
+                    var childChannelIdList = ChannelManager.GetChannelIdList(nodeInfo, EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
                     allChannelIdList.AddRange(childChannelIdList);
                 }
             }
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-            var sitePath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir);
-            var siteIe = new SiteIe(site, siteContentDirectoryPath);
+            var siteIe = new SiteIe(_siteInfo, siteContentDirectoryPath);
             foreach (var channelId in allChannelIdList)
             {
-                await siteIe.ExportAsync(_siteId, channelId, true);
-            }
-
-            var imageUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, site.ImageUploadDirectoryName);
+                siteIe.Export(_siteInfo.Id, channelId, true);
+            } 
+             
+            var imageUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, _siteInfo.Additional.ImageUploadDirectoryName);
             DirectoryUtils.DeleteDirectoryIfExists(imageUploadDirectoryPath);
-            DirectoryUtils.Copy(PathUtils.Combine(sitePath, site.ImageUploadDirectoryName), imageUploadDirectoryPath);
+            DirectoryUtils.Copy(PathUtils.Combine(_sitePath, _siteInfo.Additional.ImageUploadDirectoryName), imageUploadDirectoryPath);
 
-            var videoUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, site.VideoUploadDirectoryName);
+            var videoUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, _siteInfo.Additional.VideoUploadDirectoryName);
             DirectoryUtils.DeleteDirectoryIfExists(videoUploadDirectoryPath);
-            DirectoryUtils.Copy(PathUtils.Combine(sitePath, site.VideoUploadDirectoryName), videoUploadDirectoryPath);
+            DirectoryUtils.Copy(PathUtils.Combine(_sitePath, _siteInfo.Additional.VideoUploadDirectoryName), videoUploadDirectoryPath);
 
-            var fileUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, site.FileUploadDirectoryName);
+            var fileUploadDirectoryPath = PathUtils.Combine(siteContentDirectoryPath, _siteInfo.Additional.FileUploadDirectoryName);
             DirectoryUtils.DeleteDirectoryIfExists(fileUploadDirectoryPath);
-            DirectoryUtils.Copy(PathUtils.Combine(sitePath, site.FileUploadDirectoryName), fileUploadDirectoryPath);
+            DirectoryUtils.Copy(PathUtils.Combine(_sitePath, _siteInfo.Additional.FileUploadDirectoryName), fileUploadDirectoryPath);
 
-            AtomFeed feed = AtomUtility.GetEmptyFeed();  
+            Atom.Core.AtomFeed feed = AtomUtility.GetEmptyFeed();  
             var entry = AtomUtility.GetEmptyEntry();  
-            AtomUtility.AddDcElement(entry.AdditionalElements, "ImageUploadDirectoryName", site.ImageUploadDirectoryName);
-            AtomUtility.AddDcElement(entry.AdditionalElements, "VideoUploadDirectoryName", site.VideoUploadDirectoryName);
-            AtomUtility.AddDcElement(entry.AdditionalElements, "FileUploadDirectoryName", site.FileUploadDirectoryName);
+            AtomUtility.AddDcElement(entry.AdditionalElements, "ImageUploadDirectoryName", _siteInfo.Additional.ImageUploadDirectoryName);
+            AtomUtility.AddDcElement(entry.AdditionalElements, "VideoUploadDirectoryName", _siteInfo.Additional.VideoUploadDirectoryName);
+            AtomUtility.AddDcElement(entry.AdditionalElements, "FileUploadDirectoryName", _siteInfo.Additional.FileUploadDirectoryName);
 
             feed.Entries.Add(entry);
             var uploadFolderPath = PathUtils.Combine(siteContentDirectoryPath, BackupUtility.UploadFolderName); 
@@ -311,7 +307,7 @@ namespace SiteServer.CMS.ImportExport
             return PathUtils.GetFileName(filePath);
         }
 
-        public async Task<bool> ExportContentsAsync(string filePath, int channelId, List<int> contentIdArrayList, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState)
+        public bool ExportContents(string filePath, int channelId, List<int> contentIdArrayList, bool isPeriods, string dateFrom, string dateTo, ETriState checkedState)
         {
             var siteContentDirectoryPath = PathUtils.Combine(DirectoryUtils.GetDirectoryPath(filePath), PathUtils.GetFileNameWithoutExtension(filePath));
 
@@ -319,10 +315,8 @@ namespace SiteServer.CMS.ImportExport
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-
-            var contentIe = new ContentIe(site, siteContentDirectoryPath);
-            var isExport = await contentIe.ExportContentsAsync(site, channelId, contentIdArrayList, isPeriods, dateFrom, dateTo, checkedState);
+            var contentIe = new ContentIe(_siteInfo, siteContentDirectoryPath);
+            var isExport = contentIe.ExportContents(_siteInfo, channelId, contentIdArrayList, isPeriods, dateFrom, dateTo, checkedState);
             if (isExport)
             {
                 ZipUtils.CreateZip(filePath, siteContentDirectoryPath);
@@ -331,7 +325,7 @@ namespace SiteServer.CMS.ImportExport
             return isExport;
         }
 
-        public async Task<bool> ExportContentsAsync(string filePath, List<Content> contentInfoList)
+        public bool ExportContents(string filePath, List<ContentInfo> contentInfoList)
         {
             var siteContentDirectoryPath = PathUtils.Combine(DirectoryUtils.GetDirectoryPath(filePath), PathUtils.GetFileNameWithoutExtension(filePath));
 
@@ -339,10 +333,8 @@ namespace SiteServer.CMS.ImportExport
             DirectoryUtils.DeleteDirectoryIfExists(siteContentDirectoryPath);
             DirectoryUtils.CreateDirectoryIfNotExists(siteContentDirectoryPath);
 
-            var site = await DataProvider.SiteRepository.GetAsync(_siteId);
-
-            var contentIe = new ContentIe(site, siteContentDirectoryPath);
-            var isExport = contentIe.ExportContents(site, contentInfoList);
+            var contentIe = new ContentIe(_siteInfo, siteContentDirectoryPath);
+            var isExport = contentIe.ExportContents(_siteInfo, contentInfoList);
             if (isExport)
             {
                 ZipUtils.CreateZip(filePath, siteContentDirectoryPath);

@@ -1,43 +1,44 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerGroup")]
     public class HomeContentsLayerGroupController : ApiController
     {
         private const string Route = "";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentDelete))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentDelete))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var contentGroupNameList = await DataProvider.ContentGroupRepository.GetGroupNamesAsync(siteId);
+                var contentGroupNameList = ContentGroupManager.GetGroupNameList(siteId);
 
                 return Ok(new
                 {
@@ -46,110 +47,110 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
-                var contentIdList = StringUtils.GetIntList(request.GetPostString("contentIds"));
+                var contentIdList = TranslateUtils.StringCollectionToIntList(request.GetPostString("contentIds"));
                 var pageType = request.GetPostString("pageType");
-                var groupNames = StringUtils.GetStringList(request.GetPostString("groupNames"));
+                var groupNames = TranslateUtils.StringCollectionToStringList(request.GetPostString("groupNames"));
                 var groupName = request.GetPostString("groupName");
                 var description = request.GetPostString("description");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
                 if (pageType == "setGroup")
                 {
                     foreach (var contentId in contentIdList)
                     {
-                        var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                        var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                         if (contentInfo == null) continue;
 
-                        var list = StringUtils.GetStringList(contentInfo.GroupNameCollection);
+                        var list = TranslateUtils.StringCollectionToStringList(contentInfo.GroupNameCollection);
                         foreach (var name in groupNames)
                         {
                             if (!list.Contains(name)) list.Add(name);
                         }
                         contentInfo.GroupNameCollection = TranslateUtils.ObjectCollectionToString(list);
 
-                        await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                     }
 
-                    await request.AddSiteLogAsync(siteId, "批量设置内容组", $"内容组:{TranslateUtils.ObjectCollectionToString(groupNames)}");
+                    request.AddSiteLog(siteId, "批量设置内容组", $"内容组:{TranslateUtils.ObjectCollectionToString(groupNames)}");
                 }
                 else if(pageType == "cancelGroup")
                 {
                     foreach (var contentId in contentIdList)
                     {
-                        var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                        var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                         if (contentInfo == null) continue;
 
-                        var list = StringUtils.GetStringList(contentInfo.GroupNameCollection);
+                        var list = TranslateUtils.StringCollectionToStringList(contentInfo.GroupNameCollection);
                         foreach (var name in groupNames)
                         {
                             if (list.Contains(name)) list.Remove(name);
                         }
                         contentInfo.GroupNameCollection = TranslateUtils.ObjectCollectionToString(list);
 
-                        await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                     }
 
-                    await request.AddSiteLogAsync(siteId, "批量取消内容组", $"内容组:{TranslateUtils.ObjectCollectionToString(groupNames)}");
+                    request.AddSiteLog(siteId, "批量取消内容组", $"内容组:{TranslateUtils.ObjectCollectionToString(groupNames)}");
                 }
                 else if (pageType == "addGroup")
                 {
-                    var groupInfo = new ContentGroup
+                    var groupInfo = new ContentGroupInfo
                     {
                         GroupName = AttackUtils.FilterXss(groupName),
                         SiteId = siteId,
                         Description = AttackUtils.FilterXss(description)
                     };
 
-                    if (await DataProvider.ContentGroupRepository.IsExistsAsync(siteId, groupInfo.GroupName))
+                    if (ContentGroupManager.IsExists(siteId, groupInfo.GroupName))
                     {
-                        await DataProvider.ContentGroupRepository.UpdateAsync(groupInfo);
-                        await request.AddSiteLogAsync(siteId, "修改内容组", $"内容组:{groupInfo.GroupName}");
+                        DataProvider.ContentGroupDao.Update(groupInfo);
+                        request.AddSiteLog(siteId, "修改内容组", $"内容组:{groupInfo.GroupName}");
                     }
                     else
                     {
-                        await DataProvider.ContentGroupRepository.InsertAsync(groupInfo);
-                        await request.AddSiteLogAsync(siteId, "添加内容组", $"内容组:{groupInfo.GroupName}");
+                        DataProvider.ContentGroupDao.Insert(groupInfo);
+                        request.AddSiteLog(siteId, "添加内容组", $"内容组:{groupInfo.GroupName}");
                     }
 
                     foreach (var contentId in contentIdList)
                     {
-                        var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                        var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                         if (contentInfo == null) continue;
 
-                        var list = StringUtils.GetStringList(contentInfo.GroupNameCollection);
+                        var list = TranslateUtils.StringCollectionToStringList(contentInfo.GroupNameCollection);
                         if (!list.Contains(groupInfo.GroupName)) list.Add(groupInfo.GroupName);
                         contentInfo.GroupNameCollection = TranslateUtils.ObjectCollectionToString(list);
 
-                        await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                     }
 
-                    await request.AddSiteLogAsync(siteId, "批量设置内容组", $"内容组:{groupInfo.GroupName}");
+                    request.AddSiteLog(siteId, "批量设置内容组", $"内容组:{groupInfo.GroupName}");
                 }
 
                 return Ok(new
@@ -159,7 +160,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

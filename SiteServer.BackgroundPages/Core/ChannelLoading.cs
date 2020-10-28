@@ -1,32 +1,31 @@
 ﻿using System;
 using System.Text;
+using SiteServer.Utils;
 using System.Collections.Specialized;
-using System.Threading.Tasks;
 using SiteServer.BackgroundPages.Cms;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
-using SiteServer.Abstractions;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Core
 {
     public static class ChannelLoading
     {
-        public static async Task<string> GetChannelRowHtmlAsync(Site site, Channel node, bool enabled, ELoadingType loadingType, NameValueCollection additional, PermissionsImpl permissionsImpl)
+        public static string GetChannelRowHtml(SiteInfo siteInfo, ChannelInfo nodeInfo, bool enabled, ELoadingType loadingType, NameValueCollection additional, PermissionsImpl permissionsImpl)
         {
-            var nodeTreeItem = ChannelTreeItem.CreateInstance(site, node, enabled, permissionsImpl);
-            var adminId = await permissionsImpl.GetAdminIdAsync(site.Id, node.Id);
-            var title = await nodeTreeItem.GetItemHtmlAsync(loadingType, PageChannel.GetRedirectUrl(site.Id, node.Id), adminId, additional);
+            var nodeTreeItem = ChannelTreeItem.CreateInstance(siteInfo, nodeInfo, enabled, permissionsImpl);
+            var adminId = permissionsImpl.GetAdminId(siteInfo.Id, nodeInfo.Id);
+            var title = nodeTreeItem.GetItemHtml(loadingType, PageChannel.GetRedirectUrl(siteInfo.Id, nodeInfo.Id), adminId, additional);
 
             var rowHtml = string.Empty;
 
             if (loadingType == ELoadingType.ContentTree)
             {
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td nowrap>{title}</td>
 </tr>
 ";
@@ -40,30 +39,30 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    if (await permissionsImpl.HasChannelPermissionsAsync(node.SiteId, node.Id, Constants.ChannelPermissions.ChannelEdit))
+                    if (permissionsImpl.HasChannelPermissions(nodeInfo.SiteId, nodeInfo.Id, ConfigManager.ChannelPermissions.ChannelEdit))
                     {
-                        editUrl = $@"<a href=""{PageChannelEdit.GetRedirectUrl(node.SiteId, node.Id, PageChannel.GetRedirectUrl(node.SiteId, node.Id))}"" onclick=""event.stopPropagation()"">编辑</a>";
+                        editUrl = $@"<a href=""{PageChannelEdit.GetRedirectUrl(nodeInfo.SiteId, nodeInfo.Id, PageChannel.GetRedirectUrl(nodeInfo.SiteId, nodeInfo.Id))}"" onclick=""event.stopPropagation()"">编辑</a>";
                         upLink =
-                            $@"<a href=""{PageUtils.GetCmsUrl(node.SiteId, nameof(PageChannel), new NameValueCollection
+                            $@"<a href=""{PageUtils.GetCmsUrl(nodeInfo.SiteId, nameof(PageChannel), new NameValueCollection
                             {
                                 {"Subtract", true.ToString()},
-                                {"channelId", node.Id.ToString()}
+                                {"channelId", nodeInfo.Id.ToString()}
                             })}"" onclick=""event.stopPropagation()""><img src=""../Pic/icon/up.gif"" border=""0"" alt=""上升"" /></a>";
                         downLink =
-                            $@"<a href=""{PageUtils.GetCmsUrl(node.SiteId, nameof(PageChannel), new NameValueCollection
+                            $@"<a href=""{PageUtils.GetCmsUrl(nodeInfo.SiteId, nameof(PageChannel), new NameValueCollection
                             {
                                 {"Add", true.ToString()},
-                                {"channelId", node.Id.ToString()}
+                                {"channelId", nodeInfo.Id.ToString()}
                             })}"" onclick=""event.stopPropagation()""><img src=""../Pic/icon/down.gif"" border=""0"" alt=""下降"" /></a>";
                     }
-                    checkBoxHtml = $@"<input type=""checkbox"" name=""ChannelIDCollection"" value=""{node.Id}"" onclick=""checkboxClick(this)"" />";
+                    checkBoxHtml = $@"<input type=""checkbox"" name=""ChannelIDCollection"" value=""{nodeInfo.Id}"" onclick=""checkboxClick(this)"" />";
                 }
 
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"" onclick=""activeRow(this);return false;"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"" onclick=""activeRow(this);return false;"">
     <td>{title}</td>
-    <td class=""text-nowrap"">{StringUtils.Join(node.GroupNames)}</td>
-    <td class=""text-nowrap"">{node.IndexName}</td>
+    <td class=""text-nowrap"">{nodeInfo.GroupNameCollection}</td>
+    <td class=""text-nowrap"">{nodeInfo.IndexName}</td>
     <td class=""text-center"">{upLink}</td>
     <td class=""text-center"">{downLink}</td>
     <td class=""text-center"">{editUrl}</td>
@@ -76,15 +75,15 @@ namespace SiteServer.BackgroundPages.Core
                 var startDate = TranslateUtils.ToDateTime(additional["StartDate"]);
                 var endDate = TranslateUtils.ToDateTime(additional["EndDate"]);
 
-                var tableName = ChannelManager.GetTableNameAsync(site, node).GetAwaiter().GetResult();
-                var num = DataProvider.ContentRepository.GetCountOfContentAddAsync(tableName, site.Id, node.Id, EScopeType.All, startDate, endDate, string.Empty, ETriState.All).GetAwaiter().GetResult();
+                var tableName = ChannelManager.GetTableName(siteInfo, nodeInfo);
+                var num = DataProvider.ContentDao.GetCountOfContentAdd(tableName, siteInfo.Id, nodeInfo.Id, EScopeType.All, startDate, endDate, string.Empty, ETriState.All);
                 var contentAddNum = num == 0 ? "0" : $"<strong>{num}</strong>";
 
-                num = DataProvider.ContentRepository.GetCountOfContentUpdateAsync(tableName, site.Id, node.Id, EScopeType.All, startDate, endDate, string.Empty).GetAwaiter().GetResult();
+                num = DataProvider.ContentDao.GetCountOfContentUpdate(tableName, siteInfo.Id, nodeInfo.Id, EScopeType.All, startDate, endDate, string.Empty);
                 var contentUpdateNum = num == 0 ? "0" : $"<strong>{num}</strong>";
 
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 	<td class=""text-center"">{contentAddNum}</td>
 	<td class=""text-center"">{contentUpdateNum}</td>
@@ -97,13 +96,13 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalTemplateFilePathRule.GetOpenWindowString(node.SiteId, node.Id);
+                    var showPopWinString = ModalTemplateFilePathRule.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">更改</a>";
                 }
-                var filePath = PageUtility.GetInputChannelUrlAsync(site, node, false).GetAwaiter().GetResult();
+                var filePath = PageUtility.GetInputChannelUrl(siteInfo, nodeInfo, false);
 
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 	<td>{filePath}</td>
 	<td class=""text-center"">{editLink}</td>
@@ -118,15 +117,15 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalConfigurationCreateChannel.GetOpenWindowString(node.SiteId, node.Id);
+                    var showPopWinString = ModalConfigurationCreateChannel.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editChannelLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">触发栏目</a>";
                 }
 
                 var nodeNameBuilder = new StringBuilder();
-                var channelIdList = StringUtils.GetIntList(node.CreateChannelIdsIfContentChanged);
+                var channelIdList = TranslateUtils.StringCollectionToIntList(nodeInfo.Additional.CreateChannelIdsIfContentChanged);
                 foreach (var theChannelId in channelIdList)
                 {
-                    var theNodeInfo = await ChannelManager.GetChannelAsync(site.Id, theChannelId);
+                    var theNodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, theChannelId);
                     if (theNodeInfo != null)
                     {
                         nodeNameBuilder.Append(theNodeInfo.ChannelName).Append(",");
@@ -139,7 +138,7 @@ namespace SiteServer.BackgroundPages.Core
                 }
 
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 	<td>{nodeNames}</td>
 	<td class=""text-center"">{editChannelLink}</td>
@@ -152,14 +151,14 @@ namespace SiteServer.BackgroundPages.Core
 
                 if (enabled)
                 {
-                    var showPopWinString = ModalCrossSiteTransEdit.GetOpenWindowString(node.SiteId, node.Id);
+                    var showPopWinString = ModalCrossSiteTransEdit.GetOpenWindowString(nodeInfo.SiteId, nodeInfo.Id);
                     editLink = $"<a href=\"javascript:;\" onclick=\"{showPopWinString}\">更改</a>";
                 }
 
-                var contribute = CrossSiteTransUtility.GetDescriptionAsync(node.SiteId, node).GetAwaiter().GetResult();
+                var contribute = CrossSiteTransUtility.GetDescription(nodeInfo.SiteId, nodeInfo);
 
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 	<td>{contribute}</td>
 	<td class=""text-center"">{editLink}</td>
@@ -169,7 +168,7 @@ namespace SiteServer.BackgroundPages.Core
             else if (loadingType == ELoadingType.ChannelClickSelect)
             {
                 rowHtml = $@"
-<tr treeItemLevel=""{node.ParentsCount + 1}"">
+<tr treeItemLevel=""{nodeInfo.ParentsCount + 1}"">
 	<td>{title}</td>
 </tr>
 ";
@@ -178,16 +177,16 @@ namespace SiteServer.BackgroundPages.Core
             return rowHtml;
         }
 
-        public static string GetScript(Site site, string contentModelPluginId, ELoadingType loadingType, NameValueCollection additional)
+        public static string GetScript(SiteInfo siteInfo, string contentModelPluginId, ELoadingType loadingType, NameValueCollection additional)
         {
-            return ChannelTreeItem.GetScript(site, loadingType, contentModelPluginId, additional);
+            return ChannelTreeItem.GetScript(siteInfo, loadingType, contentModelPluginId, additional);
         }
 
         public static string GetScriptOnLoad(int siteId, int currentChannelId)
         {
             if (currentChannelId == 0 || currentChannelId == siteId) return string.Empty;
 
-            var nodeInfo = ChannelManager.GetChannelAsync(siteId, currentChannelId).GetAwaiter().GetResult();
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, currentChannelId);
             if (nodeInfo == null) return string.Empty;
 
             string path;

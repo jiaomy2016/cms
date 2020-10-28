@@ -4,7 +4,7 @@ var data = {
   pageLoad: false,
   pageAlert: {
     type: 'warning',
-    html: 'API密钥可以用于访问 SiteServer REST API <a href="https://www.siteserver.cn/docs/api/" target="_blank">阅读更多</a>'
+    html: 'API密钥可以用于访问 SiteServer REST API <a href="' + $urlCloud + '/docs/api/" target="_blank">阅读更多</a>'
   },
   pageType: null,
   items: null,
@@ -43,11 +43,11 @@ var methods = {
   delete: function (item) {
     var $this = this;
 
-    utils.loading(true);
+    pageUtils.loading(true);
     $api.delete({
       id: item.id
     }, function (err, res) {
-      utils.loading(false);
+      pageUtils.loading(false);
       if (err || !res || !res.value) return;
 
       $this.items = res.value;
@@ -58,9 +58,9 @@ var methods = {
 
     this.item.scopes = this.item.scopeList ? this.item.scopeList.join(',') : '';
 
-    utils.loading(true);
+    pageUtils.loading(true);
     $api.post(item, function (err, res) {
-      utils.loading(false);
+      pageUtils.loading(false);
       if (err) {
         $this.pageAlert = {
           type: 'danger',
@@ -91,7 +91,7 @@ var methods = {
     this.pageType = 'list';
   },
   btnViewClick: function (item) {
-    utils.openLayer({
+    pageUtils.openLayer({
       title: '获取密钥',
       url: 'adminAccessTokensViewLayer.cshtml?id=' + item.id,
       height: 410
@@ -100,7 +100,7 @@ var methods = {
   btnDeleteClick: function (item) {
     var $this = this;
 
-    utils.alertDelete({
+    pageUtils.alertDelete({
       title: '删除API密钥',
       text: '此操作将删除API密钥 ' + item.title + '，确定吗？',
       callback: function () {

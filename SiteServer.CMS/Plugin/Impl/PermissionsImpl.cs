@@ -1,19 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.CMS.Model;
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Plugin.Impl
 {
-    public class PermissionsImpl
+    public class PermissionsImpl : IPermissions
     {
-        private readonly Administrator _adminInfo;
+        private readonly AdministratorInfo _adminInfo;
         private readonly string _rolesKey;
         private readonly string _permissionListKey;
         private readonly string _websitePermissionDictKey;
@@ -28,9 +28,9 @@ namespace SiteServer.CMS.Plugin.Impl
         private List<string> _channelPermissionListIgnoreChannelId;
         private List<int> _channelIdList;
 
-        public PermissionsImpl(Administrator adminInfo)
+        public PermissionsImpl(AdministratorInfo adminInfo)
         {
-            if (adminInfo == null || adminInfo.Locked) return;
+            if (adminInfo == null || adminInfo.IsLockedOut) return;
 
             _adminInfo = adminInfo;
 
@@ -42,72 +42,68 @@ namespace SiteServer.CMS.Plugin.Impl
             _channelIdListKey = GetChannelIdListCacheKey(adminInfo.UserName);
         }
 
-        public async Task<List<int>> GetChannelIdListAsync()
+        public List<int> ChannelIdList
         {
-            if (_channelIdList != null) return _channelIdList;
-            if (_adminInfo == null || _adminInfo.Locked) return new List<int>();
-
-            _channelIdList = DataCacheManager.Get<List<int>>(_channelIdListKey);
-
-            if (_channelIdList == null)
+            get
             {
-                _channelIdList = new List<int>();
+                if (_channelIdList != null) return _channelIdList;
+                if (_adminInfo == null || _adminInfo.IsLockedOut) return new List<int>();
 
-                if (!await IsSuperAdminAsync())
+                _channelIdList = DataCacheManager.Get<List<int>>(_channelIdListKey);
+
+                if (_channelIdList == null)
                 {
-                    var dict = await GetChannelPermissionDictAsync();
-                    foreach (var dictKey in dict.Keys)
+                    _channelIdList = new List<int>();
+
+                    if (!IsSystemAdministrator)
                     {
-                        var kvp = ParseChannelPermissionDictKey(dictKey);
-                        var channelInfo = await ChannelManager.GetChannelAsync(kvp.Key, kvp.Value);
-                        _channelIdList.AddRange(await ChannelManager.GetChannelIdListAsync(channelInfo, EScopeType.All, string.Empty, string.Empty, string.Empty));
+                        foreach (var dictKey in ChannelPermissionDict.Keys)
+                        {
+                            var kvp = ParseChannelPermissionDictKey(dictKey);
+                            var channelInfo = ChannelManager.GetChannelInfo(kvp.Key, kvp.Value);
+                            _channelIdList.AddRange(ChannelManager.GetChannelIdList(channelInfo, EScopeType.All, string.Empty, string.Empty, string.Empty));
+                        }
                     }
+
+                    DataCacheManager.InsertMinutes(_channelIdListKey, _channelIdList, 30);
                 }
-
-                DataCacheManager.InsertMinutes(_channelIdListKey, _channelIdList, 30);
+                return _channelIdList ?? (_channelIdList = new List<int>());
             }
-            return _channelIdList ?? (_channelIdList = new List<int>());
         }
 
-        public async Task<bool> IsSuperAdminAsync()
+        public bool IsSuperAdmin()
         {
-            return EPredefinedRoleUtils.IsConsoleAdministrator(await GetRolesAsync());
+            return IsConsoleAdministrator;
         }
 
-        public async Task<bool> IsSiteAdminAsync()
+        public bool IsSiteAdmin(int siteId)
         {
-            return EPredefinedRoleUtils.IsSystemAdministrator(await GetRolesAsync());
+            return IsSystemAdministrator && GetSiteIdList().Contains(siteId);
         }
 
-        public async Task<bool> IsSiteAdminAsync(int siteId)
+        public string GetAdminLevel()
         {
-            var siteIdList = await GetSiteIdListAsync();
-            return await IsSiteAdminAsync() && siteIdList.Contains(siteId);
-        }
-
-        public async Task<string> GetAdminLevelAsync()
-        {
-            if (await IsSiteAdminAsync())
+            if (IsConsoleAdministrator)
             {
                 return "超级管理员";
             }
 
-            return await IsSiteAdminAsync() ? "站点总管理员" : "普通管理员";
+            return IsSystemAdministrator ? "站点总管理员" : "普通管理员";
         }
 
-        public async Task<List<int>> GetSiteIdListAsync()
+        public List<int> GetSiteIdList()
         {
             var siteIdList = new List<int>();
 
-            if (await IsSuperAdminAsync())
+            if (IsConsoleAdministrator)
             {
-                siteIdList = await DataProvider.SiteRepository.GetSiteIdListAsync();
+                siteIdList = SiteManager.GetSiteIdList();
             }
-            else if (await IsSiteAdminAsync())
+            else if (IsSystemAdministrator)
             {
                 if (_adminInfo != null)
                 {
-                    foreach (var siteId in _adminInfo.SiteIds)
+                    foreach (var siteId in TranslateUtils.StringCollectionToIntList(_adminInfo.SiteIdCollection))
                     {
                         if (!siteIdList.Contains(siteId))
                         {
@@ -118,7 +114,7 @@ namespace SiteServer.CMS.Plugin.Impl
             }
             else
             {
-                var dict = await GetWebsitePermissionDictAsync();
+                var dict = WebsitePermissionDict;
 
                 foreach (var siteId in dict.Keys)
                 {
@@ -132,24 +128,24 @@ namespace SiteServer.CMS.Plugin.Impl
             return siteIdList;
         }
 
-        public async Task<List<int>> GetChannelIdListAsync(int siteId, params string[] permissions)
+        public List<int> GetChannelIdList(int siteId, params string[] permissions)
         {
-            if (await IsSiteAdminAsync(siteId))
+            if (IsSystemAdministrator)
             {
-                return await ChannelManager.GetChannelIdListAsync(siteId);
+                return ChannelManager.GetChannelIdList(siteId);
             }
 
             var siteChannelIdList = new List<int>();
-            var dict = await GetChannelPermissionDictAsync();
+            var dict = ChannelPermissionDict;
             foreach (var dictKey in dict.Keys)
             {
                 var kvp = ParseChannelPermissionDictKey(dictKey);
                 var dictPermissions = dict[dictKey];
                 if (kvp.Key == siteId && dictPermissions.Any(permissions.Contains))
                 {
-                    var channelInfo = await ChannelManager.GetChannelAsync(kvp.Key, kvp.Value);
+                    var channelInfo = ChannelManager.GetChannelInfo(kvp.Key, kvp.Value);
 
-                    var channelIdList = await ChannelManager.GetChannelIdListAsync(channelInfo, EScopeType.All);
+                    var channelIdList = ChannelManager.GetChannelIdList(channelInfo, EScopeType.All);
 
                     foreach (var channelId in channelIdList)
                     {
@@ -164,21 +160,20 @@ namespace SiteServer.CMS.Plugin.Impl
             return siteChannelIdList;
         }
 
-        public async Task<bool> HasSystemPermissionsAsync(params string[] permissions)
+        public bool HasSystemPermissions(params string[] permissions)
         {
-            if (await IsSiteAdminAsync()) return true;
+            if (IsSystemAdministrator) return true;
 
-            var permissionList = await GetPermissionListAsync();
+            var permissionList = PermissionList;
             return permissions.Any(permission => permissionList.Contains(permission));
         }
 
-        public async Task<bool> HasSitePermissionsAsync(int siteId, params string[] permissions)
+        public bool HasSitePermissions(int siteId, params string[] permissions)
         {
-            if (await IsSiteAdminAsync()) return true;
-            var dict = await GetWebsitePermissionDictAsync();
-            if (!dict.ContainsKey(siteId)) return false;
+            if (IsSystemAdministrator) return true;
+            if (!WebsitePermissionDict.ContainsKey(siteId)) return false;
 
-            var websitePermissionList = dict[siteId];
+            var websitePermissionList = WebsitePermissionDict[siteId];
             if (websitePermissionList != null && websitePermissionList.Count > 0)
             {
                 return permissions.Any(sitePermission => websitePermissionList.Contains(sitePermission));
@@ -187,20 +182,23 @@ namespace SiteServer.CMS.Plugin.Impl
             return false;
         }
 
-        public async Task<bool> HasChannelPermissionsAsync(int siteId, int channelId, params string[] permissions)
+        public bool HasChannelPermissions(int siteId, int channelId, params string[] permissions)
         {
             while (true)
             {
                 if (channelId == 0) return false;
-                if (await IsSiteAdminAsync()) return true;
+                if (IsSystemAdministrator) return true;
                 var dictKey = GetChannelPermissionDictKey(siteId, channelId);
-                var dict = await GetChannelPermissionDictAsync();
-                if (dict.ContainsKey(dictKey) && await HasChannelPermissionsAsync(dict[dictKey], permissions)) return true;
+                if (ChannelPermissionDict.ContainsKey(dictKey) && HasChannelPermissions(ChannelPermissionDict[dictKey], permissions)) return true;
 
-                var parentChannelId = await ChannelManager.GetParentIdAsync(siteId, channelId);
+                var parentChannelId = ChannelManager.GetParentId(siteId, channelId);
                 channelId = parentChannelId;
             }
         }
+
+        public bool IsConsoleAdministrator => EPredefinedRoleUtils.IsConsoleAdministrator(Roles);
+
+        public bool IsSystemAdministrator => EPredefinedRoleUtils.IsSystemAdministrator(Roles);
 
         //public bool IsSuperAdmin(string userName)
         //{
@@ -214,231 +212,214 @@ namespace SiteServer.CMS.Plugin.Impl
         //    return adminPermissionsImpl.IsSystemAdministrator && adminPermissionsImpl.HasSitePermissions(siteId);
         //}
 
-        public async Task<List<string>> GetPermissionListAsync()
+        public List<string> PermissionList
         {
-            if (_permissionList != null) return _permissionList;
-            if (_adminInfo == null || _adminInfo.Locked) return new List<string>();
-
-            _permissionList = DataCacheManager.Get<List<string>>(_permissionListKey);
-
-            if (_permissionList == null)
+            get
             {
-                var roles = await GetRolesAsync();
-                if (EPredefinedRoleUtils.IsConsoleAdministrator(roles))
+                if (_permissionList != null) return _permissionList;
+                if (_adminInfo == null || _adminInfo.IsLockedOut) return new List<string>();
+
+                _permissionList = DataCacheManager.Get<List<string>>(_permissionListKey);
+
+                if (_permissionList == null)
                 {
-                    _permissionList = new List<string>();
-                    var instance = await PermissionConfigManager.GetInstanceAsync();
-                    foreach (var permission in instance.GeneralPermissions)
+                    if (EPredefinedRoleUtils.IsConsoleAdministrator(Roles))
                     {
-                        _permissionList.Add(permission.Name);
+                        _permissionList = new List<string>();
+                        foreach (var permission in PermissionConfigManager.Instance.GeneralPermissions)
+                        {
+                            _permissionList.Add(permission.Name);
+                        }
                     }
-                }
-                else if (EPredefinedRoleUtils.IsSystemAdministrator(roles))
-                {
-                    _permissionList = new List<string>
+                    else if (EPredefinedRoleUtils.IsSystemAdministrator(Roles))
                     {
-                        Constants.SettingsPermissions.Admin
-                    };
-                }
-                else
-                {
-                    _permissionList = await DataProvider.PermissionsInRolesRepository.GetGeneralPermissionListAsync(roles);
-                }
-
-                DataCacheManager.InsertMinutes(_permissionListKey, _permissionList, 30);
-            }
-            return _permissionList ?? (_permissionList = new List<string>());
-        }
-
-        private async Task<IList<string>> GetRolesAsync()
-        {
-            if (_roles != null) return _roles;
-            if (_adminInfo == null || _adminInfo.Locked)
-                return new List<string> { EPredefinedRoleUtils.GetValue(EPredefinedRole.Administrator) };
-
-            _roles = DataCacheManager.Get<List<string>>(_rolesKey);
-            if (_roles == null)
-            {
-                _roles = await DataProvider.AdministratorsInRolesRepository.GetRolesForUserAsync(_adminInfo.UserName);
-                DataCacheManager.InsertMinutes(_rolesKey, _roles, 30);
-            }
-
-            return _roles ?? new List<string> { EPredefinedRoleUtils.GetValue(EPredefinedRole.Administrator) };
-        }
-
-        private async Task<Dictionary<int, List<string>>> GetWebsitePermissionDictAsync()
-        {
-            if (_websitePermissionDict != null) return _websitePermissionDict;
-            if (_adminInfo == null || _adminInfo.Locked) return new Dictionary<int, List<string>>();
-
-            _websitePermissionDict = DataCacheManager.Get<Dictionary<int, List<string>>>(_websitePermissionDictKey);
-
-            if (_websitePermissionDict == null)
-            {
-                if (await IsSiteAdminAsync())
-                {
-                    var allWebsitePermissionList = new List<string>();
-                    var instance = await PermissionConfigManager.GetInstanceAsync();
-
-                    foreach (var permission in instance.WebsitePermissions)
+                        _permissionList = new List<string>
+                        {
+                            ConfigManager.AppPermissions.SettingsAdmin
+                        };
+                    }
+                    else
                     {
-                        allWebsitePermissionList.Add(permission.Name);
+                        _permissionList = DataProvider.PermissionsInRolesDao.GetGeneralPermissionList(Roles);
                     }
 
-                    var siteIdList = await GetSiteIdListAsync();
-
-                    _websitePermissionDict = new Dictionary<int, List<string>>();
-                    foreach (var siteId in siteIdList)
-                    {
-                        _websitePermissionDict[siteId] = allWebsitePermissionList;
-                    }
+                    DataCacheManager.InsertMinutes(_permissionListKey, _permissionList, 30);
                 }
-                else
-                {
-                    var roles = await GetRolesAsync();
-                    _websitePermissionDict = await DataProvider.SitePermissionsRepository.GetWebsitePermissionSortedListAsync(roles);
-                }
-                DataCacheManager.InsertMinutes(_websitePermissionDictKey, _websitePermissionDict, 30);
+                return _permissionList ?? (_permissionList = new List<string>());
             }
-            return _websitePermissionDict ??= new Dictionary<int, List<string>>();
         }
 
-        private async Task<Dictionary<string, List<string>>> GetChannelPermissionDictAsync()
+        private IList<string> Roles
         {
-            if (_channelPermissionDict != null) return _channelPermissionDict;
-            if (_adminInfo == null || _adminInfo.Locked) return new Dictionary<string, List<string>>();
-
-            _channelPermissionDict = DataCacheManager.Get<Dictionary<string, List<string>>>(_channelPermissionDictKey);
-
-            if (_channelPermissionDict == null)
+            get
             {
-                var roles = await GetRolesAsync();
-                if (EPredefinedRoleUtils.IsSystemAdministrator(roles))
+                if (_roles != null) return _roles;
+                if (_adminInfo == null || _adminInfo.IsLockedOut)
+                    return new List<string> { EPredefinedRoleUtils.GetValue(EPredefinedRole.Administrator) };
+
+                _roles = DataCacheManager.Get<List<string>>(_rolesKey);
+                if (_roles == null)
                 {
-                    var allChannelPermissionList = new List<string>();
-                    var instance = await PermissionConfigManager.GetInstanceAsync();
-
-                    foreach (var permission in instance.ChannelPermissions)
-                    {
-                        allChannelPermissionList.Add(permission.Name);
-                    }
-
-                    _channelPermissionDict = new Dictionary<string, List<string>>();
-
-                    var siteIdList = await GetSiteIdListAsync();
-
-                    foreach (var siteId in siteIdList)
-                    {
-                        _channelPermissionDict[GetChannelPermissionDictKey(siteId, siteId)] = allChannelPermissionList;
-                    }
+                    _roles = DataProvider.AdministratorsInRolesDao.GetRolesForUser(_adminInfo.UserName);
+                    DataCacheManager.InsertMinutes(_rolesKey, _roles, 30);
                 }
-                else
-                {
-                    _channelPermissionDict = await DataProvider.SitePermissionsRepository.GetChannelPermissionSortedListAsync(roles);
-                }
-                DataCacheManager.InsertMinutes(_channelPermissionDictKey, _channelPermissionDict, 30);
+
+                return _roles ?? new List<string> { EPredefinedRoleUtils.GetValue(EPredefinedRole.Administrator) };
             }
-
-            return _channelPermissionDict ?? (_channelPermissionDict = new Dictionary<string, List<string>>());
         }
 
-        private async Task<List<string>> GetChannelPermissionListIgnoreChannelIdAsync()
+        private Dictionary<int, List<string>> WebsitePermissionDict
         {
-            if (_channelPermissionListIgnoreChannelId != null) return _channelPermissionListIgnoreChannelId;
-            if (_adminInfo == null || _adminInfo.Locked) return new List<string>();
-
-            _channelPermissionListIgnoreChannelId =
-                DataCacheManager.Get<List<string>>(_channelPermissionListIgnoreChannelIdKey);
-            if (_channelPermissionListIgnoreChannelId == null)
+            get
             {
-                var roles = await GetRolesAsync();
-                if (EPredefinedRoleUtils.IsSystemAdministrator(roles))
-                {
-                    _channelPermissionListIgnoreChannelId = new List<string>();
-                    var instance = await PermissionConfigManager.GetInstanceAsync();
+                if (_websitePermissionDict != null) return _websitePermissionDict;
+                if (_adminInfo == null || _adminInfo.IsLockedOut) return new Dictionary<int, List<string>>();
 
-                    foreach (var permission in instance.ChannelPermissions)
+                _websitePermissionDict = DataCacheManager.Get<Dictionary<int, List<string>>>(_websitePermissionDictKey);
+
+                if (_websitePermissionDict == null)
+                {
+                    if (IsSystemAdministrator)
                     {
-                        _channelPermissionListIgnoreChannelId.Add(permission.Name);
+                        var allWebsitePermissionList = new List<string>();
+                        foreach (var permission in PermissionConfigManager.Instance.WebsitePermissions)
+                        {
+                            allWebsitePermissionList.Add(permission.Name);
+                        }
+
+                        var siteIdList = GetSiteIdList();
+
+                        _websitePermissionDict = new Dictionary<int, List<string>>();
+                        foreach (var siteId in siteIdList)
+                        {
+                            _websitePermissionDict[siteId] = allWebsitePermissionList;
+                        }
                     }
+                    else
+                    {
+                        _websitePermissionDict = DataProvider.SitePermissionsDao.GetWebsitePermissionSortedList(Roles);
+                    }
+                    DataCacheManager.InsertMinutes(_websitePermissionDictKey, _websitePermissionDict, 30);
                 }
-                else
-                {
-                    _channelPermissionListIgnoreChannelId =
-                        await DataProvider.SitePermissionsRepository.GetChannelPermissionListIgnoreChannelIdAsync(roles);
-                }
-
-                DataCacheManager.InsertMinutes(_channelPermissionListIgnoreChannelIdKey,
-                    _channelPermissionListIgnoreChannelId, 30);
+                return _websitePermissionDict ?? (_websitePermissionDict = new Dictionary<int, List<string>>());
             }
-
-            return _channelPermissionListIgnoreChannelId ??
-                   (_channelPermissionListIgnoreChannelId = new List<string>());
         }
 
-        public async Task<bool> HasSitePermissionsAsync(int siteId)
+        private Dictionary<string, List<string>> ChannelPermissionDict
         {
-            var dict = await GetWebsitePermissionDictAsync();
-            return await IsSiteAdminAsync() || dict.ContainsKey(siteId);
-        }
-
-        public async Task<List<string>> GetSitePermissionsAsync(int siteId)
-        {
-            var dict = await GetWebsitePermissionDictAsync();
-            return dict.TryGetValue(siteId, out var list) ? list : new List<string>();
-        }
-
-        private async Task<bool> HasChannelPermissionsAsync(List<string> channelPermissionList, params string[] channelPermissions)
-        {
-            if (await IsSiteAdminAsync())
+            get
             {
-                return true;
-            }
-            foreach (var channelPermission in channelPermissions)
-            {
-                if (channelPermissionList.Contains(channelPermission))
+                if (_channelPermissionDict != null) return _channelPermissionDict;
+                if (_adminInfo == null || _adminInfo.IsLockedOut) return new Dictionary<string, List<string>>();
+
+                _channelPermissionDict = DataCacheManager.Get<Dictionary<string, List<string>>>(_channelPermissionDictKey);
+
+                if (_channelPermissionDict == null)
                 {
-                    return true;
+                    if (EPredefinedRoleUtils.IsSystemAdministrator(Roles))
+                    {
+                        var allChannelPermissionList = new List<string>();
+                        foreach (var permission in PermissionConfigManager.Instance.ChannelPermissions)
+                        {
+                            allChannelPermissionList.Add(permission.Name);
+                        }
+
+                        _channelPermissionDict = new Dictionary<string, List<string>>();
+
+                        var siteIdList = GetSiteIdList();
+
+                        foreach (var siteId in siteIdList)
+                        {
+                            _channelPermissionDict[GetChannelPermissionDictKey(siteId, siteId)] = allChannelPermissionList;
+                        }
+                    }
+                    else
+                    {
+                        _channelPermissionDict = DataProvider.SitePermissionsDao.GetChannelPermissionSortedList(Roles);
+                    }
+                    DataCacheManager.InsertMinutes(_channelPermissionDictKey, _channelPermissionDict, 30);
                 }
+
+                return _channelPermissionDict ?? (_channelPermissionDict = new Dictionary<string, List<string>>());
             }
-            return false;
         }
 
-        public async Task<bool> HasChannelPermissionsAsync(int siteId, int channelId)
+        private List<string> ChannelPermissionListIgnoreChannelId
+        {
+            get
+            {
+                if (_channelPermissionListIgnoreChannelId != null) return _channelPermissionListIgnoreChannelId;
+                if (_adminInfo == null || _adminInfo.IsLockedOut) return new List<string>();
+
+                _channelPermissionListIgnoreChannelId = DataCacheManager.Get<List<string>>(_channelPermissionListIgnoreChannelIdKey);
+                if (_channelPermissionListIgnoreChannelId == null)
+                {
+                    if (EPredefinedRoleUtils.IsSystemAdministrator(Roles))
+                    {
+                        _channelPermissionListIgnoreChannelId = new List<string>();
+                        foreach (var permission in PermissionConfigManager.Instance.ChannelPermissions)
+                        {
+                            _channelPermissionListIgnoreChannelId.Add(permission.Name);
+                        }
+                    }
+                    else
+                    {
+                        _channelPermissionListIgnoreChannelId = DataProvider.SitePermissionsDao.GetChannelPermissionListIgnoreChannelId(Roles);
+                    }
+                    DataCacheManager.InsertMinutes(_channelPermissionListIgnoreChannelIdKey, _channelPermissionListIgnoreChannelId, 30);
+                }
+
+                return _channelPermissionListIgnoreChannelId ?? (_channelPermissionListIgnoreChannelId = new List<string>());
+            }
+        }
+
+        public bool HasSitePermissions(int siteId)
+        {
+            return IsSystemAdministrator || WebsitePermissionDict.ContainsKey(siteId);
+        }
+
+        public List<string> GetSitePermissions(int siteId)
+        {
+            return WebsitePermissionDict.TryGetValue(siteId, out var list) ? list : new List<string>();
+        }
+
+        private bool HasChannelPermissions(List<string> channelPermissionList, params string[] channelPermissions)
+        {
+            return IsSystemAdministrator || channelPermissions.Any(channelPermissionList.Contains);
+        }
+
+        public bool HasChannelPermissions(int siteId, int channelId)
         {
             if (channelId == 0) return false;
-            if (await IsSiteAdminAsync(siteId))
+            if (IsSystemAdministrator)
             {
                 return true;
             }
             var dictKey = GetChannelPermissionDictKey(siteId, channelId);
-            var dict = await GetChannelPermissionDictAsync();
-            if (dict.ContainsKey(dictKey))
+            if (ChannelPermissionDict.ContainsKey(dictKey))
             {
                 return true;
             }
 
-            var parentChannelId = await ChannelManager.GetParentIdAsync(siteId, channelId);
-            return await HasChannelPermissionsAsync(siteId, parentChannelId);
+            var parentChannelId = ChannelManager.GetParentId(siteId, channelId);
+            return HasChannelPermissions(siteId, parentChannelId);
         }
 
-        public async Task<List<string>> GetChannelPermissionsAsync(int siteId, int channelId)
+        public List<string> GetChannelPermissions(int siteId, int channelId)
         {
             var dictKey = GetChannelPermissionDictKey(siteId, channelId);
-            var dict = await GetChannelPermissionDictAsync();
-            return dict.TryGetValue(dictKey, out var list) ? list : new List<string>();
+            return ChannelPermissionDict.TryGetValue(dictKey, out var list) ? list : new List<string>();
         }
 
-        public async Task<List<string>> GetChannelPermissionsAsync(int siteId)
+        public List<string> GetChannelPermissions(int siteId)
         {
             var list = new List<string>();
-            var dict = await GetChannelPermissionDictAsync();
-            foreach (var dictKey in dict.Keys)
+            foreach (var dictKey in ChannelPermissionDict.Keys)
             {
                 var kvp = ParseChannelPermissionDictKey(dictKey);
                 if (kvp.Key == siteId)
                 {
-                    foreach (var permission in dict[dictKey])
+                    foreach (var permission in ChannelPermissionDict[dictKey])
                     {
                         if (!list.Contains(permission))
                         {
@@ -451,46 +432,44 @@ namespace SiteServer.CMS.Plugin.Impl
             return list;
         }
 
-        public async Task<bool> HasChannelPermissionsIgnoreChannelIdAsync(params string[] channelPermissions)
+        public bool HasChannelPermissionsIgnoreChannelId(params string[] channelPermissions)
         {
-            if (await IsSiteAdminAsync())
+            if (IsSystemAdministrator)
             {
                 return true;
             }
-            if (await HasChannelPermissionsAsync(await GetChannelPermissionListIgnoreChannelIdAsync(), channelPermissions))
+            if (HasChannelPermissions(ChannelPermissionListIgnoreChannelId, channelPermissions))
             {
                 return true;
             }
             return false;
         }
 
-        public async Task<bool> IsOwningChannelIdAsync(int channelId)
+        public bool IsOwningChannelId(int channelId)
         {
-            if (await IsSiteAdminAsync())
+            if (IsSystemAdministrator)
             {
                 return true;
             }
-
-            var channelIdList = await GetChannelIdListAsync();
-            if (channelIdList.Contains(channelId))
+            if (ChannelIdList.Contains(channelId))
             {
                 return true;
             }
             return false;
         }
 
-        public async Task<bool> IsDescendantOwningChannelIdAsync(int siteId, int channelId)
+        public bool IsDescendantOwningChannelId(int siteId, int channelId)
         {
-            if (await IsSiteAdminAsync(siteId))
+            if (IsSystemAdministrator)
             {
                 return true;
             }
 
-            var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
-            var channelIdList = await ChannelManager.GetChannelIdListAsync(channelInfo, EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
+            var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+            var channelIdList = ChannelManager.GetChannelIdList(channelInfo, EScopeType.Descendant, string.Empty, string.Empty, string.Empty);
             foreach (var theChannelId in channelIdList)
             {
-                if (await IsOwningChannelIdAsync(theChannelId))
+                if (IsOwningChannelId(theChannelId))
                 {
                     return true;
                 }
@@ -498,13 +477,12 @@ namespace SiteServer.CMS.Plugin.Impl
             return false;
         }
 
-        public async Task<int> GetAdminIdAsync(int siteId, int channelId)
+        public int GetAdminId(int siteId, int channelId)
         {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            if (!config.IsViewContentOnlySelf
-                || await IsSuperAdminAsync()
-                || await IsSiteAdminAsync()
-                || await HasChannelPermissionsAsync(siteId, channelId, Constants.ChannelPermissions.ContentCheck))
+            if (!ConfigManager.Instance.SystemConfigInfo.IsViewContentOnlySelf
+                || IsConsoleAdministrator
+                || IsSystemAdministrator
+                || HasChannelPermissions(siteId, channelId, ConfigManager.ChannelPermissions.ContentCheck))
             {
                 return 0;
             }

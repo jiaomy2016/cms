@@ -1,9 +1,9 @@
 ﻿using System;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Impl
 {
-    public class AccessTokenImpl
+    public class AccessTokenImpl: IAccessToken
     {
         public int UserId { get; set; }
 

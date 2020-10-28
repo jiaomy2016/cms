@@ -47,7 +47,7 @@ var methods = {
   submit: function (item) {
     var $this = this;
 
-    utils.loading(true);
+    pageUtils.loading(true);
     $api.post({
       isUserRegistrationAllowed: $this.isUserRegistrationAllowed,
       isUserRegistrationChecked: $this.isUserRegistrationChecked,
@@ -61,7 +61,7 @@ var methods = {
       userLockLoginHours: $this.userLockLoginHours,
       userFindPasswordSmsTplId: $this.userFindPasswordSmsTplId,
     }, function (err, res) {
-      utils.loading(false);
+      pageUtils.loading(false);
       if (err) {
         $this.pageAlert = {
           type: 'danger',

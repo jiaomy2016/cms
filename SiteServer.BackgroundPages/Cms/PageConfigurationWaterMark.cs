@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Drawing.Text;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -40,42 +39,42 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigUpload);
 
             EBooleanUtils.AddListItems(DdlIsWaterMark);
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsWaterMark, Site.IsWaterMark.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsWaterMark, SiteInfo.Additional.IsWaterMark.ToString());
 
-            LoadWaterMarkPosition(Site.WaterMarkPosition);
+            LoadWaterMarkPosition(SiteInfo.Additional.WaterMarkPosition);
 
             for (var i = 1; i <= 10; i++)
             {
                 DdlWaterMarkTransparency.Items.Add(new ListItem(i + "0%", i.ToString()));
             }
-            ControlUtils.SelectSingleItemIgnoreCase(DdlWaterMarkTransparency, Site.WaterMarkTransparency.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlWaterMarkTransparency, SiteInfo.Additional.WaterMarkTransparency.ToString());
 
-            TbWaterMarkMinWidth.Text = Site.WaterMarkMinWidth.ToString();
-            TbWaterMarkMinHeight.Text = Site.WaterMarkMinHeight.ToString();
+            TbWaterMarkMinWidth.Text = SiteInfo.Additional.WaterMarkMinWidth.ToString();
+            TbWaterMarkMinHeight.Text = SiteInfo.Additional.WaterMarkMinHeight.ToString();
 
             EBooleanUtils.AddListItems(DdlIsImageWaterMark, "图片型", "文字型");
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsImageWaterMark, Site.IsImageWaterMark.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsImageWaterMark, SiteInfo.Additional.IsImageWaterMark.ToString());
 
-            TbWaterMarkFormatString.Text = Site.WaterMarkFormatString;
+            TbWaterMarkFormatString.Text = SiteInfo.Additional.WaterMarkFormatString;
 
             LoadSystemFont();
-            ControlUtils.SelectSingleItemIgnoreCase(DdlWaterMarkFontName, Site.WaterMarkFontName);
+            ControlUtils.SelectSingleItemIgnoreCase(DdlWaterMarkFontName, SiteInfo.Additional.WaterMarkFontName);
 
-            TbWaterMarkFontSize.Text = Site.WaterMarkFontSize.ToString();
+            TbWaterMarkFontSize.Text = SiteInfo.Additional.WaterMarkFontSize.ToString();
 
-            TbWaterMarkImagePath.Text = Site.WaterMarkImagePath;
+            TbWaterMarkImagePath.Text = SiteInfo.Additional.WaterMarkImagePath;
                
             DdlIsWaterMark_SelectedIndexChanged(null, null);
-            TbWaterMarkImagePath.Attributes.Add("onchange", GetShowImageScript("preview_WaterMarkImagePath", Site.GetWebUrl()));
+            TbWaterMarkImagePath.Attributes.Add("onchange", GetShowImageScript("preview_WaterMarkImagePath", SiteInfo.Additional.WebUrl));
 
-            var showPopWinString = ModalSelectImage.GetOpenWindowString(Site, TbWaterMarkImagePath.ClientID);
-            BtnImageUrlSelect.Attributes.Add("onClick", showPopWinString);
+            var showPopWinString = ModalSelectImage.GetOpenWindowString(SiteInfo, TbWaterMarkImagePath.ClientID);
+            BtnImageUrlSelect.Attributes.Add("onclick", showPopWinString);
 
             showPopWinString = ModalUploadImageSingle.GetOpenWindowStringToTextBox(SiteId, TbWaterMarkImagePath.ClientID);
-            BtnImageUrlUpload.Attributes.Add("onClick", showPopWinString);
+            BtnImageUrlUpload.Attributes.Add("onclick", showPopWinString);
         }
 
 		private void LoadWaterMarkPosition (int selectPosition)
@@ -118,21 +117,21 @@ namespace SiteServer.BackgroundPages.Cms
 		{
 		    if (!Page.IsPostBack || !Page.IsValid) return;
 
-		    Site.IsWaterMark = TranslateUtils.ToBool(DdlIsWaterMark.SelectedValue);
-		    Site.WaterMarkPosition = TranslateUtils.ToInt(Request.Form["WaterMarkPosition"]);
-		    Site.WaterMarkTransparency = TranslateUtils.ToInt(DdlWaterMarkTransparency.SelectedValue);
-		    Site.WaterMarkMinWidth = TranslateUtils.ToInt(TbWaterMarkMinWidth.Text);
-		    Site.WaterMarkMinHeight = TranslateUtils.ToInt(TbWaterMarkMinHeight.Text);
-		    Site.IsImageWaterMark = TranslateUtils.ToBool(DdlIsImageWaterMark.SelectedValue);
-		    Site.WaterMarkFormatString = TbWaterMarkFormatString.Text;
-		    Site.WaterMarkFontName = DdlWaterMarkFontName.SelectedValue;
-		    Site.WaterMarkFontSize = TranslateUtils.ToInt(TbWaterMarkFontSize.Text);
-		    Site.WaterMarkImagePath = TbWaterMarkImagePath.Text;
+		    SiteInfo.Additional.IsWaterMark = TranslateUtils.ToBool(DdlIsWaterMark.SelectedValue);
+		    SiteInfo.Additional.WaterMarkPosition = TranslateUtils.ToInt(Request.Form["WaterMarkPosition"]);
+		    SiteInfo.Additional.WaterMarkTransparency = TranslateUtils.ToInt(DdlWaterMarkTransparency.SelectedValue);
+		    SiteInfo.Additional.WaterMarkMinWidth = TranslateUtils.ToInt(TbWaterMarkMinWidth.Text);
+		    SiteInfo.Additional.WaterMarkMinHeight = TranslateUtils.ToInt(TbWaterMarkMinHeight.Text);
+		    SiteInfo.Additional.IsImageWaterMark = TranslateUtils.ToBool(DdlIsImageWaterMark.SelectedValue);
+		    SiteInfo.Additional.WaterMarkFormatString = TbWaterMarkFormatString.Text;
+		    SiteInfo.Additional.WaterMarkFontName = DdlWaterMarkFontName.SelectedValue;
+		    SiteInfo.Additional.WaterMarkFontSize = TranslateUtils.ToInt(TbWaterMarkFontSize.Text);
+		    SiteInfo.Additional.WaterMarkImagePath = TbWaterMarkImagePath.Text;
 				
 		    try
 		    {
-		        DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
-		        AuthRequest.AddSiteLogAsync(SiteId, "修改图片水印设置").GetAwaiter().GetResult();
+		        DataProvider.SiteDao.Update(SiteInfo);
+		        AuthRequest.AddSiteLog(SiteId, "修改图片水印设置");
 		        SuccessMessage("图片水印设置修改成功！");
 		    }
 		    catch(Exception ex)

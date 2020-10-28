@@ -1,33 +1,31 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
 
 namespace SiteServer.API.Controllers.Pages
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("pages/login")]
     public class PagesLoginController : ApiController
     {
         private const string Route = "";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> Get()
+        public IHttpActionResult Get()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var redirect = await request.AdminRedirectCheckAsync(checkInstall: true, checkDatabaseVersion: true);
+                var request = new AuthenticatedRequest();
+                var redirect = request.AdminRedirectCheck(checkInstall: true, checkDatabaseVersion: true);
                 if (redirect != null) return Ok(redirect);
-
-                var config = await DataProvider.ConfigRepository.GetAsync();
 
                 return Ok(new
                 {
                     Value = true,
                     SystemManager.ProductVersion,
-                    config.AdminTitle
+                    ConfigManager.SystemConfigInfo.AdminTitle
                 });
             }
             catch (Exception ex)

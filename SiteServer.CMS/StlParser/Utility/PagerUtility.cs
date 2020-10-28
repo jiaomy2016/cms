@@ -1,14 +1,13 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.Core;
+﻿using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.StlParser.StlElement;
 
 namespace SiteServer.CMS.StlParser.Utility
 {
-    public static class PagerUtility
+    public class PagerUtility
     {
-        public static async Task<string> GetUrlInChannelPageAsync(string type, Site site, Channel node, int index, int currentPageIndex, int pageCount, bool isLocal)
+        public static string GetUrlInChannelPage(string type, SiteInfo siteInfo, ChannelInfo nodeInfo, int index, int currentPageIndex, int pageCount, bool isLocal)
         {
             var pageIndex = 0;
             if (type.ToLower().Equals(StlPageItem.TypeFirstPage.ToLower()))//首页
@@ -32,11 +31,11 @@ namespace SiteServer.CMS.StlParser.Utility
                 pageIndex = index - 1;
             }
 
-            var physicalPath = await PathUtility.GetChannelPageFilePathAsync(site, node.Id, pageIndex);
-            return await PageUtility.GetSiteUrlByPhysicalPathAsync(site, physicalPath, isLocal);
+            var physicalPath = PathUtility.GetChannelPageFilePath(siteInfo, nodeInfo.Id, pageIndex);
+            return PageUtility.GetSiteUrlByPhysicalPath(siteInfo, physicalPath, isLocal);
         }
 
-        public static async Task<string> GetUrlInContentPageAsync(string type, Site site, int channelId, int contentId, int index, int currentPageIndex, int pageCount, bool isLocal)
+        public static string GetUrlInContentPage(string type, SiteInfo siteInfo, int channelId, int contentId, int index, int currentPageIndex, int pageCount, bool isLocal)
         {
             var pageIndex = 0;
             if (type.ToLower().Equals(StlPageItem.TypeFirstPage.ToLower()))//首页
@@ -60,8 +59,8 @@ namespace SiteServer.CMS.StlParser.Utility
                 pageIndex = index - 1;
             }
 
-            var physicalPath = await PathUtility.GetContentPageFilePathAsync(site, channelId, contentId, pageIndex);
-            return await PageUtility.GetSiteUrlByPhysicalPathAsync(site, physicalPath, isLocal);
+            var physicalPath = PathUtility.GetContentPageFilePath(siteInfo, channelId, contentId, pageIndex);
+            return PageUtility.GetSiteUrlByPhysicalPath(siteInfo, physicalPath, isLocal);
         }
 
         public static string GetClickStringInSearchPage(string type, string ajaxDivId, int index, int currentPageIndex, int pageCount)
@@ -96,7 +95,7 @@ namespace SiteServer.CMS.StlParser.Utility
             return clickString;
         }
 
-        public static async Task<string> GetJsMethodInDynamicPageAsync(string type, Site site, int channelId, int contentId, int index, int currentPageIndex, int pageCount, bool isPageRefresh, string ajaxDivId, bool isLocal)
+        public static string GetJsMethodInDynamicPage(string type, SiteInfo siteInfo, int channelId, int contentId, int index, int currentPageIndex, int pageCount, bool isPageRefresh, string ajaxDivId, bool isLocal)
         {
             var jsMethod = string.Empty;
             var pageIndex = 0;
@@ -179,9 +178,9 @@ namespace SiteServer.CMS.StlParser.Utility
                 }
                 else
                 {
-                    var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                    var redirectUrl = contentId > 0 ? await PathUtility.GetContentPageFilePathAsync(site, nodeInfo.Id, contentId, pageIndex) : await PathUtility.GetChannelPageFilePathAsync(site, nodeInfo.Id, pageIndex);
-                    redirectUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, redirectUrl, isLocal);
+                    var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                    var redirectUrl = contentId > 0 ? PathUtility.GetContentPageFilePath(siteInfo, nodeInfo.Id, contentId, pageIndex) : PathUtility.GetChannelPageFilePath(siteInfo, nodeInfo.Id, pageIndex);
+                    redirectUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, redirectUrl, isLocal);
                     jsMethod = $"window.location.href='{redirectUrl}';";
                 }
             }

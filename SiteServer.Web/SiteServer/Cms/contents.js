@@ -12,12 +12,12 @@ Object.defineProperty(Object.prototype, "getProp", {
 });
 
 var data = {
-  siteId: parseInt(utils.getQueryString("siteId")),
-  channelId: parseInt(utils.getQueryString("channelId")),
+  siteId: parseInt(pageUtils.getQueryStringByName("siteId")),
+  channelId: parseInt(pageUtils.getQueryStringByName("channelId")),
+  page: parseInt(pageUtils.getQueryStringByName("page") || '1'),
   pageLoad: false,
   pageAlert: null,
   pageType: null,
-  page: 1,
   pageContents: null,
   count: null,
   pages: null,
@@ -25,7 +25,12 @@ var data = {
   columns: null,
   isAllContents: false,
   pageOptions: null,
-  isAllChecked: false
+  isAllChecked: false,
+  isSearch: false,
+  type: 'title',
+  keyword: '',
+  tableHeight: 0,
+  tableWidth: 0
 };
 
 var methods = {
@@ -35,7 +40,7 @@ var methods = {
   },
 
   getPageContentAddUrl: function (content) {
-    return 'pageContentAdd.aspx?siteId=' + this.siteId + '&channelId=' + content.channelId + '&id=' + content.id + '&returnUrl=' + encodeURIComponent(location.href);
+    return 'pageContentAdd.aspx?siteId=' + this.siteId + '&channelId=' + content.channelId + '&id=' + content.id + '&returnUrl=' + encodeURIComponent('contents.cshtml?siteId=' + this.siteId + '&channelId=' + this.channelId + '&page=' + this.page);
   },
 
   btnCreateClick: function (e) {
@@ -45,13 +50,13 @@ var methods = {
     this.pageAlert = null;
     if (!this.isContentChecked) return;
 
-    utils.loading(true);
+    pageUtils.loading(true);
     $api.postAt('actions/create', {
       siteId: $this.siteId,
       channelContentIds: this.channelContentIds
     }, function (err, res) {
       if (err || !res || !res.value) return;
-      utils.loading(false);
+      pageUtils.loading(false);
       $this.pageAlert = {
         type: "success",
         html: "内容已添加至生成列队！<a href='createStatus.cshtml?siteId=" + $this.siteId + "'>生成进度查看</a>"
@@ -86,7 +91,7 @@ var methods = {
     }
     url += '&returnUrl=' + encodeURIComponent(location.href);
 
-    utils.openLayer({
+    pageUtils.openLayer({
       title: options.title,
       url: url,
       full: options.full,
@@ -98,7 +103,7 @@ var methods = {
   btnContentViewClick: function (contentId, e) {
     e.stopPropagation();
 
-    utils.openLayer({
+    pageUtils.openLayer({
       title: "查看内容",
       url: "contentsLayerView.cshtml?siteId=" +
         this.siteId +
@@ -113,7 +118,7 @@ var methods = {
   btnContentStateClick: function (contentId, e) {
     e.stopPropagation();
 
-    utils.openLayer({
+    pageUtils.openLayer({
       title: "查看审核状态",
       url: "contentsLayerState.cshtml?siteId=" +
         this.siteId +
@@ -175,7 +180,7 @@ var methods = {
     e.stopPropagation();
 
     if (pluginMenu.target === '_layer') {
-      utils.openLayer({
+      pageUtils.openLayer({
         title: pluginMenu.text,
         url: this.getPluginMenuUrl(pluginMenu),
         full: true
@@ -185,15 +190,19 @@ var methods = {
 
   loadContents: function (page) {
     var $this = this;
+    $this.tableHeight = ($(window).height() - 100) + 'px';
+    $this.tableWidth = ($(window).width() - 15) + 'px';
 
     if ($this.pageLoad) {
-      utils.loading(true);
+      pageUtils.loading(true);
     }
 
     $api.get({
-        siteId: $this.siteId,
-        channelId: $this.channelId,
-        page: page
+        siteId: this.siteId,
+        channelId: this.channelId,
+        page: page,
+        type: this.type,
+        keyword: this.keyword
       },
       function (err, res) {
         if (err || !res || !res.value) return;
@@ -219,13 +228,25 @@ var methods = {
         }
 
         if ($this.pageLoad) {
-          utils.loading(false);
+          pageUtils.loading(false);
           $this.scrollToTop();
         } else {
           $this.pageLoad = true;
         }
       }
     );
+  },
+
+  btnSearchSubmitClick: function() {
+    this.loadContents(1);
+  },
+
+  btnSearchCancelClick: function() {
+    this.isSearch = false;
+    if (this.keyword) {
+      this.keyword = '';
+      this.loadContents(1);
+    }
   }
 };
 
@@ -273,6 +294,6 @@ var $vue = new Vue({
     }
   },
   created: function () {
-    this.loadContents(1);
+    this.loadContents(this.page);
   }
 });

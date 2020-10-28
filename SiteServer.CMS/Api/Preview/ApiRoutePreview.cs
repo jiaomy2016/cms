@@ -1,4 +1,6 @@
-﻿namespace SiteServer.CMS.Api.Preview
+﻿using SiteServer.Utils;
+
+namespace SiteServer.CMS.Api.Preview
 {
     public class ApiRoutePreview
     {

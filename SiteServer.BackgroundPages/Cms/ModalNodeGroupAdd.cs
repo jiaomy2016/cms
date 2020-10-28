@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -34,7 +35,7 @@ namespace SiteServer.BackgroundPages.Cms
             if (AuthRequest.IsQueryExists("GroupName"))
             {
                 var groupName = AuthRequest.GetQueryString("GroupName");
-                var nodeGroupInfo = DataProvider.ChannelGroupRepository.GetAsync(SiteId, groupName).GetAwaiter().GetResult();
+                var nodeGroupInfo = ChannelGroupManager.GetChannelGroupInfo(SiteId, groupName);
                 if (nodeGroupInfo != null)
                 {
                     TbNodeGroupName.Text = nodeGroupInfo.GroupName;
@@ -49,7 +50,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
 			var isChanged = false;
 
-            var nodeGroupInfo = new ChannelGroup
+            var nodeGroupInfo = new ChannelGroupInfo
             {
                 GroupName = TbNodeGroupName.Text,
                 SiteId = SiteId,
@@ -60,8 +61,8 @@ namespace SiteServer.BackgroundPages.Cms
 			{
 				try
 				{
-                    DataProvider.ChannelGroupRepository.UpdateAsync(nodeGroupInfo).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改栏目组", $"栏目组:{nodeGroupInfo.GroupName}").GetAwaiter().GetResult();
+                    DataProvider.ChannelGroupDao.Update(nodeGroupInfo);
+                    AuthRequest.AddSiteLog(SiteId, "修改栏目组", $"栏目组:{nodeGroupInfo.GroupName}");
 					isChanged = true;
                 }
 				catch(Exception ex)
@@ -71,8 +72,8 @@ namespace SiteServer.BackgroundPages.Cms
 			}
 			else
 			{
-                var exists = DataProvider.ChannelGroupRepository.IsExistsAsync(SiteId, TbNodeGroupName.Text).GetAwaiter().GetResult();
-				if (exists)
+                var nodeGroupNameList = ChannelGroupManager.GetGroupNameList(SiteId);
+				if (nodeGroupNameList.IndexOf(TbNodeGroupName.Text) != -1)
 				{
                     FailMessage("栏目组添加失败，栏目组名称已存在！");
 				}
@@ -80,8 +81,8 @@ namespace SiteServer.BackgroundPages.Cms
 				{
 					try
 					{
-						DataProvider.ChannelGroupRepository.InsertAsync(nodeGroupInfo).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId, "添加栏目组", $"栏目组:{nodeGroupInfo.GroupName}").GetAwaiter().GetResult();
+						DataProvider.ChannelGroupDao.Insert(nodeGroupInfo);
+                        AuthRequest.AddSiteLog(SiteId, "添加栏目组", $"栏目组:{nodeGroupInfo.GroupName}");
 						isChanged = true;
                     }
                     catch (Exception ex)

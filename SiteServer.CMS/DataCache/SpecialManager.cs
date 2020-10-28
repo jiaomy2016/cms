@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.CMS.Model;
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.DataCache
 {
@@ -17,54 +16,54 @@ namespace SiteServer.CMS.DataCache
         private static readonly string CacheKey = DataCacheManager.GetCacheKey(nameof(SpecialManager));
         private static readonly object SyncRoot = new object();
 
-	    public static async Task<Special> DeleteSpecialAsync(Site site, int specialId)
+	    public static SpecialInfo DeleteSpecialInfo(SiteInfo siteInfo, int specialId)
 	    {
-	        var special = await GetSpecialAsync(site.Id, specialId);
+	        var specialInfo = GetSpecialInfo(siteInfo.Id, specialId);
 
-            if (!string.IsNullOrEmpty(special.Url) && special.Url != "/")
+            if (!string.IsNullOrEmpty(specialInfo.Url) && specialInfo.Url != "/")
             {
-                var directoryPath = GetSpecialDirectoryPath(site, special.Url);
+                var directoryPath = GetSpecialDirectoryPath(siteInfo, specialInfo.Url);
                 DirectoryUtils.DeleteDirectoryIfExists(directoryPath);
             }
 
-            await DataProvider.SpecialRepository.DeleteAsync(site.Id, specialId);
+            DataProvider.SpecialDao.Delete(siteInfo.Id, specialId);
 
-	        return special;
+	        return specialInfo;
 	    }
 
-        public static async Task<Special> GetSpecialAsync(int siteId, int specialId)
+        public static SpecialInfo GetSpecialInfo(int siteId, int specialId)
         {
-            Special special = null;
-            var specialDictionary = await GetSpecialDictionaryBySiteIdAsync(siteId);
+            SpecialInfo specialInfo = null;
+            var specialInfoDictionary = GetSpecialInfoDictionaryBySiteId(siteId);
 
-            if (specialDictionary != null && specialDictionary.ContainsKey(specialId))
+            if (specialInfoDictionary != null && specialInfoDictionary.ContainsKey(specialId))
             {
-                special = specialDictionary[specialId];
+                specialInfo = specialInfoDictionary[specialId];
             }
-            return special;
+            return specialInfo;
         }
 
-	    public static async Task<string> GetTitleAsync(int siteId, int specialId)
+	    public static string GetTitle(int siteId, int specialId)
 	    {
 	        var title = string.Empty;
 
-	        var special = await GetSpecialAsync(siteId, specialId);
-	        if (special != null)
+	        var specialInfo = GetSpecialInfo(siteId, specialId);
+	        if (specialInfo != null)
 	        {
-	            title = special.Title;
+	            title = specialInfo.Title;
 	        }
 
 	        return title;
 	    }
 
-        public static async Task<List<Template>> GetTemplateListAsync(Site site, int specialId)
+        public static List<TemplateInfo> GetTemplateInfoList(SiteInfo siteInfo, int specialId)
 	    {
-            var list = new List<Template>();
+            var list = new List<TemplateInfo>();
 
-	        var special = await GetSpecialAsync(site.Id, specialId);
-	        if (special != null)
+	        var specialInfo = GetSpecialInfo(siteInfo.Id, specialId);
+	        if (specialInfo != null)
 	        {
-	            var directoryPath = GetSpecialDirectoryPath(site, special.Url);
+	            var directoryPath = GetSpecialDirectoryPath(siteInfo, specialInfo.Url);
 	            var srcDirectoryPath = GetSpecialSrcDirectoryPath(directoryPath);
                 if (!DirectoryUtils.IsDirectoryExists(srcDirectoryPath)) return list;
 
@@ -73,70 +72,70 @@ namespace SiteServer.CMS.DataCache
                 {
                     var relatedPath = PathUtils.GetPathDifference(srcDirectoryPath, htmlFilePath);
 
-                    var template = new Template
+                    var templateInfo = new TemplateInfo
                     {
-                        CharsetType = ECharset.utf_8,
+                        Charset = ECharset.utf_8,
                         Content = GetContentByFilePath(htmlFilePath),
                         CreatedFileExtName = ".html",
-                        CreatedFileFullName = PathUtils.Combine(special.Url, relatedPath),
+                        CreatedFileFullName = PathUtils.Combine(specialInfo.Url, relatedPath),
                         Id = 0,
-                        Default = false,
+                        IsDefault = false,
                         RelatedFileName = string.Empty,
-                        SiteId = site.Id,
-                        Type = TemplateType.FileTemplate,
+                        SiteId = siteInfo.Id,
+                        TemplateType = TemplateType.FileTemplate,
                         TemplateName = relatedPath
                     };
 
-                    list.Add(template);
+                    list.Add(templateInfo);
                 }
             }
 
             return list;
 	    }
 
-	    public static async Task<List<int>> GetAllSpecialIdListAsync(int siteId)
+	    public static List<int> GetAllSpecialIdList(int siteId)
 	    {
 	        var list = new List<int>();
 
-	        var specialDictionary = await GetSpecialDictionaryBySiteIdAsync(siteId);
-	        if (specialDictionary == null) return list;
+	        var specialInfoDictionary = GetSpecialInfoDictionaryBySiteId(siteId);
+	        if (specialInfoDictionary == null) return list;
 
-	        foreach (var special in specialDictionary.Values)
+	        foreach (var specialInfo in specialInfoDictionary.Values)
 	        {
-	            list.Add(special.Id);
+	            list.Add(specialInfo.Id);
             }
 
 	        return list;
 	    }
 
-        private static async Task<Dictionary<int, Special>> GetSpecialDictionaryBySiteIdAsync(int siteId, bool flush = false)
+        private static Dictionary<int, SpecialInfo> GetSpecialInfoDictionaryBySiteId(int siteId, bool flush = false)
         {
             var dictionary = GetCacheDictionary();
 
-            Dictionary<int, Special> specialDictionary = null;
+            Dictionary<int, SpecialInfo> specialInfoDictionary = null;
 
             if (!flush && dictionary.ContainsKey(siteId))
             {
-                specialDictionary = dictionary[siteId];
+                specialInfoDictionary = dictionary[siteId];
             }
 
-            if (specialDictionary == null)
+            if (specialInfoDictionary == null)
             {
-                specialDictionary = await DataProvider.SpecialRepository.GetSpecialDictionaryBySiteIdAsync(siteId);
+                specialInfoDictionary = DataProvider.SpecialDao.GetSpecialInfoDictionaryBySiteId(siteId);
 
-                if (specialDictionary != null)
+                if (specialInfoDictionary != null)
                 {
-                    UpdateCache(dictionary, specialDictionary, siteId);
+                    UpdateCache(dictionary, specialInfoDictionary, siteId);
                 }
             }
-            return specialDictionary;
+            return specialInfoDictionary;
         }
 
-        private static void UpdateCache(Dictionary<int, Dictionary<int, Special>> dictionary, Dictionary<int, Special> specialDictionary, int siteId)
+        private static void UpdateCache(Dictionary<int, Dictionary<int, SpecialInfo>> dictionary, Dictionary<int, SpecialInfo> specialInfoDictionary, int siteId)
         {
             lock (SyncRoot)
             {
-                dictionary[siteId] = specialDictionary;
+                dictionary[siteId] = specialInfoDictionary;
             }
         }
 
@@ -150,12 +149,12 @@ namespace SiteServer.CMS.DataCache
             }
         }
 
-        private static Dictionary<int, Dictionary<int, Special>> GetCacheDictionary()
+        private static Dictionary<int, Dictionary<int, SpecialInfo>> GetCacheDictionary()
         {
-            var dictionary = DataCacheManager.Get<Dictionary<int, Dictionary<int, Special>>>(CacheKey);
+            var dictionary = DataCacheManager.Get<Dictionary<int, Dictionary<int, SpecialInfo>>>(CacheKey);
             if (dictionary != null) return dictionary;
 
-            dictionary = new Dictionary<int, Dictionary<int, Special>>();
+            dictionary = new Dictionary<int, Dictionary<int, SpecialInfo>>();
             DataCacheManager.InsertHours(CacheKey, dictionary, 24);
             return dictionary;
         }
@@ -181,26 +180,26 @@ namespace SiteServer.CMS.DataCache
             }
         }
 
-        public static string GetSpecialDirectoryPath(Site site, string url)
+        public static string GetSpecialDirectoryPath(SiteInfo siteInfo, string url)
 	    {
 	        var virtualPath = PageUtils.RemoveFileNameFromUrl(url);
-	        return PathUtility.MapPath(site, virtualPath);
+	        return PathUtility.MapPath(siteInfo, virtualPath);
 	    }
 
-	    public static string GetSpecialUrl(Site site, string url)
+	    public static string GetSpecialUrl(SiteInfo siteInfo, string url)
 	    {
 	        var virtualPath = PageUtils.RemoveFileNameFromUrl(url);
             if (!PageUtils.IsVirtualUrl(virtualPath))
             {
                 virtualPath = $"@/{StringUtils.TrimSlash(virtualPath)}";
             }
-	        return PageUtility.ParseNavigationUrl(site, virtualPath, false);
+	        return PageUtility.ParseNavigationUrl(siteInfo, virtualPath, false);
 	    }
 
-	    public static async Task<string> GetSpecialUrlAsync(Site site, int specialId)
+	    public static string GetSpecialUrl(SiteInfo siteInfo, int specialId)
 	    {
-	        var special = await GetSpecialAsync(site.Id, specialId);
-	        return GetSpecialUrl(site, special.Url);
+	        var specialInfo = GetSpecialInfo(siteInfo.Id, specialId);
+	        return GetSpecialUrl(siteInfo, specialInfo.Url);
 	    }
 
         public static string GetSpecialZipFilePath(string title, string directoryPath)
@@ -208,9 +207,9 @@ namespace SiteServer.CMS.DataCache
 	        return PathUtils.Combine(directoryPath, $"{title}.zip");
 	    }
 
-        public static string GetSpecialZipFileUrl(Site site, Special special)
+        public static string GetSpecialZipFileUrl(SiteInfo siteInfo, SpecialInfo specialInfo)
         {
-            return PageUtility.ParseNavigationUrl(site, $"@/{special.Url}/{special.Title}.zip", true);
+            return PageUtility.ParseNavigationUrl(siteInfo, $"@/{specialInfo.Url}/{specialInfo.Title}.zip", true);
         }
 
         public static string GetSpecialSrcDirectoryPath(string directoryPath)

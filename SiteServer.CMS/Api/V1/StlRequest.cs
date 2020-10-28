@@ -1,32 +1,31 @@
 ﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Plugin.Impl;
 using SiteServer.CMS.StlParser.Model;
-
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Api.V1
 {
     public class StlRequest
     {
-        private AuthenticatedRequest Request { get; set; }
+        private AuthenticatedRequest Request { get; }
 
-        public bool IsApiAuthorized { get; private set; }
+        public bool IsApiAuthorized { get; }
 
-        public Site Site { get; private set; }
+        public SiteInfo SiteInfo { get; }
 
-        public PageInfo PageInfo { get; private set; }
+        public PageInfo PageInfo { get; }
 
-        public ContextInfo ContextInfo { get; private set; }
+        public ContextInfo ContextInfo { get; }
 
-        public async Task LoadAsync(AuthenticatedRequest request, bool isApiAuthorized)
+        public StlRequest()
         {
-            //Request = new AuthenticatedRequest();
-            //IsApiAuthorized = Request.IsApiAuthenticated && AccessTokenManager.IsScope(Request.ApiToken, AccessTokenManager.ScopeStl);
-
-            Request = request;
-            IsApiAuthorized = isApiAuthorized;
+            Request = new AuthenticatedRequest();
+            IsApiAuthorized = Request.IsApiAuthenticated && AccessTokenManager.IsScope(Request.ApiToken, AccessTokenManager.ScopeStl);
 
             if (!IsApiAuthorized) return;
 
@@ -38,49 +37,39 @@ namespace SiteServer.CMS.Api.V1
 
             if (siteId > 0)
             {
-                Site = await DataProvider.SiteRepository.GetAsync(siteId);
+                SiteInfo = SiteManager.GetSiteInfo(siteId);
             }
             else if (!string.IsNullOrEmpty(siteDir))
             {
-                Site = await DataProvider.SiteRepository.GetSiteByDirectoryAsync(siteDir);
+                SiteInfo = SiteManager.GetSiteInfoByDirectory(siteDir);
             }
             else
             {
-                Site = await DataProvider.SiteRepository.GetSiteByIsRootAsync();
-                if (Site == null)
+                SiteInfo = SiteManager.GetSiteInfoByIsRoot();
+                if (SiteInfo == null)
                 {
-                    var siteList = await DataProvider.SiteRepository.GetSiteListAsync();
-                    if (siteList != null && siteList.Count > 0)
+                    var siteInfoList = SiteManager.GetSiteInfoList();
+                    if (siteInfoList != null && siteInfoList.Count > 0)
                     {
-                        Site = siteList[0];
+                        SiteInfo = siteInfoList[0];
                     }
                 }
             }
 
-            if (Site == null) return;
+            if (SiteInfo == null) return;
 
             if (channelId == 0)
             {
-                channelId = Site.Id;
+                channelId = SiteInfo.Id;
             }
 
-            var templateInfo = new Template
+            var templateInfo = new TemplateInfo(0, SiteInfo.Id, string.Empty, TemplateType.IndexPageTemplate, string.Empty, string.Empty, string.Empty, ECharset.utf_8, true);
+
+            PageInfo = new PageInfo(channelId, contentId, SiteInfo, templateInfo, new Dictionary<string, object>())
             {
-                Id = 0,
-                SiteId = Site.Id,
-                TemplateName = string.Empty,
-                Type = TemplateType.IndexPageTemplate,
-                RelatedFileName = string.Empty,
-                CreatedFileFullName = string.Empty,
-                CreatedFileExtName = string.Empty,
-                CharsetType = ECharset.utf_8,
-                Default = true
+                UniqueId = 1000,
+                UserInfo = Request.UserInfo
             };
-
-            PageInfo = await PageInfo.GetPageInfoAsync(channelId, contentId, Site, templateInfo, new Dictionary<string, object>());
-
-            PageInfo.UniqueId = 1000;
-            PageInfo.User = Request.User;
 
             var attributes = TranslateUtils.NewIgnoreCaseNameValueCollection();
             foreach (var key in Request.QueryString.AllKeys)

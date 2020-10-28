@@ -3,10 +3,9 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.ImportExport;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -67,9 +66,9 @@ namespace SiteServer.BackgroundPages.Cms
                         HifMyFile.PostedFile.SaveAs(localFilePath);
 
                         var importObject = new ImportObject(SiteId, AuthRequest.AdminName);
-                        importObject.ImportRelatedFieldByZipFileAsync(localFilePath, TranslateUtils.ToBool(DdlIsOverride.SelectedValue)).GetAwaiter().GetResult();
+                        importObject.ImportRelatedFieldByZipFile(localFilePath, TranslateUtils.ToBool(DdlIsOverride.SelectedValue));
 
-                        AuthRequest.AddSiteLogAsync(SiteId, "导入联动字段").GetAwaiter().GetResult();
+                        AuthRequest.AddSiteLog(SiteId, "导入联动字段");
 
                         LayerUtils.Close(Page);
                     }

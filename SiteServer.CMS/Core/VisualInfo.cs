@@ -1,21 +1,19 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+﻿using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.StlParser.Model;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core
 {
 	public class VisualInfo
 	{
-        public Site Site { get; private set; }
+        public SiteInfo SiteInfo { get; private set; }
 
         public int ChannelId { get; private set; }
 
         public int ContentId { get; private set; }
 
-        public Template Template { get; private set; }
+        public TemplateInfo TemplateInfo { get; private set; }
 
         public EContextType ContextType { get; private set; }
 
@@ -25,25 +23,25 @@ namespace SiteServer.CMS.Core
 
         public int PageIndex { get; private set; }
 
-        public static async Task<VisualInfo> GetInstanceAsync(int siteId, int channelId, int contentId, int fileTemplateId, int pageIndex, int previewId)
+        public static VisualInfo GetInstance(int siteId, int channelId, int contentId, int fileTemplateId, int pageIndex, int previewId)
         {
             if (siteId == 0)
             {
-                siteId = await PathUtility.GetCurrentSiteIdAsync();
+                siteId = PathUtility.GetCurrentSiteId();
             }
             var visualInfo = new VisualInfo
             {
-                Site = await DataProvider.SiteRepository.GetAsync(siteId),
+                SiteInfo = SiteManager.GetSiteInfo(siteId),
                 ChannelId = channelId,
                 ContentId = contentId,
-                Template = null,
+                TemplateInfo = null,
                 ContextType = EContextType.Undefined,
                 IsPreview = false,
                 FilePath = string.Empty,
                 PageIndex = pageIndex
             };
 
-            if (visualInfo.Site == null) return visualInfo;
+            if (visualInfo.SiteInfo == null) return visualInfo;
 
             if (previewId > 0)
             {
@@ -72,32 +70,32 @@ namespace SiteServer.CMS.Core
 
             if (visualInfo.ChannelId == 0)
             {
-                visualInfo.ChannelId = visualInfo.Site.Id;
+                visualInfo.ChannelId = visualInfo.SiteInfo.Id;
             }
 
             if (templateType == TemplateType.IndexPageTemplate)
             {
-                visualInfo.Template = await TemplateManager.GetIndexPageTemplateAsync(visualInfo.Site.Id);
+                visualInfo.TemplateInfo = TemplateManager.GetIndexPageTemplateInfo(visualInfo.SiteInfo.Id);
                 visualInfo.ContextType = EContextType.Channel;
-                visualInfo.FilePath = PathUtility.GetIndexPageFilePath(visualInfo.Site, visualInfo.Template.CreatedFileFullName, visualInfo.Site.Root, visualInfo.PageIndex);
+                visualInfo.FilePath = PathUtility.GetIndexPageFilePath(visualInfo.SiteInfo, visualInfo.TemplateInfo.CreatedFileFullName, visualInfo.SiteInfo.IsRoot, visualInfo.PageIndex);
             }
             else if (templateType == TemplateType.ChannelTemplate)
             {
-                visualInfo.Template = await TemplateManager.GetChannelTemplateAsync(visualInfo.Site.Id, visualInfo.ChannelId);
+                visualInfo.TemplateInfo = TemplateManager.GetChannelTemplateInfo(visualInfo.SiteInfo.Id, visualInfo.ChannelId);
                 visualInfo.ContextType = EContextType.Channel;
-                visualInfo.FilePath = await PathUtility.GetChannelPageFilePathAsync(visualInfo.Site, visualInfo.ChannelId, visualInfo.PageIndex);
+                visualInfo.FilePath = PathUtility.GetChannelPageFilePath(visualInfo.SiteInfo, visualInfo.ChannelId, visualInfo.PageIndex);
             }
             else if (templateType == TemplateType.ContentTemplate)
             {
-                visualInfo.Template = await TemplateManager.GetContentTemplateAsync(visualInfo.Site.Id, visualInfo.ChannelId);
+                visualInfo.TemplateInfo = TemplateManager.GetContentTemplateInfo(visualInfo.SiteInfo.Id, visualInfo.ChannelId);
                 visualInfo.ContextType = EContextType.Content;
-                visualInfo.FilePath = await PathUtility.GetContentPageFilePathAsync(visualInfo.Site, visualInfo.ChannelId, visualInfo.ContentId, visualInfo.PageIndex);
+                visualInfo.FilePath = PathUtility.GetContentPageFilePath(visualInfo.SiteInfo, visualInfo.ChannelId, visualInfo.ContentId, visualInfo.PageIndex);
             }
             else if (templateType == TemplateType.FileTemplate)
             {
-                visualInfo.Template = await TemplateManager.GetFileTemplateAsync(visualInfo.Site.Id, fileTemplateId);
+                visualInfo.TemplateInfo = TemplateManager.GetFileTemplateInfo(visualInfo.SiteInfo.Id, fileTemplateId);
                 visualInfo.ContextType = EContextType.Undefined;
-                visualInfo.FilePath = PathUtility.MapPath(visualInfo.Site, visualInfo.Template.CreatedFileFullName);
+                visualInfo.FilePath = PathUtility.MapPath(visualInfo.SiteInfo, visualInfo.TemplateInfo.CreatedFileFullName);
             }
 
             return visualInfo;

@@ -1,25 +1,26 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Api.Sys.Stl;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.StlElement;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Sys
 {
-    
+    [OpenApiIgnore]
     public class SysStlActionsIfController : ApiController
     {
         [HttpPost, Route(ApiRouteActionsIf.Route)]
-        public async Task<IHttpActionResult> Main()
+        public IHttpActionResult Main()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
-                var dynamicInfo = DynamicInfo.GetDynamicInfo(request, request.User);
+                var dynamicInfo = DynamicInfo.GetDynamicInfo(request, request.UserInfo);
                 var ifInfo = TranslateUtils.JsonDeserialize<DynamicInfo.IfInfo>(dynamicInfo.ElementValues);
 
                 var isSuccess = false;
@@ -39,9 +40,24 @@ namespace SiteServer.API.Controllers.Sys
                     {
                         isSuccess = request.IsUserLoggin || request.IsAdminLoggin;
                     }
+                    else if (StringUtils.EqualsIgnoreCase(ifInfo.Type, StlIf.TypeIsUserGroup))
+                    {
+                        if (request.IsUserLoggin)
+                        {
+                            var group = UserGroupManager.GetUserGroupInfo(request.UserInfo.GroupId);
+                            if (StringUtils.EqualsIgnoreCase(ifInfo.Op, StlIf.OperateNotEquals))
+                            {
+                                isSuccess = !StringUtils.EqualsIgnoreCase(group.GroupName, ifInfo.Value);
+                            }
+                            else
+                            {
+                                isSuccess = StringUtils.EqualsIgnoreCase(group.GroupName, ifInfo.Value);
+                            }
+                        }
+                    }
 
                     var template = isSuccess ? dynamicInfo.SuccessTemplate : dynamicInfo.FailureTemplate;
-                    html = await StlDynamic.ParseDynamicContentAsync(dynamicInfo, template);
+                    html = StlDynamic.ParseDynamicContent(dynamicInfo, template);
                 }
 
                 return Ok(new

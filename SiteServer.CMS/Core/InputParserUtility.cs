@@ -1,36 +1,36 @@
 using System.Collections;
 using System.Collections.Specialized;
-using System.Threading.Tasks;
 using System.Web.UI.HtmlControls;
+using SiteServer.CMS.Api;
 using SiteServer.CMS.Api.Sys.Stl;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.Utils;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core
 {
     public static class InputParserUtility
     {
-        public static async Task<string> GetContentByTableStyleAsync(string content, Site site, TableStyle style)
+        public static string GetContentByTableStyle(string content, SiteInfo siteInfo, TableStyleInfo styleInfo)
         {
             if (!string.IsNullOrEmpty(content))
             {
-                return await GetContentByTableStyleAsync(content, ",", site, style, string.Empty, null, string.Empty, false);
+                return GetContentByTableStyle(content, ",", siteInfo, styleInfo, string.Empty, null, string.Empty, false);
             }
             return string.Empty;
         }
 
-        public static async Task<string> GetContentByTableStyleAsync(string content, string separator, Site site, TableStyle style, string formatString, NameValueCollection attributes, string innerHtml, bool isStlEntity)
+        public static string GetContentByTableStyle(string content, string separator, SiteInfo siteInfo, TableStyleInfo styleInfo, string formatString, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
             var parsedContent = content;
 
-            var inputType = style.Type;
+            var inputType = styleInfo.InputType;
 
             if (inputType == InputType.Date)
             {
                 var dateTime = TranslateUtils.ToDateTime(content);
-                if (dateTime != Constants.SqlMinValue)
+                if (dateTime != DateUtils.SqlMinValue)
                 {
                     if (string.IsNullOrEmpty(formatString))
                     {
@@ -46,7 +46,7 @@ namespace SiteServer.CMS.Core
             else if (inputType == InputType.DateTime)
             {
                 var dateTime = TranslateUtils.ToDateTime(content);
-                if (dateTime != Constants.SqlMinValue)
+                if (dateTime != DateUtils.SqlMinValue)
                 {
                     if (string.IsNullOrEmpty(formatString))
                     {
@@ -62,8 +62,8 @@ namespace SiteServer.CMS.Core
             else if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)//选择类型
             {
                 var selectedTexts = new ArrayList();
-                var selectedValues = StringUtils.GetStringList(content);
-                var styleItems = style.StyleItems;
+                var selectedValues = TranslateUtils.StringCollectionToStringList(content);
+                var styleItems = styleInfo.StyleItems;
                 if (styleItems != null)
                 {
                     foreach (var itemInfo in styleItems)
@@ -77,41 +77,41 @@ namespace SiteServer.CMS.Core
                 
                 parsedContent = separator == null ? TranslateUtils.ObjectCollectionToString(selectedTexts) : TranslateUtils.ObjectCollectionToString(selectedTexts, separator);
             }
-            //else if (style.InputType == InputType.TextArea)
+            //else if (styleInfo.InputType == InputType.TextArea)
             //{
             //    parsedContent = StringUtils.ReplaceNewlineToBR(parsedContent);
             //}
             else if (inputType == InputType.TextEditor)
             {
-                parsedContent = ContentUtility.TextEditorContentDecode(site, parsedContent, true);
+                parsedContent = ContentUtility.TextEditorContentDecode(siteInfo, parsedContent, true);
             }
             else if (inputType == InputType.Image)
             {
-                parsedContent = GetImageOrFlashHtml(site, parsedContent, attributes, isStlEntity);
+                parsedContent = GetImageOrFlashHtml(siteInfo, parsedContent, attributes, isStlEntity);
             }
             else if (inputType == InputType.Video)
             {
-                parsedContent = await GetVideoHtmlAsync(site, parsedContent, attributes, isStlEntity);
+                parsedContent = GetVideoHtml(siteInfo, parsedContent, attributes, isStlEntity);
             }
             else if (inputType == InputType.File)
             {
-                parsedContent = await GetFileHtmlWithoutCountAsync(site, parsedContent, attributes, innerHtml, isStlEntity, false, false);
+                parsedContent = GetFileHtmlWithoutCount(siteInfo, parsedContent, attributes, innerHtml, isStlEntity, false, false);
             }
 
             return parsedContent;
         }
 
-        public static async Task<string> GetContentByTableStyleAsync(Content content, string separator, Site site, TableStyle style, string formatString, int no, NameValueCollection attributes, string innerHtml, bool isStlEntity)
+        public static string GetContentByTableStyle(ContentInfo contentInfo, string separator, SiteInfo siteInfo, TableStyleInfo styleInfo, string formatString, int no, NameValueCollection attributes, string innerHtml, bool isStlEntity)
         {
-            var value = content.Get<string>(style.AttributeName);
+            var value = contentInfo.GetString(styleInfo.AttributeName);
             var parsedContent = string.Empty;
 
-            var inputType = style.Type;
+            var inputType = styleInfo.InputType;
 
             if (inputType == InputType.Date)
             {
                 var dateTime = TranslateUtils.ToDateTime(value);
-                if (dateTime != Constants.SqlMinValue)
+                if (dateTime != DateUtils.SqlMinValue)
                 {
                     if (string.IsNullOrEmpty(formatString))
                     {
@@ -123,7 +123,7 @@ namespace SiteServer.CMS.Core
             else if (inputType == InputType.DateTime)
             {
                 var dateTime = TranslateUtils.ToDateTime(value);
-                if (dateTime != Constants.SqlMinValue)
+                if (dateTime != DateUtils.SqlMinValue)
                 {
                     if (string.IsNullOrEmpty(formatString))
                     {
@@ -135,8 +135,8 @@ namespace SiteServer.CMS.Core
             else if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)//选择类型
             {
                 var selectedTexts = new ArrayList();
-                var selectedValues = StringUtils.GetStringList(value);
-                var styleItems = style.StyleItems;
+                var selectedValues = TranslateUtils.StringCollectionToStringList(value);
+                var styleItems = styleInfo.StyleItems;
                 if (styleItems != null)
                 {
                     foreach (var itemInfo in styleItems)
@@ -152,26 +152,26 @@ namespace SiteServer.CMS.Core
             }
             else if (inputType == InputType.TextEditor)
             {
-                parsedContent = ContentUtility.TextEditorContentDecode(site, value, true);
+                parsedContent = ContentUtility.TextEditorContentDecode(siteInfo, value, true);
             }
             else if (inputType == InputType.Image)
             {
                 if (no <= 1)
                 {
-                    parsedContent = GetImageOrFlashHtml(site, value, attributes, isStlEntity);
+                    parsedContent = GetImageOrFlashHtml(siteInfo, value, attributes, isStlEntity);
                 }
                 else
                 {
-                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(style.AttributeName);
-                    var extendValues = content.Get<string>(extendAttributeName);
+                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
+                    var extendValues = contentInfo.GetString(extendAttributeName);
                     if (!string.IsNullOrEmpty(extendValues))
                     {
                         var index = 2;
-                        foreach (string extendValue in StringUtils.GetStringList(extendValues))
+                        foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
                         {
                             if (index == no)
                             {
-                                parsedContent = GetImageOrFlashHtml(site, extendValue, attributes, isStlEntity);
+                                parsedContent = GetImageOrFlashHtml(siteInfo, extendValue, attributes, isStlEntity);
                                 break;
                             }
                             index++;
@@ -183,20 +183,20 @@ namespace SiteServer.CMS.Core
             {
                 if (no <= 1)
                 {
-                    parsedContent = await GetVideoHtmlAsync(site, value, attributes, isStlEntity);
+                    parsedContent = GetVideoHtml(siteInfo, value, attributes, isStlEntity);
                 }
                 else
                 {
-                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(style.AttributeName);
-                    var extendValues = content.Get<string>(extendAttributeName);
+                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
+                    var extendValues = contentInfo.GetString(extendAttributeName);
                     if (!string.IsNullOrEmpty(extendValues))
                     {
                         var index = 2;
-                        foreach (string extendValue in StringUtils.GetStringList(extendValues))
+                        foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
                         {
                             if (index == no)
                             {
-                                parsedContent = await GetVideoHtmlAsync(site, extendValue, attributes, isStlEntity);
+                                parsedContent = GetVideoHtml(siteInfo, extendValue, attributes, isStlEntity);
                                 break;
                             }
                             index++;
@@ -208,20 +208,20 @@ namespace SiteServer.CMS.Core
             {
                 if (no <= 1)
                 {
-                    parsedContent = await GetFileHtmlWithoutCountAsync(site, value, attributes, innerHtml, isStlEntity, false, false);
+                    parsedContent = GetFileHtmlWithoutCount(siteInfo, value, attributes, innerHtml, isStlEntity, false, false);
                 }
                 else
                 {
-                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(style.AttributeName);
-                    var extendValues = content.Get<string>(extendAttributeName);
+                    var extendAttributeName = ContentAttribute.GetExtendAttributeName(styleInfo.AttributeName);
+                    var extendValues = contentInfo.GetString(extendAttributeName);
                     if (!string.IsNullOrEmpty(extendValues))
                     {
                         var index = 2;
-                        foreach (string extendValue in StringUtils.GetStringList(extendValues))
+                        foreach (string extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
                         {
                             if (index == no)
                             {
-                                parsedContent = await GetFileHtmlWithoutCountAsync(site, extendValue, attributes, innerHtml, isStlEntity, false, false);
+                                parsedContent = GetFileHtmlWithoutCount(siteInfo, extendValue, attributes, innerHtml, isStlEntity, false, false);
                                 break;
                             }
                             index++;
@@ -237,12 +237,12 @@ namespace SiteServer.CMS.Core
             return parsedContent;
         }
 
-        public static string GetImageOrFlashHtml(Site site, string imageUrl, NameValueCollection attributes, bool isStlEntity)
+        public static string GetImageOrFlashHtml(SiteInfo siteInfo, string imageUrl, NameValueCollection attributes, bool isStlEntity)
         {
             var retVal = string.Empty;
             if (!string.IsNullOrEmpty(imageUrl))
             {
-                imageUrl = PageUtility.ParseNavigationUrl(site, imageUrl, false);
+                imageUrl = PageUtility.ParseNavigationUrl(siteInfo, imageUrl, false);
                 if (isStlEntity)
                 {
                     retVal = imageUrl;
@@ -298,22 +298,20 @@ namespace SiteServer.CMS.Core
             return retVal;
         }
 
-        public static async Task<string> GetVideoHtmlAsync(Site site, string videoUrl, NameValueCollection attributes, bool isStlEntity)
+        public static string GetVideoHtml(SiteInfo siteInfo, string videoUrl, NameValueCollection attributes, bool isStlEntity)
         {
             var retVal = string.Empty;
             if (!string.IsNullOrEmpty(videoUrl))
             {
-                videoUrl = PageUtility.ParseNavigationUrl(site, videoUrl, false);
+                videoUrl = PageUtility.ParseNavigationUrl(siteInfo, videoUrl, false);
                 if (isStlEntity)
                 {
                     retVal = videoUrl;
                 }
                 else
                 {
-                    var config = await DataProvider.ConfigRepository.GetAsync();
-
                     retVal = $@"
-<embed src=""{SiteFilesAssets.GetUrl(config.GetApiUrl(), SiteFilesAssets.BrPlayer.Swf)}"" allowfullscreen=""true"" flashvars=""controlbar=over&autostart={true
+<embed src=""{SiteFilesAssets.GetUrl(siteInfo.Additional.ApiUrl, SiteFilesAssets.BrPlayer.Swf)}"" allowfullscreen=""true"" flashvars=""controlbar=over&autostart={true
                         .ToString().ToLower()}&image={string.Empty}&file={videoUrl}"" width=""{450}"" height=""{350}""/>
 ";
                 }
@@ -321,23 +319,20 @@ namespace SiteServer.CMS.Core
             return retVal;
         }
 
-        public static async Task<string> GetFileHtmlWithCountAsync(Site site, int channelId, int contentId, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity, bool isLower, bool isUpper)
+        public static string GetFileHtmlWithCount(SiteInfo siteInfo, int channelId, int contentId, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity, bool isLower, bool isUpper)
         {
-            if (site == null || string.IsNullOrEmpty(fileUrl)) return string.Empty;
-
-            var config = await DataProvider.ConfigRepository.GetAsync();
+            if (siteInfo == null || string.IsNullOrEmpty(fileUrl)) return string.Empty;
 
             string retVal;
             if (isStlEntity)
             {
-                retVal = ApiRouteActionsDownload.GetUrl(config.GetApiUrl(), site.Id, channelId, contentId,
-                    fileUrl);
+                retVal = PageUtility.ParseNavigationUrl(siteInfo, fileUrl, true);
             }
             else
             {
                 var stlAnchor = new HtmlAnchor();
                 ControlUtils.AddAttributesIfNotExists(stlAnchor, attributes);
-                stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(config.GetApiUrl(), site.Id, channelId,
+                stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(siteInfo.Additional.ApiUrl, siteInfo.Id, channelId,
                     contentId, fileUrl);
                 stlAnchor.InnerHtml = string.IsNullOrEmpty(innerHtml)
                     ? PageUtils.GetFileNameFromUrl(fileUrl)
@@ -357,22 +352,20 @@ namespace SiteServer.CMS.Core
             return retVal;
         }
 
-        public static async Task<string> GetFileHtmlWithoutCountAsync(Site site, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity, bool isLower, bool isUpper)
+        public static string GetFileHtmlWithoutCount(SiteInfo siteInfo, string fileUrl, NameValueCollection attributes, string innerHtml, bool isStlEntity, bool isLower, bool isUpper)
         {
-            if (site == null || string.IsNullOrEmpty(fileUrl)) return string.Empty;
-
-            var config = await DataProvider.ConfigRepository.GetAsync();
+            if (siteInfo == null || string.IsNullOrEmpty(fileUrl)) return string.Empty;
 
             string retVal;
             if (isStlEntity)
             {
-                retVal = ApiRouteActionsDownload.GetUrl(config.GetApiUrl(), site.Id, fileUrl);
+                retVal = PageUtility.ParseNavigationUrl(siteInfo, fileUrl, true);
             }
             else
             {
                 var stlAnchor = new HtmlAnchor();
                 ControlUtils.AddAttributesIfNotExists(stlAnchor, attributes);
-                stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(config.GetApiUrl(), site.Id, fileUrl);
+                stlAnchor.HRef = ApiRouteActionsDownload.GetUrl(siteInfo.Additional.ApiUrl, siteInfo.Id, fileUrl);
                 stlAnchor.InnerHtml = string.IsNullOrEmpty(innerHtml) ? PageUtils.GetFileNameFromUrl(fileUrl) : innerHtml;
 
                 if (isLower)

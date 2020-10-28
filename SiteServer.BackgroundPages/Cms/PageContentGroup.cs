@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -27,8 +28,8 @@ namespace SiteServer.BackgroundPages.Cms
 			
 				try
 				{
-					DataProvider.ContentGroupRepository.DeleteAsync(SiteId, groupName).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "删除内容组", $"内容组:{groupName}").GetAwaiter().GetResult();
+					DataProvider.ContentGroupDao.Delete(groupName, SiteId);
+                    AuthRequest.AddSiteLog(SiteId, "删除内容组", $"内容组:{groupName}");
 					SuccessDeleteMessage();
 				}
 				catch(Exception ex)
@@ -44,10 +45,10 @@ namespace SiteServer.BackgroundPages.Cms
                 switch (direction.ToUpper())
                 {
                     case "UP":
-                        DataProvider.ContentGroupRepository.UpdateTaxisToUpAsync(SiteId, groupName).GetAwaiter().GetResult();
+                        DataProvider.ContentGroupDao.UpdateTaxisToUp(SiteId, groupName);
                         break;
                     case "DOWN":
-                        DataProvider.ContentGroupRepository.UpdateTaxisToDownAsync(SiteId, groupName).GetAwaiter().GetResult();
+                        DataProvider.ContentGroupDao.UpdateTaxisToDown(SiteId, groupName);
                         break;
                 }
                 SuccessMessage("排序成功！");
@@ -56,21 +57,21 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigGroups);
 
-            RptContents.DataSource = DataProvider.ContentGroupRepository.GetContentGroupsAsync(SiteId).GetAwaiter().GetResult();
+            RptContents.DataSource = ContentGroupManager.GetContentGroupInfoList(SiteId);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
             var showPopWinString = ModalContentGroupAdd.GetOpenWindowString(SiteId);
-            BtnAddGroup.Attributes.Add("onClick", showPopWinString);
+            BtnAddGroup.Attributes.Add("onclick", showPopWinString);
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var groupInfo = (ContentGroup) e.Item.DataItem;
+            var groupInfo = (ContentGroupInfo) e.Item.DataItem;
 
             var ltlContentGroupName = (Literal)e.Item.FindControl("ltlContentGroupName");
             var ltlDescription = (Literal)e.Item.FindControl("ltlDescription");

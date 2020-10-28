@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -12,6 +12,7 @@ namespace SiteServer.BackgroundPages.Cms
     {
         public Literal LtlPageTitle;
         public TextBox TbRelatedFileName;
+        public DropDownList DdlCharset;
         public TextBox TbContent;
         public PlaceHolder PhCodeMirror;
         public PlaceHolder PhCodeMirrorInclude;
@@ -53,27 +54,27 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 _name = PageTemplateAssets.NameInclude;
                 _ext = PageTemplateAssets.ExtInclude;
-                _assetsDir = Site.TemplatesAssetsIncludeDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsIncludeDir.Trim('/');
                 PhCodeMirrorInclude.Visible = true;
             }
             else if (_type == PageTemplateAssets.TypeJs)
             {
                 _name = PageTemplateAssets.NameJs;
                 _ext = PageTemplateAssets.ExtJs;
-                _assetsDir = Site.TemplatesAssetsJsDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsJsDir.Trim('/');
                 PhCodeMirrorJs.Visible = true;
             }
             else if (_type == PageTemplateAssets.TypeCss)
             {
                 _name = PageTemplateAssets.NameCss;
                 _ext = PageTemplateAssets.ExtCss;
-                _assetsDir = Site.TemplatesAssetsCssDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsCssDir.Trim('/');
                 PhCodeMirrorCss.Visible = true;
             }
 
             if (string.IsNullOrEmpty(_assetsDir)) return;
 
-            _directoryPath = PathUtility.MapPath(Site, "@/" + _assetsDir);
+            _directoryPath = PathUtility.MapPath(SiteInfo, "@/" + _assetsDir);
 
             if (AuthRequest.IsQueryExists("fileName"))
             {
@@ -83,13 +84,15 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Template);
+            VerifySitePermissions(ConfigManager.SitePermissions.TemplatesIncludes);
 
             LtlPageTitle.Text = string.IsNullOrEmpty(_fileName) ? $"添加{_name}" : $"编辑{_name}";
 
-            var isCodeMirror = Site.ConfigTemplateIsCodeMirror;
+            var isCodeMirror = SiteInfo.Additional.ConfigTemplateIsCodeMirror;
             BtnEditorType.Text = isCodeMirror ? "采用纯文本编辑模式" : "采用代码编辑模式";
             PhCodeMirror.Visible = isCodeMirror;
+
+            ECharsetUtils.AddListItems(DdlCharset);
 
             if (_fileName != null)
             {
@@ -101,9 +104,13 @@ namespace SiteServer.BackgroundPages.Cms
                 {
                     TbRelatedFileName.Text = _fileName;
                     var fileCharset = FileUtils.GetFileCharset(PathUtils.Combine(_directoryPath, _fileName));
-                    
+                    ControlUtils.SelectSingleItemIgnoreCase(DdlCharset, ECharsetUtils.GetValue(fileCharset));
                     TbContent.Text = FileUtils.ReadText(PathUtils.Combine(_directoryPath, _fileName), fileCharset);
                 }
+            }
+            else
+            {
+                ControlUtils.SelectSingleItemIgnoreCase(DdlCharset, SiteInfo.Additional.Charset);
             }
         }
 
@@ -111,10 +118,10 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (!Page.IsPostBack || !Page.IsValid) return;
 
-            var isCodeMirror = Site.ConfigTemplateIsCodeMirror;
+            var isCodeMirror = SiteInfo.Additional.ConfigTemplateIsCodeMirror;
             isCodeMirror = !isCodeMirror;
-            Site.ConfigTemplateIsCodeMirror = isCodeMirror;
-            DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
+            SiteInfo.Additional.ConfigTemplateIsCodeMirror = isCodeMirror;
+            DataProvider.SiteDao.Update(SiteInfo);
 
             BtnEditorType.Text = isCodeMirror ? "采用纯文本编辑模式" : "采用代码编辑模式";
             PhCodeMirror.Visible = isCodeMirror;
@@ -154,12 +161,13 @@ namespace SiteServer.BackgroundPages.Cms
                     previousFileName = _fileName;
                 }
                 
-                FileUtils.WriteText(PathUtils.Combine(_directoryPath, relatedFileName), TbContent.Text);
+                var charset = ECharsetUtils.GetEnumType(DdlCharset.SelectedValue);
+                FileUtils.WriteText(PathUtils.Combine(_directoryPath, relatedFileName), charset, TbContent.Text);
                 if (!string.IsNullOrEmpty(previousFileName))
                 {
                     FileUtils.DeleteFileIfExists(PathUtils.Combine(_directoryPath, previousFileName));
                 }
-                AuthRequest.AddSiteLogAsync(SiteId, $"修改{_name}", $"{_name}:{relatedFileName}").GetAwaiter().GetResult();
+                AuthRequest.AddSiteLog(SiteId, $"修改{_name}", $"{_name}:{relatedFileName}");
                 SuccessMessage($"{_name}修改成功！");
                 AddWaitAndRedirectScript(PageTemplateAssets.GetRedirectUrl(SiteId, _type));
             }
@@ -175,8 +183,9 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                 }
 
-                FileUtils.WriteText(PathUtils.Combine(_directoryPath, relatedFileName), TbContent.Text);
-                AuthRequest.AddSiteLogAsync(SiteId, $"添加{_name}", $"{_name}:{relatedFileName}").GetAwaiter().GetResult();
+                var charset = ECharsetUtils.GetEnumType(DdlCharset.SelectedValue);
+                FileUtils.WriteText(PathUtils.Combine(_directoryPath, relatedFileName), charset, TbContent.Text);
+                AuthRequest.AddSiteLog(SiteId, $"添加{_name}", $"{_name}:{relatedFileName}");
                 SuccessMessage($"{_name}添加成功！");
                 AddWaitAndRedirectScript(PageTemplateAssets.GetRedirectUrl(SiteId, _type));
             }

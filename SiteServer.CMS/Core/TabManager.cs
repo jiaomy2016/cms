@@ -1,10 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Plugin;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Core
 {
@@ -20,7 +18,7 @@ namespace SiteServer.CMS.Core
 	        var tc = CacheUtils.Get(filePath) as TabCollection;
 	        if (tc != null) return tc;
 
-	        tc = Serializer.ConvertFileToObject<TabCollection>(filePath);
+	        tc = (TabCollection)Serializer.ConvertFileToObject(filePath, typeof(TabCollection));
 	        CacheUtils.Insert(filePath, tc, filePath);
 	        return tc;
 	    }
@@ -29,7 +27,7 @@ namespace SiteServer.CMS.Core
         {
             var list = new List<Tab>();
 
-            var menuPath = WebUtils.GetMenusPath("Top.config");
+            var menuPath = PathUtils.GetMenusPath("Top.config");
             if (!FileUtils.IsFileExists(menuPath)) return list;
 
             var tabs = GetTabs(menuPath);
@@ -45,7 +43,7 @@ namespace SiteServer.CMS.Core
 	    {
 	        var list = new List<Tab>();
 
-	        var menuPath = WebUtils.GetMenusPath("Top.config");
+	        var menuPath = PathUtils.GetMenusPath("Top.config");
 	        if (!FileUtils.IsFileExists(menuPath)) return list;
 
 	        var tabs = GetTabs(menuPath);
@@ -83,36 +81,13 @@ namespace SiteServer.CMS.Core
             return true;
         }
 
-        private static Tab GetPluginTab(SiteServer.Abstractions.Menu menu, string permission)
-        {
-            var tab = new Tab
-            {
-                Id = menu.Id,
-                Text = menu.Text,
-                IconClass = menu.IconClass,
-                Selected = false,
-                Href = menu.Link,
-                Target = menu.Target,
-                Permissions = permission
-            };
-            if (menu.Menus != null && menu.Menus.Count > 0)
-            {
-                tab.Children = new Tab[menu.Menus.Count];
-                for (var i = 0; i < menu.Menus.Count; i++)
-                {
-                    tab.Children[i] = GetPluginTab(menu.Menus[i], permission);
-                }
-            }
-            return tab;
-        }
-
-        public static async Task<List<Tab>> GetTabListAsync(string topId, int siteId)
+        public static List<Tab> GetTabList(string topId, int siteId)
         {
             var tabs = new List<Tab>();
 
             if (!string.IsNullOrEmpty(topId))
             {
-                var filePath = WebUtils.GetMenusPath($"{topId}.config");
+                var filePath = PathUtils.GetMenusPath($"{topId}.config");
                 var tabCollection = GetTabs(filePath);
                 if (tabCollection?.Tabs != null)
                 {
@@ -123,10 +98,10 @@ namespace SiteServer.CMS.Core
                 }
             }
 
-            var menus = new List<Menu>();
+            var menus = new List<PluginMenu>();
             if (siteId > 0 && topId == string.Empty)
             {
-                var siteMenus = await PluginMenuManager.GetSiteMenusAsync(siteId);
+                var siteMenus = PluginMenuManager.GetSiteMenus(siteId);
                 if (siteMenus != null)
                 {
                     menus.AddRange(siteMenus);
@@ -134,7 +109,7 @@ namespace SiteServer.CMS.Core
             }
             else if (topId == "Plugins")
             {
-                var topMenus = await PluginMenuManager.GetTopMenusAsync();
+                var topMenus = PluginMenuManager.GetTopMenus();
                 if (topMenus != null)
                 {
                     menus.AddRange(topMenus);
@@ -154,7 +129,7 @@ namespace SiteServer.CMS.Core
 
                 if (isExists) continue;
 
-                tabs.Add(GetPluginTab(menu, menu.PluginId));
+                tabs.Add(PluginMenuManager.GetPluginTab(menu.PluginId, null, menu));
 
                 //if (string.IsNullOrEmpty(menu.ParentId))
                 //{

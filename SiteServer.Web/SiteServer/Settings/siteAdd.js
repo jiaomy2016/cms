@@ -6,7 +6,7 @@ var data = {
   pageType: utils.getQueryString('type') || 'selectType',
 
   siteTemplates: null,
-  rootExists: null,
+  isRootExists: null,
   siteList: null,
   tableNameList: null,
 
@@ -23,10 +23,10 @@ var data = {
   createType: utils.getQueryString('createType'),
   createTemplateId: utils.getQueryString('createTemplateId'),
   siteName: '',
-  root: false,
+  isRoot: false,
   parentId: 0,
   siteDir: '',
-  tableRule: 'Create',
+  tableRule: 'Choose',
   tableChoose: '',
   tableHandWrite: '',
   isImportContents: true,
@@ -41,7 +41,7 @@ var methods = {
       var res = response.data;
 
       $this.siteTemplates = res.value;
-      $this.rootExists = res.rootExists;
+      $this.isRootExists = res.isRootExists;
       $this.siteList = res.siteList;
       $this.tableNameList = res.tableNameList;
     }).catch(function (error) {
@@ -55,15 +55,15 @@ var methods = {
   },
 
   getDisplayUrl: function (templateId) {
-    return 'https://www.siteserver.cn/templates/template.html?id=' + templateId;
+    return $urlCloud + '/templates/template.html?id=' + templateId;
   },
 
   getTemplateUrl: function (relatedUrl) {
-    return 'https://www.siteserver.cn/templates/' + relatedUrl;
+    return $urlCloud + '/templates/' + relatedUrl;
   },
 
   getPreviewUrl: function (templateId) {
-    return 'https://demo.siteserver.cn/' + templateId;
+    return $urlCloudDemo + '/' + templateId;
   },
 
   getPageUrl: function (page) {
@@ -177,7 +177,7 @@ var methods = {
           createType: $this.createType,
           createTemplateId: $this.createTemplateId,
           siteName: $this.siteName,
-          root: $this.root,
+          isRoot: $this.isRoot,
           parentId: $this.parentId,
           siteDir: $this.siteDir,
           tableRule: $this.tableRule,

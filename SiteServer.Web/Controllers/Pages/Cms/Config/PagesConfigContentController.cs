@@ -1,38 +1,37 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
 
 namespace SiteServer.API.Controllers.Pages.Cms.Config
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("pages/cms/configContent")]
     public class PagesConfigContentController : ApiController
     {
         private const string Route = "";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 var siteId = request.SiteId;
 
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSitePermissionsAsync(siteId, Constants.WebSitePermissions.Configuration))
+                    !request.AdminPermissionsImpl.HasSitePermissions(siteId, ConfigManager.SitePermissions.ConfigContents))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
 
                 return Ok(new
                 {
-                    Value = site,
-                    Config = site.ToDictionary()
+                    Value = siteInfo,
+                    Config = siteInfo.Additional
                 });
             }
             catch (Exception ex)
@@ -42,24 +41,24 @@ namespace SiteServer.API.Controllers.Pages.Cms.Config
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 var siteId = request.SiteId;
 
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSitePermissionsAsync(siteId, Constants.WebSitePermissions.Configuration))
+                    !request.AdminPermissionsImpl.HasSitePermissions(siteId, ConfigManager.SitePermissions.ConfigContents))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
 
                 var isSaveImageInTextEditor = request.GetPostBool("isSaveImageInTextEditor", true);
                 var isAutoPageInTextEditor = request.GetPostBool("isAutoPageInTextEditor");
-                var autoPageWordNum = request.GetPostInt("autoPageWordNum", site.AutoPageWordNum);
+                var autoPageWordNum = request.GetPostInt("autoPageWordNum", siteInfo.Additional.AutoPageWordNum);
                 var isContentTitleBreakLine = request.GetPostBool("isContentTitleBreakLine", true);
                 var isContentSubTitleBreakLine = request.GetPostBool("isContentSubTitleBreakLine", true);
                 var isAutoCheckKeywords = request.GetPostBool("isAutoCheckKeywords", true);
@@ -67,47 +66,47 @@ namespace SiteServer.API.Controllers.Pages.Cms.Config
                 var checkContentLevel = request.GetPostInt("checkContentLevel");
                 var checkContentDefaultLevel = request.GetPostInt("checkContentDefaultLevel");
 
-                site.IsSaveImageInTextEditor = isSaveImageInTextEditor;
+                siteInfo.Additional.IsSaveImageInTextEditor = isSaveImageInTextEditor;
 
                 var isReCalculate = false;
                 if (isAutoPageInTextEditor)
                 {
-                    if (site.IsAutoPageInTextEditor == false)
+                    if (siteInfo.Additional.IsAutoPageInTextEditor == false)
                     {
                         isReCalculate = true;
                     }
-                    else if (site.AutoPageWordNum != autoPageWordNum)
+                    else if (siteInfo.Additional.AutoPageWordNum != autoPageWordNum)
                     {
                         isReCalculate = true;
                     }
                 }
 
-                site.IsAutoPageInTextEditor = isAutoPageInTextEditor;
-                site.AutoPageWordNum = autoPageWordNum;
-                site.IsContentTitleBreakLine = isContentTitleBreakLine;
-                site.IsContentSubTitleBreakLine = isContentSubTitleBreakLine;
-                site.IsAutoCheckKeywords = isAutoCheckKeywords;
+                siteInfo.Additional.IsAutoPageInTextEditor = isAutoPageInTextEditor;
+                siteInfo.Additional.AutoPageWordNum = autoPageWordNum;
+                siteInfo.Additional.IsContentTitleBreakLine = isContentTitleBreakLine;
+                siteInfo.Additional.IsContentSubTitleBreakLine = isContentSubTitleBreakLine;
+                siteInfo.Additional.IsAutoCheckKeywords = isAutoCheckKeywords;
 
-                site.IsCheckContentLevel = isCheckContentLevel;
-                if (site.IsCheckContentLevel)
+                siteInfo.Additional.IsCheckContentLevel = isCheckContentLevel;
+                if (siteInfo.Additional.IsCheckContentLevel)
                 {
-                    site.CheckContentLevel = checkContentLevel;
+                    siteInfo.Additional.CheckContentLevel = checkContentLevel;
                 }
-                site.CheckContentDefaultLevel = checkContentDefaultLevel;
+                siteInfo.Additional.CheckContentDefaultLevel = checkContentDefaultLevel;
 
-                await DataProvider.SiteRepository.UpdateAsync(site);
+                DataProvider.SiteDao.Update(siteInfo);
 
                 if (isReCalculate)
                 {
-                    await DataProvider.ContentRepository.SetAutoPageContentToSiteAsync(site);
+                    DataProvider.ContentDao.SetAutoPageContentToSite(siteInfo);
                 }
 
-                await request.AddSiteLogAsync(siteId, "修改内容设置");
+                request.AddSiteLog(siteId, "修改内容设置");
 
                 return Ok(new
                 {
-                    Value = site,
-                    Config = site.ToDictionary(),
+                    Value = siteInfo,
+                    Config = siteInfo.Additional,
                 });
             }
             catch (Exception ex)

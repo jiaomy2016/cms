@@ -2,12 +2,11 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
-using TableStyle = SiteServer.Abstractions.TableStyle;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -21,7 +20,7 @@ namespace SiteServer.BackgroundPages.Cms
         public Button BtnImport;
         public Button BtnExport;
 
-        private Channel _channel;
+        private ChannelInfo _channelInfo;
         private string _tableName;
         private List<int> _relatedIdentities;
         private string _redirectUrl;
@@ -39,25 +38,25 @@ namespace SiteServer.BackgroundPages.Cms
             if (IsForbidden) return;
 
             var channelId = AuthRequest.GetQueryInt("channelId", SiteId);
-            _channel = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
-            _tableName = ChannelManager.GetTableNameAsync(Site, _channel).GetAwaiter().GetResult();
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
+            _tableName = ChannelManager.GetTableName(SiteInfo, _channelInfo);
             _redirectUrl = GetRedirectUrl(SiteId, channelId);
-            _relatedIdentities = TableStyleManager.GetRelatedIdentities(_channel);
+            _relatedIdentities = TableStyleManager.GetRelatedIdentities(_channelInfo);
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigTableStyles);
 
             //删除样式
             if (AuthRequest.IsQueryExists("DeleteStyle"))
             {
                 var attributeName = AuthRequest.GetQueryString("AttributeName");
-                if (TableStyleManager.IsExistsAsync(_channel.Id, _tableName, attributeName).GetAwaiter().GetResult())
+                if (TableStyleManager.IsExists(_channelInfo.Id, _tableName, attributeName))
                 {
                     try
                     {
-                        DataProvider.TableStyleRepository.DeleteAsync(_channel.Id, _tableName, attributeName).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId, "删除数据表单样式", $"表单:{_tableName},字段:{attributeName}").GetAwaiter().GetResult();
+                        DataProvider.TableStyleDao.Delete(_channelInfo.Id, _tableName, attributeName);
+                        AuthRequest.AddSiteLog(SiteId, "删除数据表单样式", $"表单:{_tableName},字段:{attributeName}");
                         SuccessDeleteMessage();
                     }
                     catch (Exception ex)
@@ -69,10 +68,10 @@ namespace SiteServer.BackgroundPages.Cms
 
             InfoMessage(
                 $"在此编辑内容模型字段,子栏目默认继承父栏目字段设置; 内容表:{_tableName}");
-            ChannelManager.AddListItemsAsync(DdlChannelId.Items, Site, false, true, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+            ChannelManager.AddListItems(DdlChannelId.Items, SiteInfo, false, true, AuthRequest.AdminPermissionsImpl);
             ControlUtils.SelectSingleItem(DdlChannelId, channelId.ToString());
 
-            RptContents.DataSource = TableStyleManager.GetContentStyleListAsync(Site, _channel).GetAwaiter().GetResult();
+            RptContents.DataSource = TableStyleManager.GetContentStyleInfoList(SiteInfo, _channelInfo);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
@@ -91,7 +90,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var style = (TableStyle)e.Item.DataItem;
+            var styleInfo = (TableStyleInfo)e.Item.DataItem;
 
             var ltlAttributeName = (Literal)e.Item.FindControl("ltlAttributeName");
             var ltlDisplayName = (Literal)e.Item.FindControl("ltlDisplayName");
@@ -102,37 +101,37 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlEditStyle = (Literal)e.Item.FindControl("ltlEditStyle");
             var ltlEditValidate = (Literal)e.Item.FindControl("ltlEditValidate");
 
-            ltlAttributeName.Text = style.AttributeName;
+            ltlAttributeName.Text = styleInfo.AttributeName;
 
-            ltlDisplayName.Text = style.DisplayName;
-            ltlInputType.Text = InputTypeUtils.GetText(style.Type);
+            ltlDisplayName.Text = styleInfo.DisplayName;
+            ltlInputType.Text = InputTypeUtils.GetText(styleInfo.InputType);
 
-            var columnInfo = TableColumnManager.GetTableColumnInfo(_tableName, style.AttributeName);
+            var columnInfo = TableColumnManager.GetTableColumnInfo(_tableName, styleInfo.AttributeName);
 
             ltlFieldType.Text = columnInfo != null ? $"真实 {DataTypeUtils.GetText(columnInfo.DataType)}" : "虚拟字段";
 
-            ltlValidate.Text = TableStyleManager.GetValidateInfo(style);
+            ltlValidate.Text = TableStyleManager.GetValidateInfo(styleInfo);
 
-            if (!StringUtils.EqualsIgnoreCase(style.AttributeName, ContentAttribute.Title))
+            if (!StringUtils.EqualsIgnoreCase(styleInfo.AttributeName, ContentAttribute.Title))
             {
-                var showPopWinString = ModalTableStyleAdd.GetOpenWindowString(SiteId, style.Id, _relatedIdentities, _tableName, style.AttributeName, _redirectUrl);
+                var showPopWinString = ModalTableStyleAdd.GetOpenWindowString(SiteId, styleInfo.Id, _relatedIdentities, _tableName, styleInfo.AttributeName, _redirectUrl);
 
                 ltlEditStyle.Text = $@"<a href=""javascript:;"" onclick=""{showPopWinString}"">设置</a>";
 
-                showPopWinString = ModalTableStyleValidateAdd.GetOpenWindowString(SiteId, style.Id, _relatedIdentities, _tableName, style.AttributeName, _redirectUrl);
+                showPopWinString = ModalTableStyleValidateAdd.GetOpenWindowString(SiteId, styleInfo.Id, _relatedIdentities, _tableName, styleInfo.AttributeName, _redirectUrl);
                 ltlEditValidate.Text = $@"<a href=""javascript:;"" onclick=""{showPopWinString}"">设置</a>";
             }
 
-            ltlTaxis.Text = style.Taxis.ToString();
+            ltlTaxis.Text = styleInfo.Taxis.ToString();
 
-            if (style.RelatedIdentity != _channel.Id) return;
+            if (styleInfo.RelatedIdentity != _channelInfo.Id) return;
 
             var urlStyle = PageUtils.GetCmsUrl(SiteId, nameof(PageTableStyleContent), new NameValueCollection
             {
-                {"channelId", _channel.Id.ToString()},
+                {"channelId", _channelInfo.Id.ToString()},
                 {"DeleteStyle", true.ToString()},
                 {"TableName", _tableName},
-                {"AttributeName", style.AttributeName}
+                {"AttributeName", styleInfo.AttributeName}
             });
             ltlEditStyle.Text +=
                 $@"&nbsp;&nbsp;<a href=""{urlStyle}"" onClick=""javascript:return confirm('此操作将删除对应显示样式，确认吗？');"">删除</a>";

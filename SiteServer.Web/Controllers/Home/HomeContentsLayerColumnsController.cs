@@ -1,43 +1,41 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerColumns")]
     public class HomeContentsLayerColumnsController : ApiController
     {
         private const string Route = "";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ChannelEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ChannelEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var attributes = await ChannelManager.GetContentsColumnsAsync(site, channelInfo, true);
+                var attributes = ChannelManager.GetContentsColumns(siteInfo, channelInfo, true);
 
                 return Ok(new
                 {
@@ -46,40 +44,40 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
                 var attributeNames = request.GetPostString("attributeNames");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ChannelEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ChannelEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                channelInfo.ContentAttributesOfDisplay = attributeNames;
+                channelInfo.Additional.ContentAttributesOfDisplay = attributeNames;
 
-                await DataProvider.ChannelRepository.UpdateAsync(channelInfo);
+                DataProvider.ChannelDao.Update(channelInfo);
 
-                await request.AddSiteLogAsync(siteId, "设置内容显示项", $"显示项:{attributeNames}");
+                request.AddSiteLog(siteId, "设置内容显示项", $"显示项:{attributeNames}");
 
                 return Ok(new
                 {
@@ -88,7 +86,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

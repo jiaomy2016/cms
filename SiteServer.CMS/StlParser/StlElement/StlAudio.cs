@@ -1,8 +1,7 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+﻿using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Stl;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 
 namespace SiteServer.CMS.StlParser.StlElement
@@ -13,14 +12,16 @@ namespace SiteServer.CMS.StlParser.StlElement
         private StlAudio() { }
 		public const string ElementName = "stl:audio";
 
+        public const string EditorPlaceHolder = @"src=""../assets/editor-images/audio.png""";
+
         [StlAttribute(Title = "指定存储音频地址的内容字段，默认为VideoUrl")]
         private const string Type = nameof(Type);
 
         [StlAttribute(Title = "音频地址，优先级高于type属性")]
-        private const string PlayUrl = nameof(PlayUrl);
+        public const string PlayUrl = nameof(PlayUrl);
 
         [StlAttribute(Title = "是否自动播放")]
-        private const string IsAutoPlay = nameof(IsAutoPlay);
+        public const string IsAutoPlay = nameof(IsAutoPlay);
 
         [StlAttribute(Title = "是否预载入")]
         private const string IsPreload = nameof(IsPreload);
@@ -28,9 +29,9 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "是否循环播放")]
         private const string IsLoop = nameof(IsLoop);
 
-	    public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+	    public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
-            var type = ContentAttribute.VideoUrl;
+            var type = BackgroundContentAttribute.VideoUrl;
             var playUrl = string.Empty;
             var isAutoPlay = false;
             var isPreLoad = true;
@@ -62,10 +63,10 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, type, playUrl, isAutoPlay, isPreLoad, isLoop);
+            return ParseImpl(pageInfo, contextInfo, type, playUrl, isAutoPlay, isPreLoad, isLoop);
 		}
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, string type, string playUrl, bool isAutoPlay, bool isPreLoad, bool isLoop)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string type, string playUrl, bool isAutoPlay, bool isPreLoad, bool isLoop)
         {
             var contentId = contextInfo.ContentId;
 
@@ -73,38 +74,37 @@ namespace SiteServer.CMS.StlParser.StlElement
             {
                 if (contentId != 0)//获取内容视频
                 {
-                    var contentInfo = await contextInfo.GetContentAsync();
-                    if (contentInfo == null)
+                    if (contextInfo.ContentInfo == null)
                     {
-                        //playUrl = DataProvider.ContentRepository.GetValue(pageInfo.Site.AuxiliaryTableForContent, contentId, type);
-                        playUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, type);
+                        //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, type);
+                        playUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, type);
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            if (!StringUtils.EqualsIgnoreCase(type, ContentAttribute.VideoUrl))
+                            if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.VideoUrl))
                             {
-                                //playUrl = DataProvider.ContentRepository.GetValue(pageInfo.Site.AuxiliaryTableForContent, contentId, ContentAttribute.VideoUrl);
-                                playUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, ContentAttribute.VideoUrl);
+                                //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.VideoUrl);
+                                playUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.VideoUrl);
                             }
                         }
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            if (!StringUtils.EqualsIgnoreCase(type, ContentAttribute.FileUrl))
+                            if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.FileUrl))
                             {
-                                //playUrl = DataProvider.ContentRepository.GetValue(pageInfo.Site.AuxiliaryTableForContent, contentId, ContentAttribute.FileUrl);
-                                playUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, ContentAttribute.FileUrl);
+                                //playUrl = DataProvider.ContentDao.GetValue(pageInfo.SiteInfo.AuxiliaryTableForContent, contentId, BackgroundContentAttribute.FileUrl);
+                                playUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.FileUrl);
                             }
                         }
                     }
                     else
                     {
-                        playUrl = contentInfo.Get<string>(type);
+                        playUrl = contextInfo.ContentInfo.GetString(type);
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            playUrl = contentInfo.Get<string>(ContentAttribute.VideoUrl);
+                            playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.VideoUrl);
                         }
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            playUrl = contentInfo.Get<string>(ContentAttribute.FileUrl);
+                            playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.FileUrl);
                         }
                     }
                 }
@@ -112,7 +112,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (string.IsNullOrEmpty(playUrl)) return string.Empty;
 
-            playUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, playUrl, pageInfo.IsLocal);
+            playUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, playUrl, pageInfo.IsLocal);
 
             // 如果是实体标签，则只返回数字
             if (contextInfo.IsStlEntity)

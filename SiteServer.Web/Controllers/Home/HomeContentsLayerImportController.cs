@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
 using SiteServer.CMS.ImportExport;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerImport")]
     public class HomeContentsLayerImportController : ApiController
     {
@@ -20,30 +19,30 @@ namespace SiteServer.API.Controllers.Home
         private const string RouteUpload = "actions/upload";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var (isChecked, checkedLevel) = await CheckManager.GetUserCheckLevelAsync(request.AdminPermissionsImpl, site, siteId);
-                var checkedLevels = CheckManager.GetCheckedLevels(site, isChecked, checkedLevel, true);
+                var isChecked = CheckManager.GetUserCheckLevel(request.AdminPermissionsImpl, siteInfo, siteId, out var checkedLevel);
+                var checkedLevels = CheckManager.GetCheckedLevels(siteInfo, isChecked, checkedLevel, true);
 
                 return Ok(new
                 {
@@ -53,24 +52,24 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(RouteUpload)]
-        public async Task<IHttpActionResult> Upload()
+        public IHttpActionResult Upload()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
@@ -116,17 +115,17 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
@@ -136,19 +135,19 @@ namespace SiteServer.API.Controllers.Home
                 var fileNames = request.GetPostObject<List<string>>("fileNames");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var isChecked = checkedLevel >= site.CheckContentLevel;
+                var isChecked = checkedLevel >= siteInfo.Additional.CheckContentLevel;
 
                 if (importType == "zip")
                 {
@@ -160,7 +159,7 @@ namespace SiteServer.API.Controllers.Home
                             continue;
 
                         var importObject = new ImportObject(siteId, request.AdminName);
-                        await importObject.ImportContentsByZipFileAsync(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
+                        importObject.ImportContentsByZipFile(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
                     }
                 }
                 
@@ -174,7 +173,7 @@ namespace SiteServer.API.Controllers.Home
                             continue;
 
                         var importObject = new ImportObject(siteId, request.AdminName);
-                        await importObject.ImportContentsByCsvFileAsync(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
+                        importObject.ImportContentsByCsvFile(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
                     }
                 }
                 else if (importType == "txt")
@@ -186,11 +185,11 @@ namespace SiteServer.API.Controllers.Home
                             continue;
 
                         var importObject = new ImportObject(siteId, request.AdminName);
-                        await importObject.ImportContentsByTxtFileAsync(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
+                        importObject.ImportContentsByTxtFile(channelInfo, localFilePath, isOverride, isChecked, checkedLevel, request.AdminId, request.UserId, SourceManager.User);
                     }
                 }
 
-                await request.AddSiteLogAsync(siteId, channelId, 0, "导入内容", string.Empty);
+                request.AddSiteLog(siteId, channelId, 0, "导入内容", string.Empty);
 
                 return Ok(new
                 {
@@ -199,7 +198,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

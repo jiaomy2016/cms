@@ -1,6 +1,4 @@
-﻿
-
-using SiteServer.Abstractions;
+﻿using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core
 {

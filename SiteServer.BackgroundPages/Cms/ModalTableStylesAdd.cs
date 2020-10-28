@@ -4,12 +4,11 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
-using TableStyle = SiteServer.Abstractions.TableStyle;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -49,7 +48,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
             if (IsForbidden) return;
 
-            _relatedIdentities = StringUtils.GetIntList(AuthRequest.GetQueryString("RelatedIdentities"));
+            _relatedIdentities = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("RelatedIdentities"));
             if (_relatedIdentities.Count == 0)
             {
                 _relatedIdentities.Add(0);
@@ -75,15 +74,15 @@ namespace SiteServer.BackgroundPages.Cms
                 DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.Video, false));
                 DdlInputType.Items.Add(InputTypeUtils.GetListItem(InputType.File, false));
 
-                var style = TableStyleManager.GetTableStyleAsync(_tableName, string.Empty, _relatedIdentities).GetAwaiter().GetResult();
+                var styleInfo = TableStyleManager.GetTableStyleInfo(_tableName, string.Empty, _relatedIdentities);
 
-                ControlUtils.SelectSingleItem(DdlInputType, style.Type.Value);
-                TbDefaultValue.Text = style.DefaultValue;
-                DdlIsHorizontal.SelectedValue = style.Horizontal.ToString();
-                TbColumns.Text = style.Columns.ToString();
+                ControlUtils.SelectSingleItem(DdlInputType, styleInfo.InputType.Value);
+                TbDefaultValue.Text = styleInfo.DefaultValue;
+                DdlIsHorizontal.SelectedValue = styleInfo.IsHorizontal.ToString();
+                TbColumns.Text = styleInfo.Additional.Columns.ToString();
 
-                TbHeight.Text = style.Height == 0 ? string.Empty : style.Height.ToString();
-                TbWidth.Text = style.Width;
+                TbHeight.Text = styleInfo.Additional.Height == 0 ? string.Empty : styleInfo.Additional.Height.ToString();
+                TbWidth.Text = styleInfo.Additional.Width;
             }
 
             ReFresh(null, EventArgs.Empty);
@@ -127,7 +126,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
             var inputType = InputTypeUtils.GetEnumType(DdlInputType.SelectedValue);
 
-            var isChanged = InsertTableStyle(inputType);
+            var isChanged = InsertTableStyleInfo(inputType);
 
             if (isChanged)
             {
@@ -135,14 +134,14 @@ namespace SiteServer.BackgroundPages.Cms
             }
 		}
 
-        private bool InsertTableStyle(InputType inputType)
+        private bool InsertTableStyleInfo(InputType inputType)
         {
             var isChanged = false;
 
             var attributeNameArray = TbAttributeNames.Text.Split('\n');
 
             var relatedIdentity = _relatedIdentities[0];
-            var styleArrayList = new ArrayList();
+            var styleInfoArrayList = new ArrayList();
 
             foreach (var itemString in attributeNameArray)
             {
@@ -173,69 +172,49 @@ namespace SiteServer.BackgroundPages.Cms
                     return false;
                 }
 
-                if (TableStyleManager.IsExistsAsync(relatedIdentity, _tableName, attributeName).GetAwaiter().GetResult())
+                if (TableStyleManager.IsExists(relatedIdentity, _tableName, attributeName))
                 {
                     FailMessage($@"显示样式添加失败：字段名""{attributeName}""已存在");
                     return false;
                 }
 
-                var style = new TableStyle
-                {
-                    Id = 0,
-                    RelatedIdentity = relatedIdentity,
-                    TableName = _tableName,
-                    AttributeName = attributeName,
-                    Taxis = 0,
-                    DisplayName = displayName,
-                    HelpText = string.Empty,
-                    VisibleInList = false,
-                    Type = inputType,
-                    DefaultValue = TbDefaultValue.Text,
-                    Horizontal = TranslateUtils.ToBool(DdlIsHorizontal.SelectedValue)
-                };
-                style.Columns = TranslateUtils.ToInt(TbColumns.Text);
-                style.Height = TranslateUtils.ToInt(TbHeight.Text);
-                style.Width = TbWidth.Text;
+                var styleInfo = new TableStyleInfo(0, relatedIdentity, _tableName, attributeName, 0, displayName, string.Empty, false, inputType, TbDefaultValue.Text, TranslateUtils.ToBool(DdlIsHorizontal.SelectedValue), string.Empty);
+                styleInfo.Additional.Columns = TranslateUtils.ToInt(TbColumns.Text);
+                styleInfo.Additional.Height = TranslateUtils.ToInt(TbHeight.Text);
+                styleInfo.Additional.Width = TbWidth.Text;
 
                 if (inputType == InputType.CheckBox || inputType == InputType.Radio || inputType == InputType.SelectMultiple || inputType == InputType.SelectOne)
                 {
-                    style.StyleItems = new List<TableStyleItem>();
+                    styleInfo.StyleItems = new List<TableStyleItemInfo>();
 
-                    var rapidValues = StringUtils.GetStringList(TbRapidValues.Text);
+                    var rapidValues = TranslateUtils.StringCollectionToStringList(TbRapidValues.Text);
                     foreach (var rapidValue in rapidValues)
                     {
-                        var itemInfo = new TableStyleItem
-                        {
-                            Id = 0,
-                            TableStyleId = style.Id,
-                            ItemTitle = rapidValue,
-                            ItemValue = rapidValue,
-                            Selected = false
-                        };
-                        style.StyleItems.Add(itemInfo);
+                        var itemInfo = new TableStyleItemInfo(0, styleInfo.Id, rapidValue, rapidValue, false);
+                        styleInfo.StyleItems.Add(itemInfo);
                     }
                 }
 
-                styleArrayList.Add(style);
+                styleInfoArrayList.Add(styleInfo);
             }
 
             try
             {
                 var attributeNames = new ArrayList();
-                foreach (TableStyle style in styleArrayList)
+                foreach (TableStyleInfo styleInfo in styleInfoArrayList)
                 {
-                    attributeNames.Add(style.AttributeName);
-                    DataProvider.TableStyleRepository.InsertAsync(style).GetAwaiter().GetResult();
+                    attributeNames.Add(styleInfo.AttributeName);
+                    DataProvider.TableStyleDao.Insert(styleInfo);
                 }
                 
 
                 if (SiteId > 0)
                 {
-                    AuthRequest.AddSiteLogAsync(SiteId, "批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, "批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}");
                 }
                 else
                 {
-                    AuthRequest.AddAdminLogAsync("批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}").GetAwaiter().GetResult();
+                    AuthRequest.AddAdminLog("批量添加表单显示样式", $"字段名: {TranslateUtils.ObjectCollectionToString(attributeNames)}");
                 }
 
                 isChanged = true;

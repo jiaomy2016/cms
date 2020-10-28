@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Specialized;
-using System.Linq;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -51,7 +50,7 @@ namespace SiteServer.BackgroundPages.Cms
             if (AuthRequest.IsQueryExists("RelatedFieldID"))
             {
                 var relatedFieldId = AuthRequest.GetQueryInt("RelatedFieldID");
-                var relatedFieldInfo = DataProvider.RelatedFieldRepository.GetRelatedFieldAsync(relatedFieldId).GetAwaiter().GetResult();
+                var relatedFieldInfo = DataProvider.RelatedFieldDao.GetRelatedFieldInfo(relatedFieldId);
                 if (relatedFieldInfo != null)
                 {
                     TbRelatedFieldName.Text = relatedFieldInfo.Title;
@@ -107,7 +106,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
 			var isChanged = false;
 
-            var relatedFieldInfo = new RelatedField
+            var relatedFieldInfo = new RelatedFieldInfo
             {
                 Title = TbRelatedFieldName.Text,
                 SiteId = SiteId,
@@ -137,8 +136,8 @@ namespace SiteServer.BackgroundPages.Cms
 				try
 				{
                     relatedFieldInfo.Id = AuthRequest.GetQueryInt("RelatedFieldID");
-                    DataProvider.RelatedFieldRepository.UpdateAsync(relatedFieldInfo).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改联动字段", $"联动字段:{relatedFieldInfo.Title}").GetAwaiter().GetResult();
+                    DataProvider.RelatedFieldDao.Update(relatedFieldInfo);
+                    AuthRequest.AddSiteLog(SiteId, "修改联动字段", $"联动字段:{relatedFieldInfo.Title}");
 					isChanged = true;
 				}
 				catch(Exception ex)
@@ -148,8 +147,8 @@ namespace SiteServer.BackgroundPages.Cms
 			}
 			else
 			{
-                var relatedFieldNameList = DataProvider.RelatedFieldRepository.GetTitleListAsync(SiteId).GetAwaiter().GetResult();
-                if (relatedFieldNameList.Contains(TbRelatedFieldName.Text))
+                var relatedFieldNameList = DataProvider.RelatedFieldDao.GetTitleList(SiteId);
+                if (relatedFieldNameList.IndexOf(TbRelatedFieldName.Text) != -1)
 				{
                     FailMessage("联动字段添加失败，联动字段名称已存在！");
 				}
@@ -157,8 +156,8 @@ namespace SiteServer.BackgroundPages.Cms
 				{
 					try
 					{
-                        DataProvider.RelatedFieldRepository.InsertAsync(relatedFieldInfo).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId, "添加联动字段", $"联动字段:{relatedFieldInfo.Title}").GetAwaiter().GetResult();
+                        DataProvider.RelatedFieldDao.Insert(relatedFieldInfo);
+                        AuthRequest.AddSiteLog(SiteId, "添加联动字段", $"联动字段:{relatedFieldInfo.Title}");
 						isChanged = true;
 					}
 					catch(Exception ex)

@@ -1,9 +1,8 @@
 ﻿using System;
-using SiteServer.Abstractions;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Model;
+using System.Collections;
+using SiteServer.CMS.DataCache;
 
 namespace SiteServer.CMS.Core
 {
@@ -27,13 +26,13 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task DeleteSiteFilesAsync(Site site)
+        public static void DeleteSiteFiles(SiteInfo siteInfo)
         {
-            if (site == null) return;
+            if (siteInfo == null) return;
 
-            var sitePath = PathUtility.GetSitePath(site);
+            var sitePath = PathUtility.GetSitePath(siteInfo);
 
-            if (site.Root)
+            if (siteInfo.IsRoot)
             {
                 var filePaths = DirectoryUtils.GetFilePaths(sitePath);
                 foreach (var filePath in filePaths)
@@ -45,13 +44,13 @@ namespace SiteServer.CMS.Core
                     }
                 }
 
-                var siteDirList = await DataProvider.SiteRepository.GetSiteDirListAsync(0);
+                var siteDirList = DataProvider.SiteDao.GetLowerSiteDirListThatNotIsRoot();
 
                 var directoryPaths = DirectoryUtils.GetDirectoryPaths(sitePath);
                 foreach (var subDirectoryPath in directoryPaths)
                 {
                     var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
-                    if (!WebUtils.IsSystemDirectory(directoryName) && !StringUtils.ContainsIgnoreCase(siteDirList, directoryName))
+                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !siteDirList.Contains(directoryName.ToLower()))
                     {
                         DirectoryUtils.DeleteDirectoryIfExists(subDirectoryPath);
                     }
@@ -64,11 +63,11 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task ImportSiteFilesAsync(Site site, string siteTemplatePath, bool isOverride)
+        public static void ImportSiteFiles(SiteInfo siteInfo, string siteTemplatePath, bool isOverride)
         {
-            var sitePath = PathUtility.GetSitePath(site);
+            var sitePath = PathUtility.GetSitePath(siteInfo);
 
-            if (site.Root)
+            if (siteInfo.IsRoot)
             {
                 var filePaths = DirectoryUtils.GetFilePaths(siteTemplatePath);
                 foreach (var filePath in filePaths)
@@ -81,13 +80,13 @@ namespace SiteServer.CMS.Core
                     }
                 }
 
-                var siteDirList = await DataProvider.SiteRepository.GetSiteDirListAsync(0);
+                var siteDirList = DataProvider.SiteDao.GetLowerSiteDirListThatNotIsRoot();
 
                 var directoryPaths = DirectoryUtils.GetDirectoryPaths(siteTemplatePath);
                 foreach (var subDirectoryPath in directoryPaths)
                 {
                     var directoryName = PathUtils.GetDirectoryName(subDirectoryPath, false);
-                    if (!WebUtils.IsSystemDirectory(directoryName) && !StringUtils.ContainsIgnoreCase(siteDirList, directoryName))
+                    if (!DirectoryUtils.IsSystemDirectory(directoryName) && !siteDirList.Contains(directoryName.ToLower()))
                     {
                         var destDirectoryPath = PathUtils.Combine(sitePath, directoryName);
                         DirectoryUtils.MoveDirectory(subDirectoryPath, destDirectoryPath, isOverride);
@@ -102,29 +101,29 @@ namespace SiteServer.CMS.Core
             DirectoryUtils.DeleteDirectoryIfExists(siteTemplateMetadataPath);
         }
 
-        public static async Task ChangeParentSiteAsync(int oldParentSiteId, int newParentSiteId, int siteId, string siteDir)
+        public static void ChangeParentSite(int oldParentSiteId, int newParentSiteId, int siteId, string siteDir)
         {
             if (oldParentSiteId == newParentSiteId) return;
 
             string oldPsPath;
             if (oldParentSiteId != 0)
             {
-                var oldSite = await DataProvider.SiteRepository.GetAsync(oldParentSiteId);
+                var oldSiteInfo = SiteManager.GetSiteInfo(oldParentSiteId);
 
-                oldPsPath = PathUtils.Combine(PathUtility.GetSitePath(oldSite), siteDir);
+                oldPsPath = PathUtils.Combine(PathUtility.GetSitePath(oldSiteInfo), siteDir);
             }
             else
             {
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                oldPsPath = PathUtility.GetSitePath(site);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                oldPsPath = PathUtility.GetSitePath(siteInfo);
             }
 
             string newPsPath;
             if (newParentSiteId != 0)
             {
-                var newSite = await DataProvider.SiteRepository.GetAsync(newParentSiteId);
+                var newSiteInfo = SiteManager.GetSiteInfo(newParentSiteId);
 
-                newPsPath = PathUtils.Combine(PathUtility.GetSitePath(newSite), siteDir);
+                newPsPath = PathUtils.Combine(PathUtility.GetSitePath(newSiteInfo), siteDir);
             }
             else
             {
@@ -145,18 +144,18 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task ChangeToRootAsync(Site site, bool isMoveFiles)
+        public static void ChangeToHeadquarters(SiteInfo siteInfo, bool isMoveFiles)
         {
-            if (site.Root == false)
+            if (siteInfo.IsRoot == false)
             {
-                var sitePath = PathUtility.GetSitePath(site);
+                var sitePath = PathUtility.GetSitePath(siteInfo);
 
-                await DataProvider.SiteRepository.UpdateParentIdToZeroAsync(site.Id);
+                DataProvider.SiteDao.UpdateParentIdToZero(siteInfo.Id);
 
-                site.Root = true;
-                site.SiteDir = string.Empty;
+                siteInfo.IsRoot = true;
+                siteInfo.SiteDir = string.Empty;
 
-                await DataProvider.SiteRepository.UpdateAsync(site);
+                DataProvider.SiteDao.Update(siteInfo);
                 if (isMoveFiles)
                 {
                     DirectoryUtils.MoveDirectory(sitePath, WebConfigUtils.PhysicalApplicationPath, false);
@@ -165,20 +164,20 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task ChangeToSubSiteAsync(Site site, string siteDir, IList<string> directories, IList<string> files)
+        public static void ChangeToSubSite(SiteInfo siteInfo, string psDir, ArrayList fileSystemNameArrayList)
         {
-            if (site.Root)
+            if (siteInfo.IsRoot)
             {
-                site.Root = false;
-                site.SiteDir = siteDir;
+                siteInfo.IsRoot = false;
+                siteInfo.SiteDir = psDir.Trim();
 
-                await DataProvider.SiteRepository.UpdateAsync(site);
+                DataProvider.SiteDao.Update(siteInfo);
 
-                var psPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteDir);
+                var psPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, psDir);
                 DirectoryUtils.CreateDirectoryIfNotExists(psPath);
-                if (directories != null)
+                if (fileSystemNameArrayList != null && fileSystemNameArrayList.Count > 0)
                 {
-                    foreach (var fileSystemName in directories)
+                    foreach (string fileSystemName in fileSystemNameArrayList)
                     {
                         var srcPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, fileSystemName);
                         if (DirectoryUtils.IsDirectoryExists(srcPath))
@@ -188,15 +187,7 @@ namespace SiteServer.CMS.Core
                             DirectoryUtils.MoveDirectory(srcPath, destDirectoryPath, false);
                             DirectoryUtils.DeleteDirectoryIfExists(srcPath);
                         }
-                    }
-                }
-
-                if (files != null)
-                {
-                    foreach (var fileSystemName in files)
-                    {
-                        var srcPath = PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, fileSystemName);
-                        if (FileUtils.IsFileExists(srcPath))
+                        else if (FileUtils.IsFileExists(srcPath))
                         {
                             FileUtils.CopyFile(srcPath, PathUtils.Combine(psPath, fileSystemName));
                             FileUtils.DeleteFileIfExists(srcPath);

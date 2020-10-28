@@ -1,12 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Data;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
@@ -21,17 +21,17 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "站点文件夹")]
         private const string SiteDir = nameof(SiteDir);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static object Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
-            var listInfo = await ListInfo.GetListInfoAsync(pageInfo, contextInfo, EContextType.Site);
+            var listInfo = ListInfo.GetListInfo(pageInfo, contextInfo, EContextType.Site);
             var siteName = listInfo.Others.Get(SiteName);
             var siteDir = listInfo.Others.Get(SiteDir);
 
-            var dataSource = await StlDataUtility.GetSitesDataSourceAsync(siteName, siteDir, listInfo.StartNum, listInfo.TotalNum, listInfo.Where, listInfo.Scope, listInfo.OrderByString);
+            var dataSource = StlDataUtility.GetSitesDataSource(siteName, siteDir, listInfo.StartNum, listInfo.TotalNum, listInfo.Where, listInfo.Scope, listInfo.OrderByString);
 
             if (contextInfo.IsStlEntity)
             {
-                return ParseEntityAsync(dataSource);
+                return ParseEntity(dataSource);
             }
 
             return ParseElement(pageInfo, contextInfo, listInfo, dataSource);
@@ -112,22 +112,22 @@ namespace SiteServer.CMS.StlParser.StlElement
             return parsedContent;
         }
 
-        private static async Task<List<Site>> ParseEntityAsync(IDataReader dataSource)
+        private static List<SiteInfo> ParseEntity(IDataReader dataSource)
         {
-            var siteList = new List<Site>();
+            var siteInfoList = new List<SiteInfo>();
 
             while (dataSource.Read())
             {
                 var siteId = dataSource.GetInt32(0);
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
 
-                if (site != null)
+                if (siteInfo != null)
                 {
-                    siteList.Add(site);
+                    siteInfoList.Add(siteInfo);
                 }
             }
 
-            return siteList;
+            return siteInfoList;
         }
     }
 }

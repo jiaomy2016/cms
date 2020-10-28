@@ -1,50 +1,44 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Specialized;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
+using SiteServer.CMS.Model;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
 using SiteServer.CMS.DataCache;
+using SiteServer.CMS.DataCache.Content;
 using SiteServer.CMS.DataCache.Stl;
-using SiteServer.CMS.Repositories;
-using EBackupType = SiteServer.Abstractions.EBackupType;
-using EBackupTypeUtils = SiteServer.Abstractions.EBackupTypeUtils;
-using EDateFormatType = SiteServer.Abstractions.EDateFormatType;
-using EDateFormatTypeUtils = SiteServer.Abstractions.EDateFormatTypeUtils;
-using InputType = SiteServer.Abstractions.InputType;
-using TemplateType = SiteServer.Abstractions.TemplateType;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
     public static class PathUtility
     {
-        public static string GetSitePath(Site site)
+        public static string GetSitePath(SiteInfo siteInfo)
         {
-            return PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, site.SiteDir);
+            return PathUtils.Combine(WebConfigUtils.PhysicalApplicationPath, siteInfo.SiteDir);
         }
 
-        public static async Task<string> GetSitePathAsync(int siteId, params string[] paths)
+        public static string GetSitePath(int siteId, params string[] paths)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return GetSitePath(site, paths);
+            return GetSitePath(SiteManager.GetSiteInfo(siteId), paths);
         }
 
-        public static string GetSitePath(Site site, params string[] paths)
+        public static string GetSitePath(SiteInfo siteInfo, params string[] paths)
         {
-            var retVal = GetSitePath(site);
+            var retVal = GetSitePath(siteInfo);
             if (paths == null || paths.Length <= 0) return retVal;
 
             foreach (var t in paths)
             {
-                var path = t?.Replace(Constants.PageSeparatorChar, PathUtils.SeparatorChar).Trim(PathUtils.SeparatorChar) ?? string.Empty;
+                var path = t?.Replace(PageUtils.SeparatorChar, PathUtils.SeparatorChar).Trim(PathUtils.SeparatorChar) ?? string.Empty;
                 retVal = PathUtils.Combine(retVal, path);
             }
             return retVal;
         }
 
-        public static string GetIndexPageFilePath(Site site, string createFileFullName, bool isHeadquarters, int currentPageIndex)
+        public static string GetIndexPageFilePath(SiteInfo siteInfo, string createFileFullName, bool isHeadquarters, int currentPageIndex)
         {
             if (isHeadquarters)
             {
@@ -65,7 +59,7 @@ namespace SiteServer.CMS.Core
                 }
             }
 
-            var filePath = MapPath(site, createFileFullName);
+            var filePath = MapPath(siteInfo, createFileFullName);
 
             if (currentPageIndex != 0)
             {
@@ -77,10 +71,10 @@ namespace SiteServer.CMS.Core
             return filePath;
         }
 
-        public static string GetBackupFilePath(Site site, EBackupType backupType)
+        public static string GetBackupFilePath(SiteInfo siteInfo, EBackupType backupType)
         {
             var extention = ".zip";
-            var siteName = site.SiteDir;
+            var siteName = siteInfo.SiteDir;
             if (!string.IsNullOrEmpty(siteName))
             {
                 siteName += "_";
@@ -89,33 +83,33 @@ namespace SiteServer.CMS.Core
             {
                 extention = ".xml";
             }
-            return PathUtils.Combine(PathUtils.PhysicalSiteFilesPath, DirectoryUtils.SiteFiles.BackupFiles, site.SiteDir, DateTime.Now.ToString("yyyy-MM"), EBackupTypeUtils.GetValue(backupType) + "_" + siteName + DateTime.Now.ToString("yyyy-MM-dd-HH-mm") + extention);
+            return PathUtils.Combine(PathUtils.PhysicalSiteFilesPath, DirectoryUtils.SiteFiles.BackupFiles, siteInfo.SiteDir, DateTime.Now.ToString("yyyy-MM"), EBackupTypeUtils.GetValue(backupType) + "_" + siteName + DateTime.Now.ToString("yyyy-MM-dd-HH-mm") + extention);
         }
 
-        public static string GetUploadDirectoryPath(Site site, string fileExtension)
+        public static string GetUploadDirectoryPath(SiteInfo siteInfo, string fileExtension)
         {
-            return GetUploadDirectoryPath(site, DateTime.Now, fileExtension);
+            return GetUploadDirectoryPath(siteInfo, DateTime.Now, fileExtension);
         }
 
-        public static string GetUploadDirectoryPath(Site site, DateTime datetime, string fileExtension)
+        public static string GetUploadDirectoryPath(SiteInfo siteInfo, DateTime datetime, string fileExtension)
         {
-            var uploadDateFormatString = site.FileUploadDateFormatString;
-            var uploadDirectoryName = site.FileUploadDirectoryName;
+            var uploadDateFormatString = siteInfo.Additional.FileUploadDateFormatString;
+            var uploadDirectoryName = siteInfo.Additional.FileUploadDirectoryName;
 
-            if (IsImageExtensionAllowed(site, fileExtension))
+            if (IsImageExtenstionAllowed(siteInfo, fileExtension))
             {
-                uploadDateFormatString = site.ImageUploadDateFormatString;
-                uploadDirectoryName = site.ImageUploadDirectoryName;
+                uploadDateFormatString = siteInfo.Additional.ImageUploadDateFormatString;
+                uploadDirectoryName = siteInfo.Additional.ImageUploadDirectoryName;
             }
-            else if (IsVideoExtensionAllowed(site, fileExtension))
+            else if (IsVideoExtenstionAllowed(siteInfo, fileExtension))
             {
-                uploadDateFormatString = site.VideoUploadDateFormatString;
-                uploadDirectoryName = site.VideoUploadDirectoryName;
+                uploadDateFormatString = siteInfo.Additional.VideoUploadDateFormatString;
+                uploadDirectoryName = siteInfo.Additional.VideoUploadDirectoryName;
             }
 
             string directoryPath;
             var dateFormatType = EDateFormatTypeUtils.GetEnumType(uploadDateFormatString);
-            var sitePath = GetSitePath(site);
+            var sitePath = GetSitePath(siteInfo);
             if (dateFormatType == EDateFormatType.Year)
             {
                 directoryPath = PathUtils.Combine(sitePath, uploadDirectoryName, datetime.Year.ToString());
@@ -132,45 +126,45 @@ namespace SiteServer.CMS.Core
             return directoryPath;
         }
 
-        public static string GetUploadDirectoryPath(Site site, EUploadType uploadType)
+        public static string GetUploadDirectoryPath(SiteInfo siteInfo, EUploadType uploadType)
         {
-            return GetUploadDirectoryPath(site, DateTime.Now, uploadType);
+            return GetUploadDirectoryPath(siteInfo, DateTime.Now, uploadType);
         }
 
-        public static string GetUploadDirectoryPath(Site site, DateTime datetime, EUploadType uploadType)
+        public static string GetUploadDirectoryPath(SiteInfo siteInfo, DateTime datetime, EUploadType uploadType)
         {
             var uploadDateFormatString = string.Empty;
             var uploadDirectoryName = string.Empty;
 
             if (uploadType == EUploadType.Image)
             {
-                uploadDateFormatString = site.ImageUploadDateFormatString;
-                uploadDirectoryName = site.ImageUploadDirectoryName;
+                uploadDateFormatString = siteInfo.Additional.ImageUploadDateFormatString;
+                uploadDirectoryName = siteInfo.Additional.ImageUploadDirectoryName;
             }
             else if (uploadType == EUploadType.Video)
             {
-                uploadDateFormatString = site.VideoUploadDateFormatString;
-                uploadDirectoryName = site.VideoUploadDirectoryName;
+                uploadDateFormatString = siteInfo.Additional.VideoUploadDateFormatString;
+                uploadDirectoryName = siteInfo.Additional.VideoUploadDirectoryName;
             }
             else if (uploadType == EUploadType.File)
             {
-                uploadDateFormatString = site.FileUploadDateFormatString;
-                uploadDirectoryName = site.FileUploadDirectoryName;
+                uploadDateFormatString = siteInfo.Additional.FileUploadDateFormatString;
+                uploadDirectoryName = siteInfo.Additional.FileUploadDirectoryName;
             }
             else if (uploadType == EUploadType.Special)
             {
-                uploadDateFormatString = site.FileUploadDateFormatString;
+                uploadDateFormatString = siteInfo.Additional.FileUploadDateFormatString;
                 uploadDirectoryName = "/Special";
             }
             else if (uploadType == EUploadType.AdvImage)
             {
-                uploadDateFormatString = site.FileUploadDateFormatString;
+                uploadDateFormatString = siteInfo.Additional.FileUploadDateFormatString;
                 uploadDirectoryName = "/AdvImage";
             }
 
             string directoryPath;
             var dateFormatType = EDateFormatTypeUtils.GetEnumType(uploadDateFormatString);
-            var sitePath = GetSitePath(site);
+            var sitePath = GetSitePath(siteInfo);
             if (dateFormatType == EDateFormatType.Year)
             {
                 directoryPath = PathUtils.Combine(sitePath, uploadDirectoryName, datetime.Year.ToString());
@@ -187,18 +181,18 @@ namespace SiteServer.CMS.Core
             return directoryPath;
         }
 
-        public static string GetUploadFileName(Site site, string filePath)
+        public static string GetUploadFileName(SiteInfo siteInfo, string filePath)
         {
             var fileExtension = PathUtils.GetExtension(filePath);
 
-            var isUploadChangeFileName = site.IsFileUploadChangeFileName;
-            if (IsImageExtensionAllowed(site, fileExtension))
+            var isUploadChangeFileName = siteInfo.Additional.IsFileUploadChangeFileName;
+            if (IsImageExtenstionAllowed(siteInfo, fileExtension))
             {
-                isUploadChangeFileName = site.IsImageUploadChangeFileName;
+                isUploadChangeFileName = siteInfo.Additional.IsImageUploadChangeFileName;
             }
-            else if (IsVideoExtensionAllowed(site, fileExtension))
+            else if (IsVideoExtenstionAllowed(siteInfo, fileExtension))
             {
-                isUploadChangeFileName = site.IsVideoUploadChangeFileName;
+                isUploadChangeFileName = siteInfo.Additional.IsVideoUploadChangeFileName;
             }
 
             return GetUploadFileName(filePath, isUploadChangeFileName);
@@ -216,27 +210,27 @@ namespace SiteServer.CMS.Core
             return $"{fileName}{PathUtils.GetExtension(filePath)}";
         }
 
-        public static async Task<Site> GetSiteAsync(string path)
+        public static SiteInfo GetSiteInfo(string path)
         {
             var directoryPath = DirectoryUtils.GetDirectoryPath(path).ToLower().Trim(' ', '/', '\\');
             var applicationPath = WebConfigUtils.PhysicalApplicationPath.ToLower().Trim(' ', '/', '\\');
             var directoryDir = StringUtils.ReplaceStartsWith(directoryPath, applicationPath, string.Empty).Trim(' ', '/', '\\');
             if (directoryDir == string.Empty) return null;
 
-            var siteList = await DataProvider.SiteRepository.GetSiteListAsync();
+            var siteInfoList = SiteManager.GetSiteInfoList();
 
-            Site headquarter = null;
-            foreach (var site in siteList)
+            SiteInfo headquarter = null;
+            foreach (var siteInfo in siteInfoList)
             {
-                if (site.Root)
+                if (siteInfo.IsRoot)
                 {
-                    headquarter = site;
+                    headquarter = siteInfo;
                 }
                 else
                 {
-                    if (StringUtils.Contains(directoryDir, site.SiteDir.ToLower()))
+                    if (StringUtils.Contains(directoryDir, siteInfo.SiteDir.ToLower()))
                     {
-                        return site;
+                        return siteInfo;
                     }
                 }
             }
@@ -244,7 +238,7 @@ namespace SiteServer.CMS.Core
             return headquarter;
         }
 
-        public static async Task<string> GetSiteDirAsync(string path)
+        public static string GetSiteDir(string path)
         {
             var siteDir = string.Empty;
             var directoryPath = DirectoryUtils.GetDirectoryPath(path).ToLower().Trim(' ', '/', '\\');
@@ -255,41 +249,41 @@ namespace SiteServer.CMS.Core
                 return string.Empty;
             }
 
-            var siteList = await DataProvider.SiteRepository.GetSiteListAsync();
-            foreach (var site in siteList)
+            var siteInfoList = SiteManager.GetSiteInfoList();
+            foreach (var siteInfo in siteInfoList)
             {
-                if (site?.Root!= false) continue;
+                if (siteInfo?.IsRoot!= false) continue;
 
-                if (StringUtils.Contains(directoryDir, site.SiteDir.ToLower()))
+                if (StringUtils.Contains(directoryDir, siteInfo.SiteDir.ToLower()))
                 {
-                    siteDir = site.SiteDir;
+                    siteDir = siteInfo.SiteDir;
                 }
             }
 
             return string.IsNullOrWhiteSpace(siteDir) ? siteDir : PathUtils.GetDirectoryName(siteDir, false);
         }
 
-        public static async Task<string> GetCurrentSiteDirAsync()
+        public static string GetCurrentSiteDir()
         {
-            return await GetSiteDirAsync(WebUtils.GetCurrentPagePath());
+            return GetSiteDir(PathUtils.GetCurrentPagePath());
         }
 
-        public static async Task<int> GetCurrentSiteIdAsync()
+        public static int GetCurrentSiteId()
         {
             int siteId;
-            var siteIdList = await DataProvider.SiteRepository.GetSiteIdListAsync();
+            var siteIdList = SiteManager.GetSiteIdList();
             if (siteIdList.Count == 1)
             {
                 siteId = siteIdList[0];
             }
             else
             {
-                var siteDir = await GetCurrentSiteDirAsync();
-                siteId = !string.IsNullOrEmpty(siteDir) ? await StlSiteCache.GetSiteIdBySiteDirAsync(siteDir) : await StlSiteCache.GetSiteIdByIsRootAsync();
+                var siteDir = GetCurrentSiteDir();
+                siteId = !string.IsNullOrEmpty(siteDir) ? StlSiteCache.GetSiteIdBySiteDir(siteDir) : StlSiteCache.GetSiteIdByIsRoot();
 
                 if (siteId == 0)
                 {
-                    siteId = await StlSiteCache.GetSiteIdByIsRootAsync();
+                    siteId = StlSiteCache.GetSiteIdByIsRoot();
                 }
             }
             return siteId;
@@ -309,7 +303,7 @@ namespace SiteServer.CMS.Core
             return resolvedPath;
         }
 
-        public static string MapPath(Site site, string virtualPath)
+        public static string MapPath(SiteInfo siteInfo, string virtualPath)
         {
             var resolvedPath = virtualPath;
             if (string.IsNullOrEmpty(virtualPath))
@@ -320,18 +314,18 @@ namespace SiteServer.CMS.Core
             {
                 virtualPath = "@" + virtualPath;
             }
-            if (!virtualPath.StartsWith("@")) return WebUtils.MapPath(resolvedPath);
+            if (!virtualPath.StartsWith("@")) return PathUtils.MapPath(resolvedPath);
 
-            if (site != null)
+            if (siteInfo != null)
             {
-                resolvedPath = site.Root ? string.Concat("~", virtualPath.Substring(1)) : PageUtils.Combine(site.SiteDir, virtualPath.Substring(1));
+                resolvedPath = siteInfo.IsRoot ? string.Concat("~", virtualPath.Substring(1)) : PageUtils.Combine(siteInfo.SiteDir, virtualPath.Substring(1));
             }
-            return WebUtils.MapPath(resolvedPath);
+            return PathUtils.MapPath(resolvedPath);
         }
 
-        public static string MapPath(Site site, string virtualPath, bool isCopyToSite)
+        public static string MapPath(SiteInfo siteInfo, string virtualPath, bool isCopyToSite)
         {
-            if (!isCopyToSite) return MapPath(site, virtualPath);
+            if (!isCopyToSite) return MapPath(siteInfo, virtualPath);
 
             var resolvedPath = virtualPath;
             if (string.IsNullOrEmpty(virtualPath))
@@ -342,13 +336,13 @@ namespace SiteServer.CMS.Core
             {
                 virtualPath = "@" + virtualPath;
             }
-            if (!virtualPath.StartsWith("@")) return WebUtils.MapPath(resolvedPath);
+            if (!virtualPath.StartsWith("@")) return PathUtils.MapPath(resolvedPath);
 
-            if (site != null)
+            if (siteInfo != null)
             {
-                resolvedPath = site.Root ? string.Concat("~", virtualPath.Substring(1)) : PageUtils.Combine(site.SiteDir, virtualPath.Substring(1));
+                resolvedPath = siteInfo.IsRoot ? string.Concat("~", virtualPath.Substring(1)) : PageUtils.Combine(siteInfo.SiteDir, virtualPath.Substring(1));
             }
-            return WebUtils.MapPath(resolvedPath);
+            return PathUtils.MapPath(resolvedPath);
         }
 
         public static string MapPath(string directoryPath, string virtualPath)
@@ -373,24 +367,24 @@ namespace SiteServer.CMS.Core
                     return PageUtils.Combine(directoryPath, virtualPath.Substring(1));
                 }
             }
-            return WebUtils.MapPath(resolvedPath);
+            return PathUtils.MapPath(resolvedPath);
         }
 
         //将编辑器中图片上传至本机
-        public static async Task<string> SaveImageAsync(Site site, string content)
+        public static string SaveImage(SiteInfo siteInfo, string content)
         {
             var originalImageSrcs = RegexUtils.GetOriginalImageSrcs(content);
             foreach (var originalImageSrc in originalImageSrcs)
             {
                 if (!PageUtils.IsProtocolUrl(originalImageSrc) ||
                     StringUtils.StartsWithIgnoreCase(originalImageSrc, PageUtils.ApplicationPath) ||
-                    StringUtils.StartsWithIgnoreCase(originalImageSrc, site.GetWebUrl()))
+                    StringUtils.StartsWithIgnoreCase(originalImageSrc, siteInfo.Additional.WebUrl))
                     continue;
                 var fileExtName = PageUtils.GetExtensionFromUrl(originalImageSrc);
                 if (!EFileSystemTypeUtils.IsImageOrFlashOrPlayer(fileExtName)) continue;
 
-                var fileName = GetUploadFileName(site, originalImageSrc);
-                var directoryPath = GetUploadDirectoryPath(site, fileExtName);
+                var fileName = GetUploadFileName(siteInfo, originalImageSrc);
+                var directoryPath = GetUploadDirectoryPath(siteInfo, fileExtName);
                 var filePath = PathUtils.Combine(directoryPath, fileName);
 
                 try
@@ -400,11 +394,48 @@ namespace SiteServer.CMS.Core
                         WebClientUtils.SaveRemoteFileToLocal(originalImageSrc, filePath);
                         if (EFileSystemTypeUtils.IsImage(PathUtils.GetExtension(fileName)))
                         {
-                            FileUtility.AddWaterMark(site, filePath);
+                            FileUtility.AddWaterMark(siteInfo, filePath);
                         }
                     }
-                    var fileUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, filePath, true);
+                    var fileUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, filePath, true);
                     content = content.Replace(originalImageSrc, fileUrl);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+            return content;
+        }
+
+        public static string SaveFiles(SiteInfo siteInfo, string content)
+        {
+            var originalLinkHrefs = RegexUtils.GetOriginalLinkHrefs(content);
+            foreach (var originalLinkHref in originalLinkHrefs)
+            {
+                if (!PageUtils.IsProtocolUrl(originalLinkHref) ||
+                    StringUtils.StartsWithIgnoreCase(originalLinkHref, PageUtils.ApplicationPath) ||
+                    StringUtils.StartsWithIgnoreCase(originalLinkHref, siteInfo.Additional.WebUrl))
+                    continue;
+                var fileExtName = PageUtils.GetExtensionFromUrl(originalLinkHref);
+                if (!EFileSystemTypeUtils.IsDownload(EFileSystemTypeUtils.GetEnumType(fileExtName))) continue;
+
+                var fileName = GetUploadFileName(siteInfo, originalLinkHref);
+                var directoryPath = GetUploadDirectoryPath(siteInfo, fileExtName);
+                var filePath = PathUtils.Combine(directoryPath, fileName);
+
+                try
+                {
+                    if (!FileUtils.IsFileExists(filePath))
+                    {
+                        WebClientUtils.SaveRemoteFileToLocal(originalLinkHref, filePath);
+                        if (EFileSystemTypeUtils.IsImage(PathUtils.GetExtension(fileName)))
+                        {
+                            FileUtility.AddWaterMark(siteInfo, filePath);
+                        }
+                    }
+                    var fileUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, filePath, true);
+                    content = content.Replace(originalLinkHref, fileUrl);
                 }
                 catch
                 {
@@ -492,7 +523,7 @@ namespace SiteServer.CMS.Core
             public static string DefaultDirectoryName = "/channels/";
             public static string DefaultRegexString = "/channels/(?<channelId>[^_]*)_?(?<pageIndex>[^_]*)";
 
-            public static async Task<IDictionary> GetDictionaryAsync(Site site, int channelId)
+            public static IDictionary GetDictionary(SiteInfo siteInfo, int channelId)
             {
                 var dictionary = new ListDictionary
                 {
@@ -511,11 +542,11 @@ namespace SiteServer.CMS.Core
                     {LowerChannelIndex, "栏目索引(小写)"}
                 };
 
-                var channelInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                var styleInfoList = await TableStyleManager.GetChannelStyleListAsync(channelInfo);
+                var channelInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                var styleInfoList = TableStyleManager.GetChannelStyleInfoList(channelInfo);
                 foreach (var styleInfo in styleInfoList)
                 {
-                    if (styleInfo.Type == InputType.Text)
+                    if (styleInfo.InputType == InputType.Text)
                     {
                         dictionary.Add($@"{{@{StringUtils.LowerFirst(styleInfo.AttributeName)}}}", styleInfo.DisplayName);
                         dictionary.Add($@"{{@lower{styleInfo.AttributeName}}}", styleInfo.DisplayName + "(小写)");
@@ -525,20 +556,20 @@ namespace SiteServer.CMS.Core
                 return dictionary;
             }
 
-            public static async Task<string> ParseAsync(Site site, int channelId)
+            public static string Parse(SiteInfo siteInfo, int channelId)
             {
-                var channelFilePathRule = await GetChannelFilePathRuleAsync(site, channelId);
-                var filePath = await ParseChannelPathAsync(site, channelId, channelFilePathRule);
+                var channelFilePathRule = GetChannelFilePathRule(siteInfo, channelId);
+                var filePath = ParseChannelPath(siteInfo, channelId, channelFilePathRule);
                 return filePath;
             }
 
             //递归处理
-            private static async Task<string> ParseChannelPathAsync(Site site, int channelId, string channelFilePathRule)
+            private static string ParseChannelPath(SiteInfo siteInfo, int channelId, string channelFilePathRule)
             {
                 var filePath = channelFilePathRule.Trim();
                 const string regex = "(?<element>{@[^}]+})";
                 var elements = RegexUtils.GetContents("element", regex, filePath);
-                Channel node = null;
+                ChannelInfo nodeInfo = null;
 
                 foreach (var element in elements)
                 {
@@ -550,84 +581,84 @@ namespace SiteServer.CMS.Core
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Year))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Year.ToString();
+                            value = nodeInfo.AddDate.Value.Year.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Month))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Month.ToString();
+                            value = nodeInfo.AddDate.Value.Month.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Day))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Day.ToString();
+                            value = nodeInfo.AddDate.Value.Day.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Hour))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Hour.ToString();
+                            value = nodeInfo.AddDate.Value.Hour.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Minute))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Minute.ToString();
+                            value = nodeInfo.AddDate.Value.Minute.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Second))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        if (node.AddDate.HasValue)
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        if (nodeInfo.AddDate.HasValue)
                         {
-                            value = node.AddDate.Value.Second.ToString();
+                            value = nodeInfo.AddDate.Value.Second.ToString();
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Sequence))
                     {
-                        value = (await StlChannelCache.GetSequenceAsync(site.Id, channelId)).ToString();
+                        value = StlChannelCache.GetSequence(siteInfo.Id, channelId).ToString();
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, ParentRule))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        var parentInfo = await ChannelManager.GetChannelAsync(site.Id, node.ParentId);
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        var parentInfo = ChannelManager.GetChannelInfo(siteInfo.Id, nodeInfo.ParentId);
                         if (parentInfo != null)
                         {
-                            var parentRule = await GetChannelFilePathRuleAsync(site, parentInfo.Id);
-                            value = DirectoryUtils.GetDirectoryPath(await ParseChannelPathAsync(site, parentInfo.Id, parentRule)).Replace("\\", "/");
+                            var parentRule = GetChannelFilePathRule(siteInfo, parentInfo.Id);
+                            value = DirectoryUtils.GetDirectoryPath(ParseChannelPath(siteInfo, parentInfo.Id, parentRule)).Replace("\\", "/");
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, ChannelName))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        value = node.ChannelName;
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        value = nodeInfo.ChannelName;
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, LowerChannelName))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        value = node.ChannelName.ToLower();
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        value = nodeInfo.ChannelName.ToLower();
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, LowerChannelIndex))
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        value = node.IndexName.ToLower();
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        value = nodeInfo.IndexName.ToLower();
                     }
                     else
                     {
-                        if (node == null) node = await ChannelManager.GetChannelAsync(site.Id, channelId);
+                        if (nodeInfo == null) nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
                         var attributeName = element.Replace("{@", string.Empty).Replace("}", string.Empty);
 
                         var isLower = false;
@@ -637,7 +668,7 @@ namespace SiteServer.CMS.Core
                             attributeName = attributeName.Substring(5);
                         }
 
-                        value = node.Get<string>(attributeName);
+                        value = nodeInfo.Additional.GetString(attributeName);
 
                         if (isLower)
                         {
@@ -681,7 +712,7 @@ namespace SiteServer.CMS.Core
             public const string DefaultDirectoryName = "/contents/";
             public const string DefaultRegexString = "/contents/(?<channelId>[^/]*)/(?<contentId>[^/]*)_?(?<pageIndex>[^_]*)";
 
-            public static async Task<IDictionary> GetDictionaryAsync(Site site, int channelId)
+            public static IDictionary GetDictionary(SiteInfo siteInfo, int channelId)
             {
                 var dictionary = new ListDictionary
                 {
@@ -701,11 +732,11 @@ namespace SiteServer.CMS.Core
                     {LowerChannelIndex, "栏目索引(小写)"}
                 };
 
-                var channelInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                var styleInfoList = await TableStyleManager.GetContentStyleListAsync(site, channelInfo);
+                var channelInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                var styleInfoList = TableStyleManager.GetContentStyleInfoList(siteInfo, channelInfo);
                 foreach (var styleInfo in styleInfoList)
                 {
-                    if (styleInfo.Type == InputType.Text)
+                    if (styleInfo.InputType == InputType.Text)
                     {
                         dictionary.Add($@"{{@{StringUtils.LowerFirst(styleInfo.AttributeName)}}}", styleInfo.DisplayName);
                         dictionary.Add($@"{{@lower{styleInfo.AttributeName}}}", styleInfo.DisplayName + "(小写)");
@@ -715,28 +746,28 @@ namespace SiteServer.CMS.Core
                 return dictionary;
             }
 
-            public static async Task<string> ParseAsync(Site site, int channelId, int contentId)
+            public static string Parse(SiteInfo siteInfo, int channelId, int contentId)
             {
-                var contentFilePathRule = await GetContentFilePathRuleAsync(site, channelId);
-                var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelId, contentId);
-                var filePath = await ParseContentPathAsync(site, channelId, contentInfo, contentFilePathRule);
+                var contentFilePathRule = GetContentFilePathRule(siteInfo, channelId);
+                var contentInfo = ContentManager.GetContentInfo(siteInfo, channelId, contentId);
+                var filePath = ParseContentPath(siteInfo, channelId, contentInfo, contentFilePathRule);
                 return filePath;
             }
 
-            public static async Task<string> ParseAsync(Site site, int channelId, Content content)
+            public static string Parse(SiteInfo siteInfo, int channelId, ContentInfo contentInfo)
             {
-                var contentFilePathRule = await GetContentFilePathRuleAsync(site, channelId);
-                var filePath = await ParseContentPathAsync(site, channelId, content, contentFilePathRule);
+                var contentFilePathRule = GetContentFilePathRule(siteInfo, channelId);
+                var filePath = ParseContentPath(siteInfo, channelId, contentInfo, contentFilePathRule);
                 return filePath;
             }
 
-            private static async Task<string> ParseContentPathAsync(Site site, int channelId, Content content, string contentFilePathRule)
+            private static string ParseContentPath(SiteInfo siteInfo, int channelId, ContentInfo contentInfo, string contentFilePathRule)
             {
                 var filePath = contentFilePathRule.Trim();
                 var regex = "(?<element>{@[^}]+})";
                 var elements = RegexUtils.GetContents("element", regex, filePath);
-                var addDate = content.AddDate;
-                var contentId = content.Id;
+                var addDate = contentInfo.AddDate;
+                var contentId = contentInfo.Id;
                 foreach (var element in elements)
                 {
                     var value = string.Empty;
@@ -751,22 +782,22 @@ namespace SiteServer.CMS.Core
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, Sequence))
                     {
-                        var tableName = await ChannelManager.GetTableNameAsync(site, channelId);
-                        value = DataProvider.ContentRepository.GetSequence(tableName, channelId, contentId).ToString();
+                        var tableName = ChannelManager.GetTableName(siteInfo, channelId);
+                        value = StlContentCache.GetSequence(tableName, channelId, contentId).ToString();
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, ParentRule))//继承父级设置 20151113 sessionliang
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
-                        var parentInfo = await ChannelManager.GetChannelAsync(site.Id, nodeInfo.ParentId);
+                        var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        var parentInfo = ChannelManager.GetChannelInfo(siteInfo.Id, nodeInfo.ParentId);
                         if (parentInfo != null)
                         {
-                            var parentRule = await GetContentFilePathRuleAsync(site, parentInfo.Id);
-                            value = DirectoryUtils.GetDirectoryPath(await ParseContentPathAsync(site, parentInfo.Id, content, parentRule)).Replace("\\", "/");
+                            var parentRule = GetContentFilePathRule(siteInfo, parentInfo.Id);
+                            value = DirectoryUtils.GetDirectoryPath(ParseContentPath(siteInfo, parentInfo.Id, contentInfo, parentRule)).Replace("\\", "/");
                         }
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, ChannelName))
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
+                        var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
                         if (nodeInfo != null)
                         {
                             value = nodeInfo.ChannelName;
@@ -774,7 +805,7 @@ namespace SiteServer.CMS.Core
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, LowerChannelName))
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
+                        var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
                         if (nodeInfo != null)
                         {
                             value = nodeInfo.ChannelName.ToLower();
@@ -782,7 +813,7 @@ namespace SiteServer.CMS.Core
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, ChannelIndex))
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
+                        var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
                         if (nodeInfo != null)
                         {
                             value = nodeInfo.IndexName;
@@ -790,7 +821,7 @@ namespace SiteServer.CMS.Core
                     }
                     else if (StringUtils.EqualsIgnoreCase(element, LowerChannelIndex))
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
+                        var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
                         if (nodeInfo != null)
                         {
                             value = nodeInfo.IndexName.ToLower();
@@ -856,14 +887,14 @@ namespace SiteServer.CMS.Core
                             attributeName = attributeName.Substring(5);
                         }
 
-                        value = content.Get<string>(attributeName);
+                        value = contentInfo.GetString(attributeName);
                         if (isLower)
                         {
                             value = value.ToLower();
                         }
                     }
 
-                    value = WebUtils.HtmlDecode(value);
+                    value = StringUtils.HtmlDecode(value);
 
                     filePath = filePath.Replace(element, value);
                 }
@@ -899,12 +930,12 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task<string> GetChannelFilePathRuleAsync(Site site, int channelId)
+        public static string GetChannelFilePathRule(SiteInfo siteInfo, int channelId)
         {
-            var channelFilePathRule = await GetChannelFilePathRuleAsync(site.Id, channelId);
+            var channelFilePathRule = GetChannelFilePathRule(siteInfo.Id, channelId);
             if (string.IsNullOrEmpty(channelFilePathRule))
             {
-                channelFilePathRule = site.ChannelFilePathRule;
+                channelFilePathRule = siteInfo.Additional.ChannelFilePathRule;
 
                 if (string.IsNullOrEmpty(channelFilePathRule))
                 {
@@ -914,27 +945,27 @@ namespace SiteServer.CMS.Core
             return channelFilePathRule;
         }
 
-        private static async Task<string> GetChannelFilePathRuleAsync(int siteId, int channelId)
+        private static string GetChannelFilePathRule(int siteId, int channelId)
         {
             if (channelId == 0) return string.Empty;
-            var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (nodeInfo == null) return string.Empty;
 
             var filePathRule = nodeInfo.ChannelFilePathRule;
             if (string.IsNullOrEmpty(filePathRule) && nodeInfo.ParentId != 0)
             {
-                filePathRule = await GetChannelFilePathRuleAsync(siteId, nodeInfo.ParentId);
+                filePathRule = GetChannelFilePathRule(siteId, nodeInfo.ParentId);
             }
 
             return filePathRule;
         }
 
-        public static async Task<string> GetContentFilePathRuleAsync(Site site, int channelId)
+        public static string GetContentFilePathRule(SiteInfo siteInfo, int channelId)
         {
-            var contentFilePathRule = await GetContentFilePathRuleAsync(site.Id, channelId);
+            var contentFilePathRule = GetContentFilePathRule(siteInfo.Id, channelId);
             if (string.IsNullOrEmpty(contentFilePathRule))
             {
-                contentFilePathRule = site.ContentFilePathRule;
+                contentFilePathRule = siteInfo.Additional.ContentFilePathRule;
 
                 if (string.IsNullOrEmpty(contentFilePathRule))
                 {
@@ -944,37 +975,37 @@ namespace SiteServer.CMS.Core
             return contentFilePathRule;
         }
 
-        private static async Task<string> GetContentFilePathRuleAsync(int siteId, int channelId)
+        private static string GetContentFilePathRule(int siteId, int channelId)
         {
             if (channelId == 0) return string.Empty;
-            var nodeInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (nodeInfo == null) return string.Empty;
 
             var filePathRule = nodeInfo.ContentFilePathRule;
             if (string.IsNullOrEmpty(filePathRule) && nodeInfo.ParentId != 0)
             {
-                filePathRule = await GetContentFilePathRuleAsync(siteId, nodeInfo.ParentId);
+                filePathRule = GetContentFilePathRule(siteId, nodeInfo.ParentId);
             }
 
             return filePathRule;
         }
 
-        public static async Task<string> GetChannelPageFilePathAsync(Site site, int channelId, int currentPageIndex)
+        public static string GetChannelPageFilePath(SiteInfo siteInfo, int channelId, int currentPageIndex)
         {
-            var nodeInfo = await ChannelManager.GetChannelAsync(site.Id, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
             if (nodeInfo.ParentId == 0)
             {
-                var templateInfo = await TemplateManager.GetDefaultTemplateAsync(site.Id, TemplateType.IndexPageTemplate);
-                return GetIndexPageFilePath(site, templateInfo.CreatedFileFullName, site.Root, currentPageIndex);
+                var templateInfo = TemplateManager.GetDefaultTemplateInfo(siteInfo.Id, TemplateType.IndexPageTemplate);
+                return GetIndexPageFilePath(siteInfo, templateInfo.CreatedFileFullName, siteInfo.IsRoot, currentPageIndex);
             }
             var filePath = nodeInfo.FilePath;
 
             if (string.IsNullOrEmpty(filePath))
             {
-                filePath = await ChannelFilePathRules.ParseAsync(site, channelId);
+                filePath = ChannelFilePathRules.Parse(siteInfo, channelId);
             }
 
-            filePath = MapPath(site, filePath);// PathUtils.Combine(sitePath, filePath);
+            filePath = MapPath(siteInfo, filePath);// PathUtils.Combine(sitePath, filePath);
             if (PathUtils.IsDirectoryPath(filePath))
             {
                 filePath = PathUtils.Combine(filePath, channelId + ".html");
@@ -991,20 +1022,20 @@ namespace SiteServer.CMS.Core
             return filePath;
         }
 
-        public static async Task<string> GetContentPageFilePathAsync(Site site, int channelId, int contentId, int currentPageIndex)
+        public static string GetContentPageFilePath(SiteInfo siteInfo, int channelId, int contentId, int currentPageIndex)
         {
-            var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelId, contentId);
-            return await GetContentPageFilePathAsync(site, channelId, contentInfo, currentPageIndex);
+            var contentInfo = ContentManager.GetContentInfo(siteInfo, channelId, contentId);
+            return GetContentPageFilePath(siteInfo, channelId, contentInfo, currentPageIndex);
         }
 
-        public static async Task<string> GetContentPageFilePathAsync(Site site, int channelId, Content content, int currentPageIndex)
+        public static string GetContentPageFilePath(SiteInfo siteInfo, int channelId, ContentInfo contentInfo, int currentPageIndex)
         {
-            var filePath = await ContentFilePathRules.ParseAsync(site, channelId, content);
+            var filePath = ContentFilePathRules.Parse(siteInfo, channelId, contentInfo);
 
-            filePath = MapPath(site, filePath);
+            filePath = MapPath(siteInfo, filePath);
             if (PathUtils.IsDirectoryPath(filePath))
             {
-                filePath = PathUtils.Combine(filePath, content.Id + ".html");
+                filePath = PathUtils.Combine(filePath, contentInfo.Id + ".html");
             }
             DirectoryUtils.CreateDirectoryIfNotExists(filePath);
 
@@ -1017,64 +1048,64 @@ namespace SiteServer.CMS.Core
             return filePath;
         }
 
-        public static bool IsImageExtensionAllowed(Site site, string fileExtention)
+        public static bool IsImageExtenstionAllowed(SiteInfo siteInfo, string fileExtention)
         {
-            return PathUtils.IsFileExtensionAllowed(site.ImageUploadTypeCollection, fileExtention);
+            return PathUtils.IsFileExtenstionAllowed(siteInfo.Additional.ImageUploadTypeCollection, fileExtention);
         }
 
-        public static bool IsImageSizeAllowed(Site site, int contentLength)
+        public static bool IsImageSizeAllowed(SiteInfo siteInfo, int contentLength)
         {
-            return contentLength <= site.ImageUploadTypeMaxSize * 1024;
+            return contentLength <= siteInfo.Additional.ImageUploadTypeMaxSize * 1024;
         }
 
-        public static bool IsVideoExtensionAllowed(Site site, string fileExtention)
+        public static bool IsVideoExtenstionAllowed(SiteInfo siteInfo, string fileExtention)
         {
-            return PathUtils.IsFileExtensionAllowed(site.VideoUploadTypeCollection, fileExtention);
+            return PathUtils.IsFileExtenstionAllowed(siteInfo.Additional.VideoUploadTypeCollection, fileExtention);
         }
 
-        public static bool IsVideoSizeAllowed(Site site, int contentLength)
+        public static bool IsVideoSizeAllowed(SiteInfo siteInfo, int contentLength)
         {
-            return contentLength <= site.VideoUploadTypeMaxSize * 1024;
+            return contentLength <= siteInfo.Additional.VideoUploadTypeMaxSize * 1024;
         }
 
-        public static bool IsFileExtensionAllowed(Site site, string fileExtention)
+        public static bool IsFileExtenstionAllowed(SiteInfo siteInfo, string fileExtention)
         {
-            var typeCollection = site.FileUploadTypeCollection + "," + site.ImageUploadTypeCollection + "," + site.VideoUploadTypeCollection;
-            return PathUtils.IsFileExtensionAllowed(typeCollection, fileExtention);
+            var typeCollection = siteInfo.Additional.FileUploadTypeCollection + "," + siteInfo.Additional.ImageUploadTypeCollection + "," + siteInfo.Additional.VideoUploadTypeCollection;
+            return PathUtils.IsFileExtenstionAllowed(typeCollection, fileExtention);
         }
 
-        public static bool IsFileSizeAllowed(Site site, int contentLength)
+        public static bool IsFileSizeAllowed(SiteInfo siteInfo, int contentLength)
         {
-            return contentLength <= site.FileUploadTypeMaxSize * 1024;
+            return contentLength <= siteInfo.Additional.FileUploadTypeMaxSize * 1024;
         }
 
-        public static bool IsUploadExtensionAllowed(EUploadType uploadType, Site site, string fileExtention)
+        public static bool IsUploadExtenstionAllowed(EUploadType uploadType, SiteInfo siteInfo, string fileExtention)
         {
             if (uploadType == EUploadType.Image)
             {
-                return IsImageExtensionAllowed(site, fileExtention);
+                return IsImageExtenstionAllowed(siteInfo, fileExtention);
             }
             else if (uploadType == EUploadType.Video)
             {
-                return IsVideoExtensionAllowed(site, fileExtention);
+                return IsVideoExtenstionAllowed(siteInfo, fileExtention);
             }
             else if (uploadType == EUploadType.File)
             {
-                return IsFileExtensionAllowed(site, fileExtention);
+                return IsFileExtenstionAllowed(siteInfo, fileExtention);
             }
             return false;
         }
 
-        public static bool IsUploadSizeAllowed(EUploadType uploadType, Site site, int contentLength)
+        public static bool IsUploadSizeAllowed(EUploadType uploadType, SiteInfo siteInfo, int contentLength)
         {
             switch (uploadType)
             {
                 case EUploadType.Image:
-                    return IsImageSizeAllowed(site, contentLength);
+                    return IsImageSizeAllowed(siteInfo, contentLength);
                 case EUploadType.Video:
-                    return IsVideoSizeAllowed(site, contentLength);
+                    return IsVideoSizeAllowed(siteInfo, contentLength);
                 case EUploadType.File:
-                    return IsFileSizeAllowed(site, contentLength);
+                    return IsFileSizeAllowed(siteInfo, contentLength);
             }
             return false;
         }

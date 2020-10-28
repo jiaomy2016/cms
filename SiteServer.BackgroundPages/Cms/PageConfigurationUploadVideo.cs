@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -24,24 +24,24 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigUpload);
 
-            TbVideoUploadDirectoryName.Text = Site.VideoUploadDirectoryName;
+            TbVideoUploadDirectoryName.Text = SiteInfo.Additional.VideoUploadDirectoryName;
 
             DdlVideoUploadDateFormatString.Items.Add(new ListItem("按年存入不同目录(不推荐)", EDateFormatTypeUtils.GetValue(EDateFormatType.Year)));
             DdlVideoUploadDateFormatString.Items.Add(new ListItem("按年/月存入不同目录", EDateFormatTypeUtils.GetValue(EDateFormatType.Month)));
             DdlVideoUploadDateFormatString.Items.Add(new ListItem("按年/月/日存入不同目录", EDateFormatTypeUtils.GetValue(EDateFormatType.Day)));
-            ControlUtils.SelectSingleItemIgnoreCase(DdlVideoUploadDateFormatString, Site.VideoUploadDateFormatString);
+            ControlUtils.SelectSingleItemIgnoreCase(DdlVideoUploadDateFormatString, SiteInfo.Additional.VideoUploadDateFormatString);
 
             EBooleanUtils.AddListItems(DdlIsVideoUploadChangeFileName, "自动修改文件名", "保持文件名不变");
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsVideoUploadChangeFileName, Site.IsVideoUploadChangeFileName.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsVideoUploadChangeFileName, SiteInfo.Additional.IsVideoUploadChangeFileName.ToString());
 
-            TbVideoUploadTypeCollection.Text = Site.VideoUploadTypeCollection.Replace("|", ",");
-            var mbSize = GetMbSize(Site.VideoUploadTypeMaxSize);
+            TbVideoUploadTypeCollection.Text = SiteInfo.Additional.VideoUploadTypeCollection.Replace("|", ",");
+            var mbSize = GetMbSize(SiteInfo.Additional.VideoUploadTypeMaxSize);
             if (mbSize == 0)
             {
                 DdlVideoUploadTypeUnit.SelectedIndex = 0;
-                TbVideoUploadTypeMaxSize.Text = Site.VideoUploadTypeMaxSize.ToString();
+                TbVideoUploadTypeMaxSize.Text = SiteInfo.Additional.VideoUploadTypeMaxSize.ToString();
             }
             else
             {
@@ -64,20 +64,20 @@ namespace SiteServer.BackgroundPages.Cms
 		{
 			if (Page.IsPostBack && Page.IsValid)
 			{
-                Site.VideoUploadDirectoryName = TbVideoUploadDirectoryName.Text;
+                SiteInfo.Additional.VideoUploadDirectoryName = TbVideoUploadDirectoryName.Text;
 
-                Site.VideoUploadDateFormatString = EDateFormatTypeUtils.GetValue(EDateFormatTypeUtils.GetEnumType(DdlVideoUploadDateFormatString.SelectedValue));
-                Site.IsVideoUploadChangeFileName = TranslateUtils.ToBool(DdlIsVideoUploadChangeFileName.SelectedValue);
+                SiteInfo.Additional.VideoUploadDateFormatString = EDateFormatTypeUtils.GetValue(EDateFormatTypeUtils.GetEnumType(DdlVideoUploadDateFormatString.SelectedValue));
+                SiteInfo.Additional.IsVideoUploadChangeFileName = TranslateUtils.ToBool(DdlIsVideoUploadChangeFileName.SelectedValue);
 
-                Site.VideoUploadTypeCollection = TbVideoUploadTypeCollection.Text.Replace(",", "|");
+                SiteInfo.Additional.VideoUploadTypeCollection = TbVideoUploadTypeCollection.Text.Replace(",", "|");
                 var kbSize = int.Parse(TbVideoUploadTypeMaxSize.Text);
-                Site.VideoUploadTypeMaxSize = (DdlVideoUploadTypeUnit.SelectedIndex == 0) ? kbSize : 1024 * kbSize;
+                SiteInfo.Additional.VideoUploadTypeMaxSize = (DdlVideoUploadTypeUnit.SelectedIndex == 0) ? kbSize : 1024 * kbSize;
 				
 				try
 				{
-                    DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
+                    DataProvider.SiteDao.Update(SiteInfo);
 
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改视频上传设置").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, "修改视频上传设置");
 
                     SuccessMessage("上传视频设置修改成功！");
 				}

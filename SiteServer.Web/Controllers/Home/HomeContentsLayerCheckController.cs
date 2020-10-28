@@ -1,62 +1,64 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerCheck")]
     public class HomeContentsLayerCheckController : ApiController
     {
         private const string Route = "";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
-                var contentIdList = StringUtils.GetIntList(request.GetQueryString("contentIds"));
+                var contentIdList = TranslateUtils.StringCollectionToIntList(request.GetQueryString("contentIds"));
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentCheck))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentCheck))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var retVal = new List<IDictionary<string, object>>();
+                var retVal = new List<Dictionary<string, object>>();
                 foreach (var contentId in contentIdList)
                 {
-                    var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                    var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                     if (contentInfo == null) continue;
 
                     var dict = contentInfo.ToDictionary();
                     dict["checkState"] =
-                        CheckManager.GetCheckState(site, contentInfo);
+                        CheckManager.GetCheckState(siteInfo, contentInfo);
                     retVal.Add(dict);
                 }
 
-                var (isChecked, checkedLevel) = await CheckManager.GetUserCheckLevelAsync(request.AdminPermissionsImpl, site, channelId);
-                var checkedLevels = CheckManager.GetCheckedLevels(site, isChecked, checkedLevel, true);
+                var isChecked = CheckManager.GetUserCheckLevel(request.AdminPermissionsImpl, siteInfo, channelId, out var checkedLevel);
+                var checkedLevels = CheckManager.GetCheckedLevels(siteInfo, isChecked, checkedLevel, true);
 
                 var allChannels =
-                    await ChannelManager.GetChannelsAsync(siteId, request.AdminPermissionsImpl, Constants.ChannelPermissions.ContentAdd);
+                    ChannelManager.GetChannels(siteId, request.AdminPermissionsImpl, ConfigManager.ChannelPermissions.ContentAdd);
 
                 return Ok(new
                 {
@@ -68,98 +70,93 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
-                var contentIdList = StringUtils.GetIntList(request.GetPostString("contentIds"));
+                var contentIdList = TranslateUtils.StringCollectionToIntList(request.GetPostString("contentIds"));
                 var checkedLevel = request.GetPostInt("checkedLevel");
                 var isTranslate = request.GetPostBool("isTranslate");
                 var translateChannelId = request.GetPostInt("translateChannelId");
                 var reasons = request.GetPostString("reasons");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentCheck))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentCheck))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var isChecked = checkedLevel >= site.CheckContentLevel;
+                var isChecked = checkedLevel >= siteInfo.Additional.CheckContentLevel;
                 if (isChecked)
                 {
                     checkedLevel = 0;
                 }
-                var tableName = await ChannelManager.GetTableNameAsync(site, channelInfo);
+                var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
 
-                var contentInfoList = new List<Content>();
+                var contentInfoList = new List<ContentInfo>();
                 foreach (var contentId in contentIdList)
                 {
-                    var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                    var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                     if (contentInfo == null) continue;
 
-                    contentInfo.CheckUserName = request.AdminName;
-                    contentInfo.CheckDate = DateTime.Now;
-                    contentInfo.CheckReasons = reasons;
+                    contentInfo.Set(ContentAttribute.CheckUserName, request.AdminName);
+                    contentInfo.Set(ContentAttribute.CheckDate, DateTime.Now);
+                    contentInfo.Set(ContentAttribute.CheckReasons, reasons);
 
-                    contentInfo.Checked = isChecked;
+                    contentInfo.IsChecked = isChecked;
                     contentInfo.CheckedLevel = checkedLevel;
 
                     if (isTranslate && translateChannelId > 0)
                     {
-                        var translateChannelInfo = await ChannelManager.GetChannelAsync(siteId, translateChannelId);
+                        var translateChannelInfo = ChannelManager.GetChannelInfo(siteId, translateChannelId);
                         contentInfo.ChannelId = translateChannelInfo.Id;
-                        await DataProvider.ContentRepository.UpdateAsync(site, translateChannelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, translateChannelInfo, contentInfo);
                     }
                     else
                     {
-                        await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                     }
 
                     contentInfoList.Add(contentInfo);
 
-                    var checkInfo = new ContentCheck
-                    {
-                        TableName = tableName,
-                        SiteId = siteId,
-                        ChannelId = contentInfo.ChannelId,
-                        ContentId = contentInfo.Id,
-                        UserName = request.AdminName,
-                        IsChecked = isChecked.ToString(),
-                        CheckedLevel = checkedLevel,
-                        CheckDate = DateTime.Now,
-                        Reasons = reasons
-                    };
-
-                    await DataProvider.ContentCheckRepository.InsertAsync(checkInfo);
+                    var checkInfo = new ContentCheckInfo(0, tableName, siteId, contentInfo.ChannelId, contentInfo.Id, request.AdminName, isChecked, checkedLevel, DateTime.Now, reasons);
+                    DataProvider.ContentCheckDao.Insert(checkInfo);
                 }
 
-                await request.AddSiteLogAsync(siteId, "批量审核内容");
+                if (isTranslate && translateChannelId > 0)
+                {
+                    ContentManager.RemoveCache(siteId, channelId, tableName);
+                    var translateTableName = ChannelManager.GetTableName(siteInfo, translateChannelId);
+                    ContentManager.RemoveCache(siteInfo.Id, translateChannelId, translateTableName);
+                }
+
+                request.AddSiteLog(siteId, "批量审核内容");
 
                 foreach (var contentInfo in contentInfoList)
                 {
-                    await CreateManager.CreateContentAsync(siteId, contentInfo.ChannelId, contentInfo.Id);
+                    CreateManager.CreateContent(siteId, contentInfo.ChannelId, contentInfo.Id);
                 }
-                await CreateManager.TriggerContentChangedEventAsync(siteId, channelId);
+                CreateManager.TriggerContentChangedEvent(siteId, channelId);
                 if (isTranslate && translateChannelId > 0)
                 {
-                    await CreateManager.TriggerContentChangedEventAsync(siteId, translateChannelId);
+                    CreateManager.TriggerContentChangedEvent(siteId, translateChannelId);
                 }
 
                 return Ok(new
@@ -169,7 +166,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

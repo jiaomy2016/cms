@@ -1,9 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -19,45 +19,45 @@ namespace SiteServer.CMS.StlParser.StlElement
 
         public static SortedList<string, string> TypeList => new SortedList<string, string>
         {
-            {ContentAttribute.ImageUrl, "遍历内容的图片字段"},
-            {ContentAttribute.VideoUrl, "遍历内容的视频字段"},
-            {ContentAttribute.FileUrl, "遍历内容的附件字段"}
+            {BackgroundContentAttribute.ImageUrl, "遍历内容的图片字段"},
+            {BackgroundContentAttribute.VideoUrl, "遍历内容的视频字段"},
+            {BackgroundContentAttribute.FileUrl, "遍历内容的附件字段"}
         };
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
-            var listInfo = await ListInfo.GetListInfoAsync(pageInfo, contextInfo, EContextType.Content);
+            var listInfo = ListInfo.GetListInfo(pageInfo, contextInfo, EContextType.Content);
 
-            return await ParseImplAsync(pageInfo, contextInfo, listInfo);
+            return ParseImpl(pageInfo, contextInfo, listInfo);
         }
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
         {
             var parsedContent = string.Empty;
 
             var type = listInfo.Others.Get(Type);
             if (string.IsNullOrEmpty(type))
             {
-                type = ContentAttribute.ImageUrl;
+                type = BackgroundContentAttribute.ImageUrl;
             }
 
             var contextType = EContextType.Each;
             IEnumerable dataSource = null;
-            var content = await contextInfo.GetContentAsync();
-            if (content != null)
+            var contentInfo = contextInfo.ContentInfo;
+            if (contentInfo != null)
             {
                 var eachList = new List<string>();
 
-                if (!string.IsNullOrEmpty(content.Get<string>(type)))
+                if (!string.IsNullOrEmpty(contentInfo.GetString(type)))
                 {
-                    eachList.Add(content.Get<string>(type));
+                    eachList.Add(contentInfo.GetString(type));
                 }
 
                 var extendAttributeName = ContentAttribute.GetExtendAttributeName(type);
-                var extendValues = content.Get<string>(extendAttributeName);
+                var extendValues = contentInfo.GetString(extendAttributeName);
                 if (!string.IsNullOrEmpty(extendValues))
                 {
-                    foreach (var extendValue in StringUtils.GetStringList(extendValues))
+                    foreach (var extendValue in TranslateUtils.StringCollectionToStringList(extendValues))
                     {
                         eachList.Add(extendValue);
                     }

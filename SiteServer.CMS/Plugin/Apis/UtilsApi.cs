@@ -1,28 +1,30 @@
-﻿using System.Net.Http;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Security;
+using System.Web;
 using SiteServer.CMS.Api;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
-
-using SiteServer.Abstractions;
+using SiteServer.CMS.DataCache;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class UtilsApi
+    public class UtilsApi : IUtilsApi
     {
         private UtilsApi() { }
 
         private static UtilsApi _instance;
-        public static UtilsApi Instance => _instance ??= new UtilsApi();
+        public static UtilsApi Instance => _instance ?? (_instance = new UtilsApi());
 
         public string Encrypt(string inputString)
         {
-            return WebConfigUtils.EncryptStringBySecretKey(inputString);
+            return TranslateUtils.EncryptStringBySecretKey(inputString);
         }
 
         public string Decrypt(string inputString)
         {
-            return WebConfigUtils.DecryptStringBySecretKey(inputString);
+            return TranslateUtils.DecryptStringBySecretKey(inputString);
         }
 
         public string FilterXss(string html)
@@ -55,9 +57,9 @@ namespace SiteServer.CMS.Plugin.Apis
             return PageUtils.GetHomeUrl(relatedUrl);
         }
 
-        public async Task<string> GetApiUrlAsync(string relatedUrl = "")
+        public string GetApiUrl(string relatedUrl = "")
         {
-            return await ApiManager.GetApiUrlAsync(relatedUrl);
+            return ApiManager.GetInnerApiUrl(relatedUrl);
         }
 
         public void CreateZip(string zipFilePath, string directoryPath)
@@ -80,14 +82,14 @@ namespace SiteServer.CMS.Plugin.Apis
             return TranslateUtils.JsonDeserialize(json, defaultValue);
         }
 
-        public AuthenticatedRequest GetAuthenticatedRequest(HttpRequestMessage request)
+        public IAuthenticatedRequest GetAuthenticatedRequest(HttpRequestMessage request)
         {
             throw new System.NotImplementedException();
         }
 
-        public async Task<AuthenticatedRequest> GetRequestAsync()
+        public IAuthenticatedRequest GetAuthenticatedRequest()
         {
-            return await AuthenticatedRequest.GetAuthAsync();
+            return new AuthenticatedRequest(HttpContext.Current.Request);
         }
     }
 }

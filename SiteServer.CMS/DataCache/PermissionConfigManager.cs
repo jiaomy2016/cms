@@ -1,10 +1,8 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Xml;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.DataCache.Core;
 using SiteServer.CMS.Plugin;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.DataCache
 {
@@ -41,26 +39,29 @@ namespace SiteServer.CMS.DataCache
 		{
 		}
 
-        public static async Task<PermissionConfigManager> GetInstanceAsync()
+        public static PermissionConfigManager Instance
 		{
-            var permissionManager = DataCacheManager.Get<PermissionConfigManager>(CacheKey);
-            if (permissionManager != null) return permissionManager;
+			get
+			{
+                var permissionManager = DataCacheManager.Get<PermissionConfigManager>(CacheKey);
+			    if (permissionManager != null) return permissionManager;
 
-            permissionManager = new PermissionConfigManager();
+			    permissionManager = new PermissionConfigManager();
 
-            var path = WebUtils.GetMenusPath("Permissions.config");
-            if (FileUtils.IsFileExists(path))
-            {
-                var doc = new XmlDocument();
-                doc.Load(path);
-                await permissionManager.LoadValuesFromConfigurationXmlAsync(doc);
-            }
+			    var path = PathUtils.GetMenusPath("Permissions.config");
+			    if (FileUtils.IsFileExists(path))
+			    {
+			        var doc = new XmlDocument();
+			        doc.Load(path);
+			        permissionManager.LoadValuesFromConfigurationXml(doc);
+			    }
 
-            DataCacheManager.Insert(CacheKey, permissionManager, path);
-            return permissionManager;
-        }
+			    DataCacheManager.Insert(CacheKey, permissionManager, path);
+			    return permissionManager;
+			}
+		}
 
-        private async Task LoadValuesFromConfigurationXmlAsync(XmlDocument doc) 
+        private void LoadValuesFromConfigurationXml(XmlDocument doc) 
 		{
             var coreNode = doc.SelectSingleNode("Config");
 		    if (coreNode != null)
@@ -94,8 +95,8 @@ namespace SiteServer.CMS.DataCache
 		        }
 		    }
 
-            GeneralPermissions.AddRange(await PluginMenuManager.GetTopPermissionsAsync());
-		    var pluginPermissions = await PluginMenuManager.GetSitePermissionsAsync(0);
+            GeneralPermissions.AddRange(PluginMenuManager.GetTopPermissions());
+		    var pluginPermissions = PluginMenuManager.GetSitePermissions(0);
             WebsitePluginPermissions.AddRange(pluginPermissions);
 		    WebsitePermissions.AddRange(pluginPermissions);
         }

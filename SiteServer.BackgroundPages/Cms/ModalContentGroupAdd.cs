@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -35,7 +36,7 @@ namespace SiteServer.BackgroundPages.Cms
 				if (AuthRequest.IsQueryExists("GroupName"))
 				{
                     var groupName = AuthRequest.GetQueryString("GroupName");
-                    var contentGroupInfo = DataProvider.ContentGroupRepository.GetContentGroupAsync(SiteId, groupName).GetAwaiter().GetResult();
+                    var contentGroupInfo = ContentGroupManager.GetContentGroupInfo(SiteId, groupName);
 					if (contentGroupInfo != null)
 					{
                         TbContentGroupName.Text = contentGroupInfo.GroupName;
@@ -51,7 +52,7 @@ namespace SiteServer.BackgroundPages.Cms
         {
 			var isChanged = false;
 
-            var contentGroupInfo = new ContentGroup
+            var contentGroupInfo = new ContentGroupInfo
             {
                 GroupName = AttackUtils.FilterXss(TbContentGroupName.Text),
                 SiteId = SiteId,
@@ -62,8 +63,8 @@ namespace SiteServer.BackgroundPages.Cms
 			{
 				try
 				{
-                    DataProvider.ContentGroupRepository.UpdateAsync(contentGroupInfo).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改内容组", $"内容组:{contentGroupInfo.GroupName}").GetAwaiter().GetResult();
+                    DataProvider.ContentGroupDao.Update(contentGroupInfo);
+                    AuthRequest.AddSiteLog(SiteId, "修改内容组", $"内容组:{contentGroupInfo.GroupName}");
 					isChanged = true;
 				}
                 catch (Exception ex)
@@ -73,7 +74,7 @@ namespace SiteServer.BackgroundPages.Cms
 			}
 			else
 			{
-				if (DataProvider.ContentGroupRepository.IsExistsAsync(SiteId, TbContentGroupName.Text).GetAwaiter().GetResult())
+				if (ContentGroupManager.IsExists(SiteId, TbContentGroupName.Text))
 				{
                     FailMessage("内容组添加失败，内容组名称已存在！");
 				}
@@ -81,9 +82,9 @@ namespace SiteServer.BackgroundPages.Cms
 				{
 					try
 					{
-                        DataProvider.ContentGroupRepository.InsertAsync(contentGroupInfo).GetAwaiter().GetResult();
-                        AuthRequest.AddSiteLogAsync(SiteId, "添加内容组",
-                            $"内容组:{contentGroupInfo.GroupName}").GetAwaiter().GetResult();
+                        DataProvider.ContentGroupDao.Insert(contentGroupInfo);
+                        AuthRequest.AddSiteLog(SiteId, "添加内容组",
+                            $"内容组:{contentGroupInfo.GroupName}");
 						isChanged = true;
 					}
 					catch(Exception ex)

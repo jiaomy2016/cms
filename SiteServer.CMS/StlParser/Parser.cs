@@ -1,23 +1,21 @@
 ﻿using System;
 using System.Text;
-using System.Threading.Tasks;
 using SiteServer.CMS.Api.Sys.Stl;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Plugin;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
-
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser
 {
 	public static class Parser
 	{
-        public static async Task ParseAsync(PageInfo pageInfo, ContextInfo contextInfo, StringBuilder contentBuilder, string filePath, bool isDynamic)
+        public static void Parse(PageInfo pageInfo, ContextInfo contextInfo, StringBuilder contentBuilder, string filePath, bool isDynamic)
         {
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 try
                 {
@@ -26,9 +24,9 @@ namespace SiteServer.CMS.StlParser
                         pageInfo.SiteId,
                         pageInfo.PageChannelId,
                         pageInfo.PageContentId,
-                        await contextInfo.GetContentAsync(),
-                        pageInfo.Template.Type,
-                        pageInfo.Template.Id,
+                        contextInfo.ContentInfo,
+                        pageInfo.TemplateInfo.TemplateType,
+                        pageInfo.TemplateInfo.Id,
                         filePath,
                         pageInfo.HeadCodes,
                         pageInfo.BodyCodes,
@@ -38,24 +36,24 @@ namespace SiteServer.CMS.StlParser
                 }
                 catch (Exception ex)
                 {
-                    await LogUtils.AddStlErrorLogAsync(pageInfo, service.PluginId, nameof(service.OnBeforeStlParse), ex);
+                    LogUtils.AddStlErrorLog(pageInfo, service.PluginId, nameof(service.OnBeforeStlParse), ex);
                 }
             }
 
             if (contentBuilder.Length > 0)
             {
-                await StlParserManager.ParseTemplateContentAsync(contentBuilder, pageInfo, contextInfo);
+                StlParserManager.ParseTemplateContent(contentBuilder, pageInfo, contextInfo);
             }
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 try
                 {
-                    service.OnAfterStlParse(new ParseEventArgs(pageInfo.SiteId, pageInfo.PageChannelId, pageInfo.PageContentId, await contextInfo.GetContentAsync(), pageInfo.Template.Type, pageInfo.Template.Id, filePath, pageInfo.HeadCodes, pageInfo.BodyCodes, pageInfo.FootCodes, contentBuilder));
+                    service.OnAfterStlParse(new ParseEventArgs(pageInfo.SiteId, pageInfo.PageChannelId, pageInfo.PageContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.Id, filePath, pageInfo.HeadCodes, pageInfo.BodyCodes, pageInfo.FootCodes, contentBuilder));
                 }
                 catch (Exception ex)
                 {
-                    await LogUtils.AddStlErrorLogAsync(pageInfo, service.PluginId, nameof(service.OnAfterStlParse), ex);
+                    LogUtils.AddStlErrorLog(pageInfo, service.PluginId, nameof(service.OnAfterStlParse), ex);
                 }
             }
 
@@ -69,7 +67,7 @@ namespace SiteServer.CMS.StlParser
                     StringUtils.InsertAfter(new[] { "<head>", "<HEAD>" }, contentBuilder, templateString);
                 }
 
-                if (pageInfo.Site.IsCreateBrowserNoCache)
+                if (pageInfo.SiteInfo.Additional.IsCreateBrowserNoCache)
                 {
                     const string templateString = @"
 <META HTTP-EQUIV=""Pragma"" CONTENT=""no-cache"">
@@ -77,30 +75,30 @@ namespace SiteServer.CMS.StlParser
                     StringUtils.InsertAfter(new[] { "<head>", "<HEAD>" }, contentBuilder, templateString);
                 }
 
-                if (pageInfo.Site.IsCreateIe8Compatible)
+                if (pageInfo.SiteInfo.Additional.IsCreateIe8Compatible)
                 {
                     const string templateString = @"
 <META HTTP-EQUIV=""x-ua-compatible"" CONTENT=""ie=7"" />";
                     StringUtils.InsertAfter(new[] { "<head>", "<HEAD>" }, contentBuilder, templateString);
                 }
 
-                if (pageInfo.Site.IsCreateJsIgnoreError)
+                if (pageInfo.SiteInfo.Additional.IsCreateJsIgnoreError)
                 {
                     const string templateString = @"
 <script type=""text/javascript"">window.onerror=function(){return true;}</script>";
                     StringUtils.InsertAfter(new[] { "<head>", "<HEAD>" }, contentBuilder, templateString);
                 }
 
-                var isShowPageInfo = pageInfo.Site.IsCreateShowPageInfo;
+                var isShowPageInfo = pageInfo.SiteInfo.Additional.IsCreateShowPageInfo;
 
                 if (!pageInfo.IsLocal)
                 {
-                    if (pageInfo.Site.IsCreateDoubleClick)
+                    if (pageInfo.SiteInfo.Additional.IsCreateDoubleClick)
                     {
                         var fileTemplateId = 0;
-                        if (pageInfo.Template.Type == TemplateType.FileTemplate)
+                        if (pageInfo.TemplateInfo.TemplateType == TemplateType.FileTemplate)
                         {
-                            fileTemplateId = pageInfo.Template.Id;
+                            fileTemplateId = pageInfo.TemplateInfo.Id;
                         }
 
                         var apiUrl = pageInfo.ApiUrl;
@@ -121,7 +119,7 @@ namespace SiteServer.CMS.StlParser
                 if (isShowPageInfo)
                 {
                     contentBuilder.Append($@"
-<!-- {pageInfo.Template.RelatedFileName}({TemplateTypeUtils.GetText(pageInfo.Template.Type)}) -->");
+<!-- {pageInfo.TemplateInfo.RelatedFileName}({TemplateTypeUtils.GetText(pageInfo.TemplateInfo.TemplateType)}) -->");
                 }
 
                 var headCodesHtml = pageInfo.HeadCodesHtml;

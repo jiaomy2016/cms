@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -33,10 +34,10 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (AuthRequest.IsQueryExists("Delete"))
             {
-                var arraylist = StringUtils.GetIntList(Request.QueryString["IDCollection"]);
+                var arraylist = TranslateUtils.StringCollectionToIntList(Request.QueryString["IDCollection"]);
                 try
                 {
-                    DataProvider.TemplateLogRepository.DeleteAsync(arraylist).GetAwaiter().GetResult();
+                    DataProvider.TemplateLogDao.Delete(arraylist);
                     SuccessDeleteMessage();
                 }
                 catch (Exception ex)
@@ -48,17 +49,17 @@ namespace SiteServer.BackgroundPages.Cms
             SpContents.ControlToPaginate = RptContents;
             SpContents.ItemsPerPage = Constants.PageSize;
 
-            SpContents.SelectCommand = DataProvider.TemplateLogRepository.GetSelectCommend(SiteId, _templateId);
+            SpContents.SelectCommand = DataProvider.TemplateLogDao.GetSelectCommend(SiteId, _templateId);
 
-            SpContents.SortField = nameof(TemplateLog.Id);
+            SpContents.SortField = nameof(TemplateLogInfo.Id);
             SpContents.SortMode = SortMode.DESC;
             RptContents.ItemDataBound += RptContents_ItemDataBound;
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Template);
+            VerifySitePermissions(ConfigManager.SitePermissions.Templates);
 
-            BtnDelete.Attributes.Add("onClick",
+            BtnDelete.Attributes.Add("onclick",
                 PageUtils.GetRedirectStringWithCheckBoxValueAndAlert(
                     PageUtils.GetCmsUrl(SiteId, nameof(PageTemplateLog), new NameValueCollection
                     {
@@ -79,14 +80,14 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlContentLength = (Literal)e.Item.FindControl("ltlContentLength");
             var ltlView = (Literal)e.Item.FindControl("ltlView");
 
-            var logId = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLog.Id));
+            var logId = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLogInfo.Id));
 
             ltlIndex.Text = Convert.ToString(e.Item.ItemIndex + 1);
-            ltlAddUserName.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateLog.AddUserName));
-            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, nameof(TemplateLog.AddDate)));
-            ltlContentLength.Text = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLog.ContentLength)).ToString();
+            ltlAddUserName.Text = SqlUtils.EvalString(e.Item.DataItem, nameof(TemplateLogInfo.AddUserName));
+            ltlAddDate.Text = DateUtils.GetDateAndTimeString(SqlUtils.EvalDateTime(e.Item.DataItem, nameof(TemplateLogInfo.AddDate)));
+            ltlContentLength.Text = SqlUtils.EvalInt(e.Item.DataItem, nameof(TemplateLogInfo.ContentLength)).ToString();
             ltlView.Text =
-                $@"<a href=""javascript:;"" onClick=""{ModalTemplateView.GetOpenWindowString(SiteId,
+                $@"<a href=""javascript:;"" onclick=""{ModalTemplateView.GetOpenWindowString(SiteId,
                     logId)}"">查看</a>";
         }
     }

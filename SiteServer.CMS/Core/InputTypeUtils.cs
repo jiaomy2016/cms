@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Web.UI.WebControls;
 using Datory;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Core
 {
@@ -258,7 +257,7 @@ namespace SiteServer.CMS.Core
 
 	    public static List<KeyValuePair<InputType, string>> GetInputTypes(string tableName)
 	    {
-	        if (tableName == DataProvider.UserRepository.TableName)
+	        if (tableName == DataProvider.UserDao.TableName)
 	        {
 	            return new List<KeyValuePair<InputType, string>>
 	            {
@@ -304,6 +303,8 @@ namespace SiteServer.CMS.Core
 
         private static string ParseString(string content, string replace, string to, int startIndex, int length, int wordNum, string ellipsis, bool isClearTags, bool isReturnToBr, bool isLower, bool isUpper, string formatString)
         {
+            if (string.IsNullOrEmpty(content)) return string.Empty;
+
             var parsedContent = content;
 
             if (!string.IsNullOrEmpty(replace))
@@ -332,7 +333,7 @@ namespace SiteServer.CMS.Core
 
                 if (wordNum > 0)
                 {
-                    parsedContent = WebUtils.MaxLengthText(parsedContent, wordNum, ellipsis);
+                    parsedContent = StringUtils.MaxLengthText(parsedContent, wordNum, ellipsis);
                 }
 
                 if (isReturnToBr)
@@ -342,7 +343,9 @@ namespace SiteServer.CMS.Core
 
                 if (!string.IsNullOrEmpty(formatString))
                 {
-                    parsedContent = string.Format(formatString, parsedContent);
+                    var date = TranslateUtils.ToDateTime(parsedContent);
+                    parsedContent = date.ToString(formatString);
+                    //parsedContent = string.Format(formatString, parsedContent);
                 }
 
                 if (isLower)

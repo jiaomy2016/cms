@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -35,14 +34,14 @@ namespace SiteServer.BackgroundPages.Cms
 
 			if (!IsPostBack)
 			{
-                var nodeInfo = ChannelManager.GetChannelAsync(SiteId, _channelId).GetAwaiter().GetResult();
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
 
                 EBooleanUtils.AddListItems(DdlIsCreateChannelIfContentChanged, "生成", "不生成");
-                ControlUtils.SelectSingleItemIgnoreCase(DdlIsCreateChannelIfContentChanged, nodeInfo.IsCreateChannelIfContentChanged.ToString());
+                ControlUtils.SelectSingleItemIgnoreCase(DdlIsCreateChannelIfContentChanged, nodeInfo.Additional.IsCreateChannelIfContentChanged.ToString());
 
-                //NodeManager.AddListItemsForAddContent(this.channelIdCollection.Items, base.Site, false);
-                ChannelManager.AddListItemsForCreateChannelAsync(LbChannelId.Items, Site, false, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
-                ControlUtils.SelectMultiItems(LbChannelId, StringUtils.GetStringList(nodeInfo.CreateChannelIdsIfContentChanged));
+                //NodeManager.AddListItemsForAddContent(this.channelIdCollection.Items, base.SiteInfo, false);
+                ChannelManager.AddListItemsForCreateChannel(LbChannelId.Items, SiteInfo, false, AuthRequest.AdminPermissionsImpl);
+                ControlUtils.SelectMultiItems(LbChannelId, TranslateUtils.StringCollectionToStringList(nodeInfo.Additional.CreateChannelIdsIfContentChanged));
 			}
 		}
 
@@ -52,14 +51,14 @@ namespace SiteServer.BackgroundPages.Cms
 
             try
             {
-                var nodeInfo = ChannelManager.GetChannelAsync(SiteId, _channelId).GetAwaiter().GetResult();
+                var nodeInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
 
-                nodeInfo.IsCreateChannelIfContentChanged = TranslateUtils.ToBool(DdlIsCreateChannelIfContentChanged.SelectedValue);
-                nodeInfo.CreateChannelIdsIfContentChanged = ControlUtils.GetSelectedListControlValueCollection(LbChannelId);
+                nodeInfo.Additional.IsCreateChannelIfContentChanged = TranslateUtils.ToBool(DdlIsCreateChannelIfContentChanged.SelectedValue);
+                nodeInfo.Additional.CreateChannelIdsIfContentChanged = ControlUtils.GetSelectedListControlValueCollection(LbChannelId);
 
-                DataProvider.ChannelRepository.UpdateAsync(nodeInfo).GetAwaiter().GetResult();
+                DataProvider.ChannelDao.Update(nodeInfo);
 
-                AuthRequest.AddSiteLogAsync(SiteId, _channelId, 0, "设置栏目变动生成页面", $"栏目:{nodeInfo.ChannelName}").GetAwaiter().GetResult();
+                AuthRequest.AddSiteLog(SiteId, _channelId, 0, "设置栏目变动生成页面", $"栏目:{nodeInfo.ChannelName}");
                 isSuccess = true;
             }
             catch (Exception ex)

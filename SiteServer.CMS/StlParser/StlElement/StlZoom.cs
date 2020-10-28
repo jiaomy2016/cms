@@ -1,8 +1,6 @@
 ﻿using System.Text;
-using System.Threading.Tasks;
 using System.Web.UI.HtmlControls;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -20,7 +18,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "缩放字体大小")]
         private const string FontSize = nameof(FontSize);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
 		    var zoomId = string.Empty;
             var fontSize = 16;
@@ -44,10 +42,10 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, stlAnchor, zoomId, fontSize);
+            return ParseImpl(pageInfo, contextInfo, stlAnchor, zoomId, fontSize);
 		}
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, HtmlAnchor stlAnchor, string zoomId, int fontSize)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, HtmlAnchor stlAnchor, string zoomId, int fontSize)
         {
             if (string.IsNullOrEmpty(zoomId))
             {
@@ -82,7 +80,7 @@ function stlDoZoom(zoomId, size){
             else
             {
                 var innerBuilder = new StringBuilder(contextInfo.InnerHtml);
-                await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+                StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
                 stlAnchor.InnerHtml = innerBuilder.ToString();
             }
             stlAnchor.Attributes["href"] = $"javascript:stlDoZoom('{zoomId}', {fontSize});";

@@ -1,32 +1,35 @@
 ﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context.Atom.Atom.Core;
-using SiteServer.Abstractions;
+using Atom.Core;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.ImportExport.Components
 {
     internal class SiteIe
     {
-        private readonly Site _site;
+        private readonly SiteInfo _siteInfo;
         private readonly string _siteContentDirectoryPath;
         private readonly ChannelIe _channelIe;
         private readonly ContentIe _contentIe;
 
-        public SiteIe(Site site, string siteContentDirectoryPath)
+        public SiteIe(SiteInfo siteInfo, string siteContentDirectoryPath)
         {
             _siteContentDirectoryPath = siteContentDirectoryPath;
-            _site = site;
-            _channelIe = new ChannelIe(site);
-            _contentIe = new ContentIe(site, siteContentDirectoryPath);
+            _siteInfo = siteInfo;
+            _channelIe = new ChannelIe(siteInfo);
+            _contentIe = new ContentIe(siteInfo, siteContentDirectoryPath);
         }
 
-        public async Task<int> ImportChannelsAndContentsAsync(string filePath, bool isImportContents, bool isOverride, int theParentId, string adminName)
+        public int ImportChannelsAndContents(string filePath, bool isImportContents, bool isOverride, int theParentId, string adminName)
         {
-            var psChildCount = await DataProvider.ChannelRepository.GetCountAsync(_site.Id);
-            var indexNameList = (await DataProvider.ChannelRepository.GetIndexNameListAsync(_site.Id)).ToList();
+            var psChildCount = DataProvider.ChannelDao.GetCount(_siteInfo.Id);
+            var indexNameList = DataProvider.ChannelDao.GetIndexNameList(_siteInfo.Id);
 
             if (!FileUtils.IsFileExists(filePath)) return 0;
             var feed = AtomFeed.Load(FileUtils.GetFileStreamReadOnly(filePath));
@@ -55,38 +58,38 @@ namespace SiteServer.CMS.ImportExport.Components
                 orderString = orderString.Substring(0, orderString.LastIndexOf("_", StringComparison.Ordinal));
             }
 
-            var parentId = await DataProvider.ChannelRepository.GetIdAsync(_site.Id, orderString);
+            var parentId = DataProvider.ChannelDao.GetId(_siteInfo.Id, orderString);
             if (theParentId != 0)
             {
                 parentId = theParentId;
             }
 
-            var parentIdOriginal = TranslateUtils.ToInt(AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(Channel.ParentId)));
+            var parentIdOriginal = TranslateUtils.ToInt(AtomUtility.GetDcElementContent(feed.AdditionalElements, ChannelAttribute.ParentId));
             int channelId;
             if (parentIdOriginal == 0)
             {
-                channelId = _site.Id;
-                var nodeInfo = await ChannelManager.GetChannelAsync(_site.Id, _site.Id);
-                await _channelIe.ImportNodeInfoAsync(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
+                channelId = _siteInfo.Id;
+                var nodeInfo = ChannelManager.GetChannelInfo(_siteInfo.Id, _siteInfo.Id);
+                _channelIe.ImportNodeInfo(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
 
-                await DataProvider.ChannelRepository.UpdateAsync(nodeInfo);
+                DataProvider.ChannelDao.Update(nodeInfo);
 
                 if (isImportContents)
                 {
-                    await _contentIe.ImportContentsAsync(feed.Entries, nodeInfo, 0, isOverride, adminName);
+                    _contentIe.ImportContents(feed.Entries, nodeInfo, isOverride, adminName);
                 }
             }
             else
             {
-                var nodeInfo = new Channel();
-                await _channelIe.ImportNodeInfoAsync(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
+                var nodeInfo = new ChannelInfo();
+                _channelIe.ImportNodeInfo(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
                 if (string.IsNullOrEmpty(nodeInfo.ChannelName)) return 0;
 
                 var isUpdate = false;
                 var theSameNameChannelId = 0;
                 if (isOverride)
                 {
-                    theSameNameChannelId = await ChannelManager.GetChannelIdByParentIdAndChannelNameAsync(_site.Id, parentId, nodeInfo.ChannelName, false);
+                    theSameNameChannelId = ChannelManager.GetChannelIdByParentIdAndChannelName(_siteInfo.Id, parentId, nodeInfo.ChannelName, false);
                     if (theSameNameChannelId != 0)
                     {
                         isUpdate = true;
@@ -94,51 +97,51 @@ namespace SiteServer.CMS.ImportExport.Components
                 }
                 if (!isUpdate)
                 {
-                    channelId = await DataProvider.ChannelRepository.InsertAsync(nodeInfo);
+                    channelId = DataProvider.ChannelDao.Insert(nodeInfo);
                 }
                 else
                 {
                     channelId = theSameNameChannelId;
-                    nodeInfo = await ChannelManager.GetChannelAsync(_site.Id, theSameNameChannelId);
-                    //var tableName = ChannelManager.GetTableName(_site, node);
-                    await _channelIe.ImportNodeInfoAsync(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
+                    nodeInfo = ChannelManager.GetChannelInfo(_siteInfo.Id, theSameNameChannelId);
+                    var tableName = ChannelManager.GetTableName(_siteInfo, nodeInfo);
+                    _channelIe.ImportNodeInfo(nodeInfo, feed.AdditionalElements, parentId, indexNameList);
 
-                    await DataProvider.ChannelRepository.UpdateAsync(nodeInfo);
+                    DataProvider.ChannelDao.Update(nodeInfo);
 
-                    //DataProvider.ContentRepository.DeleteContentsByChannelId(_site.Id, tableName, theSameNameChannelId);
+                    //DataProvider.ContentDao.DeleteContentsByChannelId(_siteInfo.Id, tableName, theSameNameChannelId);
                 }
 
                 if (isImportContents)
                 {
-                    await _contentIe.ImportContentsAsync(feed.Entries, nodeInfo, 0, isOverride, adminName);
+                    _contentIe.ImportContents(feed.Entries, nodeInfo, isOverride, adminName);
                 }
             }
 
             return channelId;
         }
 
-        public async Task ExportAsync(int siteId, int channelId, bool isSaveContents)
+        public void Export(int siteId, int channelId, bool isSaveContents)
         {
-            var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+            var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
             if (channelInfo == null) return;
 
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            var tableName = await ChannelManager.GetTableNameAsync(site, channelInfo);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
 
-            var fileName = await DataProvider.ChannelRepository.GetOrderStringInSiteAsync(channelId);
+            var fileName = DataProvider.ChannelDao.GetOrderStringInSite(channelId);
 
             var filePath = _siteContentDirectoryPath + PathUtils.SeparatorChar + fileName + ".xml";
 
-            var feed = await _channelIe.ExportNodeInfoAsync(channelInfo);
+            var feed = _channelIe.ExportNodeInfo(channelInfo);
 
             if (isSaveContents)
             {
                 var orderByString = ETaxisTypeUtils.GetContentOrderByString(ETaxisType.OrderByTaxis);
-                var contentIdList = DataProvider.ContentRepository.GetContentIdListChecked(tableName, channelId, orderByString);
+                var contentIdList = DataProvider.ContentDao.GetContentIdListChecked(tableName, channelId, orderByString);
                 foreach (var contentId in contentIdList)
                 {
-                    var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
-                    //ContentUtility.PutImagePaths(site, contentInfo as BackgroundContentInfo, collection);
+                    var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
+                    //ContentUtility.PutImagePaths(siteInfo, contentInfo as BackgroundContentInfo, collection);
                     var entry = _contentIe.ExportContentInfo(contentInfo);
                     feed.Entries.Add(entry);
 

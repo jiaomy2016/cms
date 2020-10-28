@@ -1,4 +1,5 @@
 ﻿using System;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.CMS.Core.Create
 {

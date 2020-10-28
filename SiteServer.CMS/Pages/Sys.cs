@@ -1,4 +1,6 @@
 ﻿using SiteServer.CMS.Api;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Pages
 {

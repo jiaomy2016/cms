@@ -1,25 +1,23 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerArrange")]
     public class HomeContentsLayerArrangeController : ApiController
     {
         private const string Route = "";
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
@@ -27,23 +25,23 @@ namespace SiteServer.API.Controllers.Home
                 var isDesc = request.GetPostBool("isDesc");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var tableName = await ChannelManager.GetTableNameAsync(site, channelInfo);
+                var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
 
-                await DataProvider.ContentRepository.UpdateArrangeTaxisAsync(tableName, channelId, attributeName, isDesc);
+                DataProvider.ContentDao.UpdateArrangeTaxis(siteId, tableName, channelId, attributeName, isDesc);
 
-                await request.AddSiteLogAsync(siteId, "批量整理", string.Empty);
+                request.AddSiteLog(siteId, "批量整理", string.Empty);
 
                 return Ok(new
                 {
@@ -52,7 +50,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

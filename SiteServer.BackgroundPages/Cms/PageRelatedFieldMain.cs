@@ -2,7 +2,7 @@
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -54,7 +54,7 @@ namespace SiteServer.BackgroundPages.Cms
                 for (var i = 2; i <= totalLevel; i++)
                 {
                     builder.Append($@"
-<frame name=""level{i}"" scrolling=""auto"" marginwidth=""0"" marginheight=""0"" src=""../blank.html"">
+<frame name=""level{i}"" scrolling=""auto"" marginwidth=""0"" marginheight=""0"" src=""../pageBlank.html"">
 ");
                 }
 

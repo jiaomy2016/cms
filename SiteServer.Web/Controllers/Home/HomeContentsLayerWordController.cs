@@ -1,19 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.Core.Office;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerWord")]
     public class HomeContentsLayerWordController : ApiController
     {
@@ -21,30 +22,30 @@ namespace SiteServer.API.Controllers.Home
         private const string RouteUpload = "actions/upload";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var (isChecked, checkedLevel) = await CheckManager.GetUserCheckLevelAsync(request.AdminPermissionsImpl, site, siteId);
-                var checkedLevels = CheckManager.GetCheckedLevels(site, isChecked, checkedLevel, false);
+                var isChecked = CheckManager.GetUserCheckLevel(request.AdminPermissionsImpl, siteInfo, siteId, out var checkedLevel);
+                var checkedLevels = CheckManager.GetCheckedLevels(siteInfo, isChecked, checkedLevel, false);
 
                 return Ok(new
                 {
@@ -54,24 +55,24 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(RouteUpload)]
-        public async Task<IHttpActionResult> Upload()
+        public IHttpActionResult Upload()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
@@ -119,17 +120,17 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
@@ -141,24 +142,24 @@ namespace SiteServer.API.Controllers.Home
                 var isClearFontFamily = request.GetPostBool("isClearFontFamily");
                 var isClearImages = request.GetPostBool("isClearImages");
                 var checkedLevel = request.GetPostInt("checkedLevel");
-                var fileNames = StringUtils.GetStringList(request.GetPostString("fileNames"));
+                var fileNames = TranslateUtils.StringCollectionToStringList(request.GetPostString("fileNames"));
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var tableName = await ChannelManager.GetTableNameAsync(site, channelInfo);
-                var styleList = await TableStyleManager.GetContentStyleListAsync(site, channelInfo);
-                var isChecked = checkedLevel >= site.CheckContentLevel;
+                var tableName = ChannelManager.GetTableName(siteInfo, channelInfo);
+                var styleInfoList = TableStyleManager.GetContentStyleInfoList(siteInfo, channelInfo);
+                var isChecked = checkedLevel >= siteInfo.Additional.CheckContentLevel;
 
                 var contentIdList = new List<int>();
 
@@ -166,13 +167,13 @@ namespace SiteServer.API.Controllers.Home
                 {
                     if (string.IsNullOrEmpty(fileName)) continue;
 
-                    var formCollection = await WordUtils.GetWordNameValueCollectionAsync(siteId, isFirstLineTitle, isFirstLineRemove, isClearFormat, isFirstLineIndent, isClearFontSize, isClearFontFamily, isClearImages, fileName);
+                    var formCollection = WordUtils.GetWordNameValueCollection(siteId, isFirstLineTitle, isFirstLineRemove, isClearFormat, isFirstLineIndent, isClearFontSize, isClearFontFamily, isClearImages, fileName);
 
                     if (string.IsNullOrEmpty(formCollection[ContentAttribute.Title])) continue;
 
-                    var dict = await BackgroundInputTypeParser.SaveAttributesAsync(site, styleList, formCollection, ContentAttribute.AllAttributes.Value);
+                    var dict = BackgroundInputTypeParser.SaveAttributes(siteInfo, styleInfoList, formCollection, ContentAttribute.AllAttributes.Value);
 
-                    var contentInfo = new Content(dict)
+                    var contentInfo = new ContentInfo(dict)
                     {
                         ChannelId = channelInfo.Id,
                         SiteId = siteId,
@@ -181,7 +182,7 @@ namespace SiteServer.API.Controllers.Home
                         SourceId = SourceManager.User,
                         AdminId = request.AdminId,
                         UserId = request.UserId,
-                        Checked = isChecked,
+                        IsChecked = isChecked,
                         CheckedLevel = checkedLevel
                     };
 
@@ -190,7 +191,7 @@ namespace SiteServer.API.Controllers.Home
 
                     contentInfo.Title = formCollection[ContentAttribute.Title];
 
-                    contentInfo.Id = await DataProvider.ContentRepository.InsertAsync(site, channelInfo, contentInfo);
+                    contentInfo.Id = DataProvider.ContentDao.Insert(tableName, siteInfo, channelInfo, contentInfo);
 
                     contentIdList.Add(contentInfo.Id);
                 }
@@ -199,9 +200,9 @@ namespace SiteServer.API.Controllers.Home
                 {
                     foreach (var contentId in contentIdList)
                     {
-                        await CreateManager.CreateContentAsync(siteId, channelInfo.Id, contentId);
+                        CreateManager.CreateContent(siteId, channelInfo.Id, contentId);
                     }
-                    await CreateManager.TriggerContentChangedEventAsync(siteId, channelInfo.Id);
+                    CreateManager.TriggerContentChangedEvent(siteId, channelInfo.Id);
                 }
 
                 return Ok(new
@@ -211,7 +212,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

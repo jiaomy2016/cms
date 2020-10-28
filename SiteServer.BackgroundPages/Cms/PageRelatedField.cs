@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -26,29 +27,29 @@ namespace SiteServer.BackgroundPages.Cms
 			{
                 var relatedFieldId = AuthRequest.GetQueryInt("RelatedFieldID");
 
-                var relatedFieldName = DataProvider.RelatedFieldRepository.GetTitleAsync(relatedFieldId).GetAwaiter().GetResult();
-                DataProvider.RelatedFieldRepository.DeleteAsync(relatedFieldId).GetAwaiter().GetResult();
-                AuthRequest.AddSiteLogAsync(SiteId, "删除联动字段", $"联动字段:{relatedFieldName}").GetAwaiter().GetResult();
+                var relatedFieldName = DataProvider.RelatedFieldDao.GetTitle(relatedFieldId);
+                DataProvider.RelatedFieldDao.Delete(relatedFieldId);
+                AuthRequest.AddSiteLog(SiteId, "删除联动字段", $"联动字段:{relatedFieldName}");
                 SuccessDeleteMessage();
             }
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigTableStyles);
 
-            RptContents.DataSource = DataProvider.RelatedFieldRepository.GetRelatedFieldListAsync(SiteId).GetAwaiter().GetResult();
+            RptContents.DataSource = DataProvider.RelatedFieldDao.GetRelatedFieldInfoList(SiteId);
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
-            BtnAdd.Attributes.Add("onClick", ModalRelatedFieldAdd.GetOpenWindowString(SiteId));
-            BtnImport.Attributes.Add("onClick", ModalImport.GetOpenWindowString(SiteId, ModalImport.TypeRelatedField));
+            BtnAdd.Attributes.Add("onclick", ModalRelatedFieldAdd.GetOpenWindowString(SiteId));
+            BtnImport.Attributes.Add("onclick", ModalImport.GetOpenWindowString(SiteId, ModalImport.TypeRelatedField));
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var relatedFieldInfo = (RelatedField) e.Item.DataItem;
+            var relatedFieldInfo = (RelatedFieldInfo) e.Item.DataItem;
 
             var ltlRelatedFieldName = (Literal)e.Item.FindControl("ltlRelatedFieldName");
             var ltlTotalLevel = (Literal)e.Item.FindControl("ltlTotalLevel");
@@ -63,12 +64,12 @@ namespace SiteServer.BackgroundPages.Cms
             ltlItemsUrl.Text = $@"<a href=""{urlItems}"">管理字段项</a>";
 
             ltlEditUrl.Text =
-                $@"<a href=""javascript:;"" onClick=""{ModalRelatedFieldAdd.GetOpenWindowString(
+                $@"<a href=""javascript:;"" onclick=""{ModalRelatedFieldAdd.GetOpenWindowString(
                     SiteId, relatedFieldInfo.Id)}"">编辑</a>";
             ltlExportUrl.Text =
-                $@"<a href=""javascript:;"" onClick=""{ModalExportMessage.GetOpenWindowStringToRelatedField(SiteId, relatedFieldInfo.Id)}"">导出</a>";
+                $@"<a href=""javascript:;"" onclick=""{ModalExportMessage.GetOpenWindowStringToRelatedField(SiteId, relatedFieldInfo.Id)}"">导出</a>";
             ltlDeleteUrl.Text =
-                $@"<a href=""javascript:;"" onClick=""{PageUtils.GetRedirectStringWithConfirm(
+                $@"<a href=""javascript:;"" onclick=""{PageUtils.GetRedirectStringWithConfirm(
                     PageUtils.GetCmsUrl(SiteId, nameof(PageRelatedField), new NameValueCollection
                     {
                         {"RelatedFieldID", relatedFieldInfo.Id.ToString()},

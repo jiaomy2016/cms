@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NuGet.Packaging;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Plugin;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Packaging
 {
@@ -15,7 +14,7 @@ namespace SiteServer.CMS.Packaging
     public class PackageUtils
     {
         public const string PackageIdSsCms = "SS.CMS";
-        public const string PackageIdSiteServerPlugin = "SiteServer.Abstractions";
+        public const string PackageIdSiteServerPlugin = "SiteServer.Plugin";
         public const string VersionDev = "0.0.0";
 
         public const string CacheKeySsCmsIsDownload = nameof(CacheKeySsCmsIsDownload);
@@ -56,7 +55,7 @@ namespace SiteServer.CMS.Packaging
 
         public static void DownloadPackage(string packageId, string version)
         {
-            var packagesPath = WebUtils.GetPackagesPath();
+            var packagesPath = PathUtils.GetPackagesPath();
             var idWithVersion = $"{packageId}.{version}";
             var directoryPath = PathUtils.Combine(packagesPath, idWithVersion);
 
@@ -85,8 +84,7 @@ namespace SiteServer.CMS.Packaging
                 }
 
                 var localFilePath = PathUtils.Combine(directoryPath, idWithVersion + ".nupkg");
-                WebClientUtils.SaveRemoteFileToLocal(
-                    $"https://api.siteserver.cn/downloads/update/{version}", localFilePath);
+                WebClientUtils.SaveRemoteFileToLocal(CloudUtils.Dl.GetPackagesUrl(PackageIdSsCms, version), localFilePath);
 
                 ZipUtils.ExtractZip(localFilePath, directoryPath);
             }
@@ -99,8 +97,7 @@ namespace SiteServer.CMS.Packaging
 
                 var localFilePath = PathUtils.Combine(directoryPath, idWithVersion + ".nupkg");
 
-                WebClientUtils.SaveRemoteFileToLocal(
-                    $"https://api.siteserver.cn/downloads/package/{packageId}/{version}", localFilePath);
+                WebClientUtils.SaveRemoteFileToLocal(CloudUtils.Dl.GetPackagesUrl(packageId, version), localFilePath);
 
                 ZipUtils.ExtractZip(localFilePath, directoryPath);
 
@@ -116,34 +113,6 @@ namespace SiteServer.CMS.Packaging
 
             //ZipUtils.UnpackFilesByExtension(PathUtils.Combine(directoryPath, idWithVersion + ".nupkg"),
             //    directoryPath, ".nuspec");
-        }
-
-        public static bool IsPackageDownload(string packageId, string version)
-        {
-            var packagesPath = WebUtils.GetPackagesPath();
-            var idWithVersion = $"{packageId}.{version}";
-            var directoryPath = PathUtils.Combine(packagesPath, idWithVersion);
-
-            if (!DirectoryUtils.IsDirectoryExists(directoryPath))
-            {
-                return false;
-            }
-
-            if (!FileUtils.IsFileExists(PathUtils.Combine(directoryPath, $"{idWithVersion}.nupkg")) || !FileUtils.IsFileExists(PathUtils.Combine(directoryPath, $"{packageId}.nuspec")))
-            {
-                return false;
-            }
-
-            if (StringUtils.EqualsIgnoreCase(packageId, PackageIdSsCms))
-            {
-                var packageWebConfigPath = PathUtils.Combine(directoryPath, WebConfigUtils.WebConfigFileName);
-                if (!FileUtils.IsFileExists(packageWebConfigPath))
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         public static Dictionary<string, string> GetDependencyPackages(PackageMetadata metadata)
@@ -169,7 +138,7 @@ namespace SiteServer.CMS.Packaging
         {
             try
             {
-                var packagePath = WebUtils.GetPackagesPath(idWithVersion);
+                var packagePath = PathUtils.GetPackagesPath(idWithVersion);
 
                 string nuspecPath;
                 string dllDirectoryPath;
@@ -189,7 +158,7 @@ namespace SiteServer.CMS.Packaging
                     }
 
                     WebConfigUtils.UpdateWebConfig(packageWebConfigPath, WebConfigUtils.IsProtectData,
-                        WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString, WebConfigUtils.Redis, WebConfigUtils.AdminDirectory, WebConfigUtils.HomeDirectory,
+                        WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString, WebConfigUtils.AdminDirectory, WebConfigUtils.HomeDirectory,
                         WebConfigUtils.SecretKey, WebConfigUtils.IsNightlyUpdate);
 
                     //DirectoryUtils.Copy(PathUtils.Combine(packagePath, DirectoryUtils.SiteFiles.DirectoryName),
@@ -204,7 +173,7 @@ namespace SiteServer.CMS.Packaging
                 }
                 else if (packageType == PackageType.Plugin)
                 {
-                    var pluginPath = WebUtils.GetPluginPath(metadata.Id);
+                    var pluginPath = PathUtils.GetPluginPath(metadata.Id);
                     DirectoryUtils.CreateDirectoryIfNotExists(pluginPath);
 
                     DirectoryUtils.Copy(PathUtils.Combine(packagePath, "content"), pluginPath, true);
@@ -256,7 +225,7 @@ namespace SiteServer.CMS.Packaging
         {
             PackageMetadata metadata = null;
 
-            var nuspecPath = WebUtils.GetPluginNuspecPath(directoryName);
+            var nuspecPath = PathUtils.GetPluginNuspecPath(directoryName);
             if (FileUtils.IsFileExists(nuspecPath))
             {
                 try
@@ -285,7 +254,7 @@ namespace SiteServer.CMS.Packaging
             dllDirectoryPath = string.Empty;
             errorMessage = string.Empty;
 
-            var directoryPath = WebUtils.GetPackagesPath(directoryName);
+            var directoryPath = PathUtils.GetPackagesPath(directoryName);
 
             foreach (var filePath in DirectoryUtils.GetFilePaths(directoryPath))
             {

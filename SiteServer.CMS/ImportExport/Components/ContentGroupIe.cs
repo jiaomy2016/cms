@@ -1,43 +1,38 @@
 ﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context.Atom.Atom.Core;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using Atom.Core;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.CMS.ImportExport.Components
 {
     public static class ContentGroupIe
     {
-        public static AtomEntry Export(ContentGroup @group)
+        public static AtomEntry Export(ContentGroupInfo groupInfo)
         {
             var entry = AtomUtility.GetEmptyEntry();
 
             AtomUtility.AddDcElement(entry.AdditionalElements, "IsContentGroup", true.ToString());
-            AtomUtility.AddDcElement(entry.AdditionalElements, new List<string> { nameof(ContentGroup.GroupName), "ContentGroupName" }, @group.GroupName);
-            AtomUtility.AddDcElement(entry.AdditionalElements, nameof(ContentGroup.Taxis), @group.Taxis.ToString());
-            AtomUtility.AddDcElement(entry.AdditionalElements, nameof(ContentGroup.Description), @group.Description);
+            AtomUtility.AddDcElement(entry.AdditionalElements, new List<string> { nameof(ContentGroupInfo.GroupName), "ContentGroupName" }, groupInfo.GroupName);
+            AtomUtility.AddDcElement(entry.AdditionalElements, nameof(ContentGroupInfo.Taxis), groupInfo.Taxis.ToString());
+            AtomUtility.AddDcElement(entry.AdditionalElements, nameof(ContentGroupInfo.Description), groupInfo.Description);
 
             return entry;
         }
 
-        public static async Task<bool> ImportAsync(AtomEntry entry, int siteId)
+        public static bool Import(AtomEntry entry, int siteId)
         {
             var isNodeGroup = TranslateUtils.ToBool(AtomUtility.GetDcElementContent(entry.AdditionalElements, "IsContentGroup"));
             if (!isNodeGroup) return false;
 
-            var groupName = AtomUtility.GetDcElementContent(entry.AdditionalElements, new List<string> { nameof(ContentGroup.GroupName), "ContentGroupName" });
+            var groupName = AtomUtility.GetDcElementContent(entry.AdditionalElements, new List<string> { nameof(ContentGroupInfo.GroupName), "ContentGroupName" });
             if (string.IsNullOrEmpty(groupName)) return true;
-            if (await DataProvider.ContentGroupRepository.IsExistsAsync(siteId, groupName)) return true;
+            if (ContentGroupManager.IsExists(siteId, groupName)) return true;
 
-            var taxis = TranslateUtils.ToInt(AtomUtility.GetDcElementContent(entry.AdditionalElements, nameof(ContentGroup.Taxis)));
-            var description = AtomUtility.GetDcElementContent(entry.AdditionalElements, nameof(ContentGroup.Description));
-            await DataProvider.ContentGroupRepository.InsertAsync(new ContentGroup
-            {
-                GroupName = groupName, 
-                SiteId = siteId, 
-                Taxis = taxis, 
-                Description = description
-            });
+            var taxis = TranslateUtils.ToInt(AtomUtility.GetDcElementContent(entry.AdditionalElements, nameof(ContentGroupInfo.Taxis)));
+            var description = AtomUtility.GetDcElementContent(entry.AdditionalElements, nameof(ContentGroupInfo.Description));
+            DataProvider.ContentGroupDao.Insert(new ContentGroupInfo(groupName, siteId, taxis, description));
 
             return true;
         }

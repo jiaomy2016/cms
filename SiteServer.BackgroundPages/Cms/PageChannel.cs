@@ -2,12 +2,12 @@
 using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -43,10 +43,10 @@ namespace SiteServer.BackgroundPages.Cms
                 if (SiteId != channelId)
                 {
                     var isSubtract = AuthRequest.IsQueryExists("Subtract");
-                    DataProvider.ChannelRepository.UpdateTaxisAsync(SiteId, channelId, isSubtract).GetAwaiter().GetResult();
+                    DataProvider.ChannelDao.UpdateTaxis(SiteId, channelId, isSubtract);
 
-                    AuthRequest.AddSiteLogAsync(SiteId, channelId, 0, "栏目排序" + (isSubtract ? "上升" : "下降"),
-                        $"栏目:{ChannelManager.GetChannelNameAsync(SiteId, channelId).GetAwaiter().GetResult()}").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, channelId, 0, "栏目排序" + (isSubtract ? "上升" : "下降"),
+                        $"栏目:{ChannelManager.GetChannelName(SiteId, channelId)}");
 
                     PageUtils.Redirect(GetRedirectUrl(SiteId, channelId));
                     return;
@@ -55,7 +55,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(Site, string.Empty, ELoadingType.Channel, null));
+            ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(SiteInfo, string.Empty, ELoadingType.Channel, null));
 
             if (AuthRequest.IsQueryExists("CurrentChannelId"))
             {
@@ -69,7 +69,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             LtlButtonsHead.Text = LtlButtonsFoot.Text = GetButtonsHtml();
 
-            var channelIdList = ChannelManager.GetChannelIdListAsync(ChannelManager.GetChannelAsync(SiteId, SiteId).GetAwaiter().GetResult(), EScopeType.SelfAndChildren, string.Empty, string.Empty, string.Empty).GetAwaiter().GetResult();
+            var channelIdList = ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(SiteId, SiteId), EScopeType.SelfAndChildren, string.Empty, string.Empty, string.Empty);
 
             RptContents.DataSource = channelIdList;
             RptContents.ItemDataBound += RptContents_ItemDataBound;
@@ -80,34 +80,34 @@ namespace SiteServer.BackgroundPages.Cms
         {
             var builder = new StringBuilder();
 
-            if (HasChannelPermissionsIgnoreChannelId(Constants.ChannelPermissions.ChannelAdd))
+            if (HasChannelPermissionsIgnoreChannelId(ConfigManager.ChannelPermissions.ChannelAdd))
             {
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalChannelsAdd.GetOpenWindowString(SiteId, SiteId, GetRedirectUrl(SiteId, SiteId))}"">快速添加</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalChannelsAdd.GetOpenWindowString(SiteId, SiteId, GetRedirectUrl(SiteId, SiteId))}"">快速添加</a>
 <a href=""{PageChannelAdd.GetRedirectUrl(SiteId, SiteId, GetRedirectUrl(SiteId, 0))}"" class=""btn btn-light text-secondary"">添加栏目</a>
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalChannelImport.GetOpenWindowString(SiteId, SiteId)}"">导 入</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalChannelImport.GetOpenWindowString(SiteId, SiteId)}"">导 入</a>
 ");
             }
 
             builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalExportMessage.GetOpenWindowStringToChannel(SiteId, "ChannelIDCollection", "请选择需要导出的栏目！")}"">导 出</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalExportMessage.GetOpenWindowStringToChannel(SiteId, "ChannelIDCollection", "请选择需要导出的栏目！")}"">导 出</a>
 ");
 
-            if (HasChannelPermissionsIgnoreChannelId(Constants.ChannelPermissions.ChannelEdit))
+            if (HasChannelPermissionsIgnoreChannelId(ConfigManager.ChannelPermissions.ChannelEdit))
             {
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalAddToGroup.GetOpenWindowStringToChannel(SiteId)}"">设置栏目组</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalAddToGroup.GetOpenWindowStringToChannel(SiteId)}"">设置栏目组</a>
 ");
 
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalChannelTaxis.GetOpenWindowString(SiteId)}"">排 序</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalChannelTaxis.GetOpenWindowString(SiteId)}"">排 序</a>
 ");
             }
 
-            if (HasChannelPermissionsIgnoreChannelId(Constants.ChannelPermissions.ChannelTranslate))
+            if (HasChannelPermissionsIgnoreChannelId(ConfigManager.ChannelPermissions.ChannelTranslate))
             {
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{
                         PageUtils.GetRedirectStringWithCheckBoxValue(
                             PageChannelTranslate.GetRedirectUrl(SiteId,
                                 GetRedirectUrl(SiteId, _currentChannelId)), "ChannelIDCollection",
@@ -116,10 +116,10 @@ namespace SiteServer.BackgroundPages.Cms
 ");
             }
 
-            if (HasChannelPermissionsIgnoreChannelId(Constants.ChannelPermissions.ChannelDelete))
+            if (HasChannelPermissionsIgnoreChannelId(ConfigManager.ChannelPermissions.ChannelDelete))
             {
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{
                         PageUtils.GetRedirectStringWithCheckBoxValue(
                             PageChannelDelete.GetRedirectUrl(SiteId, GetRedirectUrl(SiteId, SiteId)), "ChannelIDCollection",
                             "ChannelIDCollection", "请选择需要删除的栏目！")
@@ -127,11 +127,11 @@ namespace SiteServer.BackgroundPages.Cms
 ");
             }
 
-            if (HasSitePermissions(Constants.WebSitePermissions.Create) ||
-                HasChannelPermissionsIgnoreChannelId(Constants.ChannelPermissions.CreatePage))
+            if (HasSitePermissions(ConfigManager.SitePermissions.CreateChannels) ||
+                HasChannelPermissionsIgnoreChannelId(ConfigManager.ChannelPermissions.CreatePage))
             {
                 builder.Append($@"
-<a href=""javascript:;"" class=""btn btn-light text-secondary"" onClick=""{ModalCreateChannels.GetOpenWindowString(SiteId)}"">生 成</a>
+<a href=""javascript:;"" class=""btn btn-light text-secondary"" onclick=""{ModalCreateChannels.GetOpenWindowString(SiteId)}"">生 成</a>
 ");
             }
 
@@ -146,11 +146,11 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 if (!IsDescendantOwningChannelId(channelId)) e.Item.Visible = false;
             }
-            var nodeInfo = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
+            var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
             var ltlHtml = (Literal)e.Item.FindControl("ltlHtml");
 
-            ltlHtml.Text = ChannelLoading.GetChannelRowHtmlAsync(Site, nodeInfo, enabled, ELoadingType.Channel, null, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+            ltlHtml.Text = ChannelLoading.GetChannelRowHtml(SiteInfo, nodeInfo, enabled, ELoadingType.Channel, null, AuthRequest.AdminPermissionsImpl);
         }
     }
 }

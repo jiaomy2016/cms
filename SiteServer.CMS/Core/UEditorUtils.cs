@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.StlParser.StlElement;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Core
 {
@@ -26,47 +26,47 @@ namespace SiteServer.CMS.Core
             return "UE";
         }
 
-        public static string GetInsertVideoScript(string attributeName, string playUrl, string imageUrl, Site site)
+        public static string GetInsertVideoScript(string attributeName, string playUrl, string imageUrl, SiteInfo siteInfo)
         {
             if (string.IsNullOrEmpty(playUrl)) return string.Empty;
 
             var dict = new Dictionary<string, string>
             {
                 {StlPlayer.PlayUrl, playUrl},
-                {StlPlayer.IsAutoPlay, site.ConfigUEditorVideoIsAutoPlay.ToString()},
-                {StlPlayer.PlayBy, site.ConfigUEditorVideoPlayBy},
+                {StlPlayer.IsAutoPlay, siteInfo.Additional.ConfigUEditorVideoIsAutoPlay.ToString()},
+                {StlPlayer.PlayBy, siteInfo.Additional.ConfigUEditorVideoPlayBy},
                 {"style", "width: 333px; height: 333px;" }
             };
-            if (site.ConfigUEditorVideoIsImageUrl && !string.IsNullOrEmpty(imageUrl))
+            if (siteInfo.Additional.ConfigUEditorVideoIsImageUrl && !string.IsNullOrEmpty(imageUrl))
             {
                 dict.Add(StlPlayer.ImageUrl, imageUrl);
             }
-            if (site.ConfigUEditorVideoIsWidth)
+            if (siteInfo.Additional.ConfigUEditorVideoIsWidth)
             {
-                dict.Add(StlPlayer.Width, site.ConfigUEditorVideoWidth.ToString());
+                dict.Add(StlPlayer.Width, siteInfo.Additional.ConfigUEditorVideoWidth.ToString());
             }
-            if (site.ConfigUEditorVideoIsHeight)
+            if (siteInfo.Additional.ConfigUEditorVideoIsHeight)
             {
-                dict.Add(StlPlayer.Height, site.ConfigUEditorVideoHeight.ToString());
+                dict.Add(StlPlayer.Height, siteInfo.Additional.ConfigUEditorVideoHeight.ToString());
             }
 
             return GetInsertHtmlScript(attributeName,
-                $@"<img class=""siteserver-stl-player"" src=""{SiteServerAssets.GetUrl("ueditor/video-clip.png")}"" {TranslateUtils.ToAttributesString(dict)} />");
+                $@"<img {StlPlayer.EditorPlaceHolder} {TranslateUtils.ToAttributesString(dict)} />");
         }
 
-        public static string GetInsertAudioScript(string attributeName, string playUrl, Site site)
+        public static string GetInsertAudioScript(string attributeName, string playUrl, SiteInfo siteInfo)
         {
             if (string.IsNullOrEmpty(playUrl)) return string.Empty;
 
             var dict = new Dictionary<string, string>
             {
-                {StlPlayer.PlayUrl, playUrl},
-                {StlPlayer.IsAutoPlay, site.ConfigUEditorAudioIsAutoPlay.ToString()},
+                {StlAudio.PlayUrl, playUrl},
+                {StlAudio.IsAutoPlay, siteInfo.Additional.ConfigUEditorAudioIsAutoPlay.ToString()},
                 {"style", "width: 400px; height: 40px;" }
             };
 
             return GetInsertHtmlScript(attributeName,
-                $@"<img class=""siteserver-stl-audio"" src=""{SiteServerAssets.GetUrl("ueditor/audio-clip.png")}"" {TranslateUtils.ToAttributesString(dict)} />");
+                $@"<img {StlAudio.EditorPlaceHolder} {TranslateUtils.ToAttributesString(dict)} />");
         }
 
         public static string GetPureTextScript(string attributeName)
@@ -92,8 +92,9 @@ namespace SiteServer.CMS.Core
             var retVal = html;
             if (!string.IsNullOrEmpty(retVal))
             {
-                retVal = retVal.Replace(@"<img class=""siteserver-stl-player"" ", "<stl:player ");
-                retVal = retVal.Replace(@"<img class=""siteserver-stl-audio"" ", "<stl:audio ");
+                retVal = retVal.Replace($"<img {StlPlayer.EditorPlaceHolder} ", $"<{StlPlayer.ElementName} ");
+                retVal = retVal.Replace($"<img {StlAudio.EditorPlaceHolder} ", $"<{StlAudio.ElementName} ");
+                retVal = retVal.Replace($"<img {StlLibrary.EditorPlaceHolder} ", $"<{StlLibrary.ElementName} ");
             }
             return retVal;
         }
@@ -103,8 +104,9 @@ namespace SiteServer.CMS.Core
             var retVal = html;
             if (!string.IsNullOrEmpty(retVal))
             {
-                retVal = retVal.Replace("<stl:player ", @"<img class=""siteserver-stl-player"" ");
-                retVal = retVal.Replace("<stl:audio ", @"<img class=""siteserver-stl-audio"" ");
+                retVal = retVal.Replace($"<{StlPlayer.ElementName} ", $"<img {StlPlayer.EditorPlaceHolder} ");
+                retVal = retVal.Replace($"<{StlAudio.ElementName} ", $"<img {StlAudio.EditorPlaceHolder} ");
+                retVal = retVal.Replace($"<{StlLibrary.ElementName} ", $"<img {StlLibrary.EditorPlaceHolder} ");
             }
             return retVal;
         }

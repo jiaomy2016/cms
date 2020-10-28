@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Web;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.UEditor
 {
@@ -60,16 +60,16 @@ namespace SiteServer.CMS.UEditor
             var buildingList = new List<String>();
             try
             {
-                var site = DataProvider.SiteRepository.GetAsync(SiteId).GetAwaiter().GetResult();
-                var sitePath = PathUtility.GetSitePath(site); // 本站点物理路径
+                var siteInfo = SiteManager.GetSiteInfo(SiteId);
+                var sitePath = PathUtility.GetSitePath(siteInfo); // 本站点物理路径
                 var applicationPath = WebConfigUtils.PhysicalApplicationPath.ToLower().Trim(' ', '/', '\\'); // 系统物理路径
                 if (UploadType == EUploadType.Image)
                 {
-                    PathToList = site.ImageUploadDirectoryName; 
+                    PathToList = siteInfo.Additional.ImageUploadDirectoryName; 
                 }
                 else if(UploadType == EUploadType.File)
                 {
-                    PathToList = site.FileUploadDirectoryName;
+                    PathToList = siteInfo.Additional.FileUploadDirectoryName;
                 }
 
                 //var localPath = Server.MapPath(PathToList);

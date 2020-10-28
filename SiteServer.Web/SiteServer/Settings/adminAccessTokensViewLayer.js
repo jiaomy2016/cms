@@ -1,5 +1,5 @@
 ﻿var $api = new apiUtils.Api(apiUrl + '/pages/settings/adminAccessTokensViewLayer');
-var $id = utils.getQueryString('id');
+var $id = pageUtils.getQueryStringByName('id');
 
 var $vue = new Vue({
   el: '#main',
@@ -27,16 +27,16 @@ var $vue = new Vue({
     regenerate: function () {
       var $this = this;
 
-      utils.loading(true);
+      pageUtils.loading(true);
       $api.post(null, function (err, res) {
-        utils.loading(false);
+        pageUtils.loading(false);
         if (err || !res || !res.value) return;
 
         $this.accessToken = res.value;
       }, 'regenerate', $id);
     },
     btnCancelClick: function () {
-      utils.closeLayer();
+      pageUtils.closeLayer();
     },
     btnRegenerateClick: function () {
       this.regenerate();

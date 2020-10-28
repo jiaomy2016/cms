@@ -2,20 +2,18 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Data;
-using System.Threading.Tasks;
 using System.Web.UI.WebControls;
 using Datory;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.Plugin;
-using SiteServer.CMS.Repositories;
-using Content = SiteServer.Abstractions.Content;
-using TableStyle = SiteServer.Abstractions.TableStyle;
-using WebUtils = SiteServer.BackgroundPages.Core.WebUtils;
+using SiteServer.Plugin;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -48,10 +46,10 @@ namespace SiteServer.BackgroundPages.Cms
         private bool _isWritingOnly;
         private bool _isAdminOnly;
         private int _channelId;
-        private Channel _channel;
-        private List<TableStyle> _styleList;
+        private ChannelInfo _channelInfo;
+        private List<TableStyleInfo> _styleInfoList;
         private StringCollection _attributesOfDisplay;
-        private List<TableStyle> _allStyleList;
+        private List<TableStyleInfo> _allStyleInfoList;
         private List<string> _pluginIds;
         private Dictionary<string, Dictionary<string, Func<IContentContext, string>>> _pluginColumns;
         private bool _isEdit;
@@ -65,7 +63,7 @@ namespace SiteServer.BackgroundPages.Cms
             });
         }
 
-        public async Task Page_Load(object sender, EventArgs e)
+        public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
 
@@ -77,14 +75,14 @@ namespace SiteServer.BackgroundPages.Cms
             _isWritingOnly = AuthRequest.GetQueryBool("isWritingOnly");
             _isAdminOnly = AuthRequest.GetQueryBool("isAdminOnly");
 
-            _channel = await ChannelManager.GetChannelAsync(SiteId, _channelId);
-            var tableName = ChannelManager.GetTableNameAsync(Site, _channel).GetAwaiter().GetResult();
-            _styleList = TableStyleManager.GetContentStyleListAsync(Site, _channel).GetAwaiter().GetResult();
-            _attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(ChannelManager.GetContentAttributesOfDisplayAsync(SiteId, _channelId).GetAwaiter().GetResult());
-            _allStyleList = ContentUtility.GetAllTableStyleList(_styleList);
-            _pluginIds = PluginContentManager.GetContentPluginIds(_channel);
-            _pluginColumns = PluginContentManager.GetContentColumnsAsync(_pluginIds).GetAwaiter().GetResult();
-            _isEdit = TextUtility.IsEditAsync(Site, _channelId, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, _channelId);
+            var tableName = ChannelManager.GetTableName(SiteInfo, _channelInfo);
+            _styleInfoList = TableStyleManager.GetContentStyleInfoList(SiteInfo, _channelInfo);
+            _attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(ChannelManager.GetContentAttributesOfDisplay(SiteId, _channelId));
+            _allStyleInfoList = ContentUtility.GetAllTableStyleInfoList(_styleInfoList);
+            _pluginIds = PluginContentManager.GetContentPluginIds(_channelInfo);
+            _pluginColumns = PluginContentManager.GetContentColumns(_pluginIds);
+            _isEdit = TextUtility.IsEdit(SiteInfo, _channelId, AuthRequest.AdminPermissionsImpl);
 
             var state = AuthRequest.IsQueryExists("state") ? AuthRequest.GetQueryInt("state") : CheckManager.LevelInt.All;
             var searchType = AuthRequest.IsQueryExists("searchType") ? AuthRequest.GetQueryString("searchType") : ContentAttribute.Title;
@@ -94,9 +92,10 @@ namespace SiteServer.BackgroundPages.Cms
 
             var checkedLevel = 5;
             var isChecked = true;
-            foreach (var owningChannelId in AuthRequest.AdminPermissionsImpl.GetChannelIdListAsync().GetAwaiter().GetResult())
+            foreach (var owningChannelId in AuthRequest.AdminPermissionsImpl.ChannelIdList)
             {
-                var (isCheckedByChannelId, checkedLevelByChannelId) = CheckManager.GetUserCheckLevelAsync(AuthRequest.AdminPermissionsImpl, Site, owningChannelId).GetAwaiter().GetResult();
+                int checkedLevelByChannelId;
+                var isCheckedByChannelId = CheckManager.GetUserCheckLevel(AuthRequest.AdminPermissionsImpl, SiteInfo, owningChannelId, out checkedLevelByChannelId);
                 if (checkedLevel > checkedLevelByChannelId)
                 {
                     checkedLevel = checkedLevelByChannelId;
@@ -112,24 +111,23 @@ namespace SiteServer.BackgroundPages.Cms
             var allAttributeNameList = TableColumnManager.GetTableColumnNameList(tableName, DataType.Text);
             var adminId = _isAdminOnly
                 ? AuthRequest.AdminId
-                : AuthRequest.AdminPermissionsImpl.GetAdminIdAsync(Site.Id, _channel.Id).GetAwaiter().GetResult();
-            var whereString = DataProvider.ContentRepository.GetPagerWhereSqlStringAsync(Site, _channel,
+                : AuthRequest.AdminPermissionsImpl.GetAdminId(SiteInfo.Id, _channelInfo.Id);
+            var whereString = DataProvider.ContentDao.GetPagerWhereSqlString(SiteInfo, _channelInfo,
                 searchType, keyword,
                 dateFrom, dateTo, state, _isCheckOnly, false, _isTrashOnly, _isWritingOnly, adminId,
-                AuthRequest.AdminPermissionsImpl.IsSiteAdminAsync().GetAwaiter().GetResult(), AuthRequest.AdminPermissionsImpl.GetChannelIdListAsync().GetAwaiter().GetResult(),
-                allAttributeNameList).GetAwaiter().GetResult();
+                AuthRequest.AdminPermissionsImpl,
+                allAttributeNameList);
 
             PgContents.Param = new PagerParam
             {
                 ControlToPaginate = RptContents,
                 TableName = tableName,
-                PageSize = Site.PageSize,
+                PageSize = SiteInfo.Additional.PageSize,
                 Page = AuthRequest.GetQueryInt(Pager.QueryNamePage, 1),
                 OrderSqlString = ETaxisTypeUtils.GetContentOrderByString(ETaxisType.OrderByIdDesc),
                 ReturnColumnNames = TranslateUtils.ObjectCollectionToString(allAttributeNameList),
                 WhereSqlString = whereString,
-                TotalCount = DataProvider.DatabaseRepository.GetPageTotalCount(tableName, whereString),
-                
+                TotalCount = DataProvider.DatabaseDao.GetPageTotalCount(tableName, whereString)
             };
 
             if (IsPostBack) return;
@@ -138,15 +136,15 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 if (AuthRequest.IsQueryExists("IsDeleteAll"))
                 {
-                    //DataProvider.ContentRepository.DeleteContentsByTrash(SiteId, _channelId, tableName);
+                    //DataProvider.ContentDao.DeleteContentsByTrash(SiteId, _channelId, tableName);
 
-                    var list = DataProvider.ContentRepository.GetContentIdListByTrashAsync(SiteId, tableName).GetAwaiter().GetResult();
+                    var list = DataProvider.ContentDao.GetContentIdListByTrash(SiteId, tableName);
                     foreach (var (contentChannelId, contentId) in list)
                     {
-                        ContentUtility.DeleteAsync(tableName, Site, contentChannelId, contentId).GetAwaiter().GetResult();
+                        ContentUtility.Delete(tableName, SiteInfo, contentChannelId, contentId);
                     }
 
-                    await AuthRequest.AddSiteLogAsync(SiteId, "清空回收站");
+                    AuthRequest.AddSiteLog(SiteId, "清空回收站");
                     SuccessMessage("成功清空回收站!");
                 }
                 else if (AuthRequest.IsQueryExists("IsRestore"))
@@ -155,37 +153,37 @@ namespace SiteServer.BackgroundPages.Cms
                     foreach (var channelId in idsDictionary.Keys)
                     {
                         var contentIdList = idsDictionary[channelId];
-                        DataProvider.ContentRepository.UpdateTrashContentsAsync(SiteId, channelId, ChannelManager.GetTableNameAsync(Site, channelId).GetAwaiter().GetResult(), contentIdList).GetAwaiter().GetResult();
+                        DataProvider.ContentDao.UpdateTrashContents(SiteId, channelId, ChannelManager.GetTableName(SiteInfo, channelId), contentIdList);
                     }
-                    await AuthRequest.AddSiteLogAsync(SiteId, "从回收站还原内容");
+                    AuthRequest.AddSiteLog(SiteId, "从回收站还原内容");
                     SuccessMessage("成功还原内容!");
                 }
                 else if (AuthRequest.IsQueryExists("IsRestoreAll"))
                 {
-                    DataProvider.ContentRepository.UpdateRestoreContentsByTrashAsync(SiteId, tableName).GetAwaiter().GetResult();
-                    await AuthRequest.AddSiteLogAsync( SiteId, "从回收站还原所有内容");
+                    DataProvider.ContentDao.UpdateRestoreContentsByTrash(SiteId, _channelId, tableName);
+                    AuthRequest.AddSiteLog(SiteId, "从回收站还原所有内容");
                     SuccessMessage("成功还原所有内容!");
                 }
             }
 
-            ChannelManager.AddListItemsAsync(DdlChannelId.Items, Site, true, true, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+            ChannelManager.AddListItems(DdlChannelId.Items, SiteInfo, true, true, AuthRequest.AdminPermissionsImpl);
 
             if (_isCheckOnly)
             {
-                CheckManager.LoadContentLevelToCheck(DdlState, Site, isChecked, checkedLevel);
+                CheckManager.LoadContentLevelToCheck(DdlState, SiteInfo, isChecked, checkedLevel);
             }
             else
             {
-                CheckManager.LoadContentLevelToList(DdlState, Site, _isCheckOnly, isChecked, checkedLevel);
+                CheckManager.LoadContentLevelToList(DdlState, SiteInfo, _isCheckOnly, isChecked, checkedLevel);
             }
             
             ControlUtils.SelectSingleItem(DdlState, state.ToString());
 
-            foreach (var style in _allStyleList)
+            foreach (var styleInfo in _allStyleInfoList)
             {
-                if (style.Type == InputType.TextEditor) continue;
+                if (styleInfo.InputType == InputType.TextEditor) continue;
 
-                var listitem = new ListItem(style.DisplayName, style.AttributeName);
+                var listitem = new ListItem(styleInfo.DisplayName, styleInfo.AttributeName);
                 DdlSearchType.Items.Add(listitem);
             }
 
@@ -203,38 +201,38 @@ namespace SiteServer.BackgroundPages.Cms
 
             PgContents.DataBind();
 
-            LtlColumnsHead.Text += TextUtility.GetColumnsHeadHtml(_styleList, _pluginColumns, _attributesOfDisplay);
+            LtlColumnsHead.Text += TextUtility.GetColumnsHeadHtml(_styleInfoList, _pluginColumns, _attributesOfDisplay);
             
 
-            BtnSelect.Attributes.Add("onClick", ModalSelectColumns.GetOpenWindowString(SiteId, _channelId));
+            BtnSelect.Attributes.Add("onclick", ModalSelectColumns.GetOpenWindowString(SiteId, _channelId));
 
             if (_isTrashOnly)
             {
                 LtlColumnsHead.Text += @"<th class=""text-center text-nowrap"" width=""150"">删除时间</th>";
                 BtnAddToGroup.Visible = BtnTranslate.Visible = BtnCheck.Visible = false;
                 PhTrash.Visible = true;
-                if (!HasChannelPermissions(_channelId, Constants.ChannelPermissions.ContentDelete))
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentDelete))
                 {
                     BtnDelete.Visible = false;
                     BtnDeleteAll.Visible = false;
                 }
                 else
                 {
-                    BtnDelete.Attributes.Add("onClick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, true, PageUrl));
-                    BtnDeleteAll.Attributes.Add("onClick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsDeleteAll", "True"), "确实要清空回收站吗?"));
+                    BtnDelete.Attributes.Add("onclick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, true, PageUrl));
+                    BtnDeleteAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsDeleteAll", "True"), "确实要清空回收站吗?"));
                 }
-                BtnRestore.Attributes.Add("onClick", PageUtils.GetRedirectStringWithCheckBoxValue(PageUtils.AddQueryString(PageUrl, "IsRestore", "True"), "IDsCollection", "IDsCollection", "请选择需要还原的内容！"));
-                BtnRestoreAll.Attributes.Add("onClick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsRestoreAll", "True"), "确实要还原所有内容吗?"));
+                BtnRestore.Attributes.Add("onclick", PageUtils.GetRedirectStringWithCheckBoxValue(PageUtils.AddQueryString(PageUrl, "IsRestore", "True"), "IDsCollection", "IDsCollection", "请选择需要还原的内容！"));
+                BtnRestoreAll.Attributes.Add("onclick", PageUtils.GetRedirectStringWithConfirm(PageUtils.AddQueryString(PageUrl, "IsRestoreAll", "True"), "确实要还原所有内容吗?"));
             }
             else
             {
                 LtlColumnsHead.Text += @"<th class=""text-center text-nowrap"" width=""100"">操作</th>";
 
-                BtnAddToGroup.Attributes.Add("onClick", ModalAddToGroup.GetOpenWindowStringToContentForMultiChannels(SiteId));
+                BtnAddToGroup.Attributes.Add("onclick", ModalAddToGroup.GetOpenWindowStringToContentForMultiChannels(SiteId));
 
-                if (HasChannelPermissions(SiteId, Constants.ChannelPermissions.ContentCheck))
+                if (HasChannelPermissions(SiteId, ConfigManager.ChannelPermissions.ContentCheck))
                 {
-                    BtnCheck.Attributes.Add("onClick", ModalContentCheck.GetOpenWindowStringForMultiChannels(SiteId, PageUrl));
+                    BtnCheck.Attributes.Add("onclick", ModalContentCheck.GetOpenWindowStringForMultiChannels(SiteId, PageUrl));
                     if (_isCheckOnly)
                     {
                         BtnCheck.CssClass = "btn m-r-5 btn-success";
@@ -245,52 +243,31 @@ namespace SiteServer.BackgroundPages.Cms
                     PhCheck.Visible = false;
                 }
 
-                if (!HasChannelPermissions(_channelId, Constants.ChannelPermissions.ContentTranslate))
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentTranslate))
                 {
                     BtnTranslate.Visible = false;
                 }
                 else
                 {
-                    BtnTranslate.Attributes.Add("onClick", PageContentTranslate.GetRedirectClickStringForMultiChannels(SiteId, PageUrl));
+                    BtnTranslate.Attributes.Add("onclick", PageContentTranslate.GetRedirectClickStringForMultiChannels(SiteId, PageUrl));
                 }
 
-                if (!HasChannelPermissions(_channelId, Constants.ChannelPermissions.ContentDelete))
+                if (!HasChannelPermissions(_channelId, ConfigManager.ChannelPermissions.ContentDelete))
                 {
                     BtnDelete.Visible = false;
                 }
                 else
                 {
-                    BtnDelete.Attributes.Add("onClick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, false, PageUrl));
+                    BtnDelete.Attributes.Add("onclick", PageContentDelete.GetRedirectClickStringForMultiChannels(SiteId, false, PageUrl));
                 }
             }
-        }
-
-        public Content GetContent(IDataRecord record)
-        {
-            if (record == null) return null;
-
-            var content = new Content();
-
-            for (var i = 0; i < record.FieldCount; i++)
-            {
-                var name = record.GetName(i);
-                var value = record.GetValue(i);
-
-                if (value is string && WebConfigUtils.DatabaseType == DatabaseType.Oracle && (string)value == SqlUtils.OracleEmptyValue)
-                {
-                    value = string.Empty;
-                }
-                content.Set(name, value);
-            }
-
-            return content;
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
 
-            var contentInfo = GetContent((IDataRecord)e.Item.DataItem);
+            var contentInfo = new ContentInfo((IDataRecord)e.Item.DataItem);
 
             var ltlTitle = (Literal)e.Item.FindControl("ltlTitle");
             var ltlChannel = (Literal)e.Item.FindControl("ltlChannel");
@@ -298,9 +275,9 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlStatus = (Literal)e.Item.FindControl("ltlStatus");
             var ltlSelect = (Literal)e.Item.FindControl("ltlSelect");
 
-            ltlTitle.Text = WebUtils.GetContentTitle(Site, contentInfo, PageUrl);
+            ltlTitle.Text = WebUtils.GetContentTitle(SiteInfo, contentInfo, PageUrl);
 
-            var specialHtml = string.Empty;
+            string specialHtml;
             
             if (_isTrashOnly)
             {
@@ -308,37 +285,36 @@ namespace SiteServer.BackgroundPages.Cms
             }
             else
             {
-                var pluginMenus = PluginMenuManager.GetContentMenusAsync(_pluginIds, contentInfo).GetAwaiter().GetResult();
-                specialHtml = TextUtility.GetCommandsHtml(Site, pluginMenus, contentInfo, PageUrl,
+                var pluginMenus = PluginMenuManager.GetContentMenus(_pluginIds, contentInfo);
+                specialHtml = TextUtility.GetCommandsHtml(SiteInfo, pluginMenus, contentInfo, PageUrl,
                         AuthRequest.AdminName, _isEdit);
             }
 
             ltlColumns.Text = $@"
-{TextUtility.GetColumnsHtmlAsync(_nameValueCacheDict, Site, contentInfo, _attributesOfDisplay, _allStyleList, _pluginColumns).GetAwaiter().GetResult()}
+{TextUtility.GetColumnsHtml(_nameValueCacheDict, SiteInfo, contentInfo, _attributesOfDisplay, _allStyleInfoList, _pluginColumns)}
 <td class=""text-center text-nowrap"">
 {specialHtml}
 </td>";
 
-            string nodeName;
-            if (!_nameValueCacheDict.TryGetValue(contentInfo.ChannelId.ToString(), out nodeName))
+            if (!_nameValueCacheDict.TryGetValue(contentInfo.ChannelId.ToString(), out var nodeName))
             {
-                nodeName = ChannelManager.GetChannelNameNavigationAsync(SiteId, contentInfo.ChannelId).GetAwaiter().GetResult();
+                nodeName = ChannelManager.GetChannelNameNavigation(SiteId, contentInfo.ChannelId);
                 _nameValueCacheDict[contentInfo.ChannelId.ToString()] = nodeName;
             }
 
             ltlChannel.Text = nodeName;
-            var checkState = CheckManager.GetCheckState(Site, contentInfo);
+            var checkState = CheckManager.GetCheckState(SiteInfo, contentInfo);
 
             ltlStatus.Text = _isTrashOnly
                 ? checkState
-                : $@"<a href=""javascript:;"" title=""设置内容状态"" onClick=""{
+                : $@"<a href=""javascript:;"" title=""设置内容状态"" onclick=""{
                         ModalCheckState.GetOpenWindowString(SiteId, contentInfo, PageUrl)
                     }"">{checkState}</a>";
 
             ltlSelect.Text = $@"<input type=""checkbox"" name=""IDsCollection"" value=""{contentInfo.ChannelId}_{contentInfo.Id}"" />";
         }
 
-        public void Search_onClick(object sender, EventArgs e)
+        public void Search_OnClick(object sender, EventArgs e)
         {
             PageUtils.Redirect(PageUrl);
         }

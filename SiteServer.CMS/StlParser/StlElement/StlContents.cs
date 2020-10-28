@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Threading.Tasks;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -20,26 +20,26 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "显示相关内容列表")]
         public const string IsRelatedContents = nameof(IsRelatedContents);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static object Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
-            var listInfo = await ListInfo.GetListInfoAsync(pageInfo, contextInfo, EContextType.Content);
-            var dataSource = await GetDataSourceAsync(pageInfo, contextInfo, listInfo);
+            var listInfo = ListInfo.GetListInfo(pageInfo, contextInfo, EContextType.Content);
+            var dataSource = GetDataSource(pageInfo, contextInfo, listInfo);
 
             if (contextInfo.IsStlEntity)
             {
-                return await ParseEntityAsync(pageInfo, dataSource);
+                return ParseEntity(pageInfo, dataSource);
             }
 
             return ParseElement(pageInfo, contextInfo, listInfo, dataSource);
         }
 
-        private static async Task<DataSet> GetDataSourceAsync(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
+        private static DataSet GetDataSource(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo)
         {
-            var channelId = await StlDataUtility.GetChannelIdByLevelAsync(pageInfo.SiteId, contextInfo.ChannelId, listInfo.UpLevel, listInfo.TopLevel);
+            var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, listInfo.UpLevel, listInfo.TopLevel);
 
-            channelId = await ChannelManager.GetChannelIdAsync(pageInfo.SiteId, channelId, listInfo.ChannelIndex, listInfo.ChannelName);
+            channelId = ChannelManager.GetChannelId(pageInfo.SiteId, channelId, listInfo.ChannelIndex, listInfo.ChannelName);
 
-            return await StlDataUtility.GetContentsDataSourceAsync(pageInfo.Site, channelId, contextInfo.ContentId, listInfo.GroupContent, listInfo.GroupContentNot, listInfo.Tags, listInfo.IsImageExists, listInfo.IsImage, listInfo.IsVideoExists, listInfo.IsVideo, listInfo.IsFileExists, listInfo.IsFile, listInfo.IsRelatedContents, listInfo.StartNum, listInfo.TotalNum, listInfo.OrderByString, listInfo.IsTopExists, listInfo.IsTop, listInfo.IsRecommendExists, listInfo.IsRecommend, listInfo.IsHotExists, listInfo.IsHot, listInfo.IsColorExists, listInfo.IsColor, listInfo.Where, listInfo.Scope, listInfo.GroupChannel, listInfo.GroupChannelNot, listInfo.Others);
+            return StlDataUtility.GetContentsDataSource(pageInfo.SiteInfo, channelId, contextInfo.ContentId, listInfo.GroupContent, listInfo.GroupContentNot, listInfo.Tags, listInfo.IsImageExists, listInfo.IsImage, listInfo.IsVideoExists, listInfo.IsVideo, listInfo.IsFileExists, listInfo.IsFile, listInfo.IsRelatedContents, listInfo.StartNum, listInfo.TotalNum, listInfo.OrderByString, listInfo.IsTopExists, listInfo.IsTop, listInfo.IsRecommendExists, listInfo.IsRecommend, listInfo.IsHotExists, listInfo.IsHot, listInfo.IsColorExists, listInfo.IsColor, listInfo.Where, listInfo.Scope, listInfo.GroupChannel, listInfo.GroupChannelNot, listInfo.Others);
         }
 
         private static string ParseElement(PageInfo pageInfo, ContextInfo contextInfo, ListInfo listInfo, DataSet dataSource)
@@ -118,9 +118,9 @@ namespace SiteServer.CMS.StlParser.StlElement
             return parsedContent;
         }
 
-        private static async Task<object> ParseEntityAsync(PageInfo pageInfo, DataSet dataSource)
+        private static object ParseEntity(PageInfo pageInfo, DataSet dataSource)
         {
-            var contentInfoList = new List<IDictionary<string, object>>();
+            var contentInfoList = new List<Dictionary<string, object>>();
 
             var table = dataSource.Tables[0];
             foreach (DataRow row in table.Rows)
@@ -128,7 +128,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 var contentId = Convert.ToInt32(row[nameof(ContentAttribute.Id)]);
                 var channelId = Convert.ToInt32(row[nameof(ContentAttribute.ChannelId)]);
 
-                var contentInfo = await DataProvider.ContentRepository.GetAsync(pageInfo.Site, channelId, contentId);
+                var contentInfo = ContentManager.GetContentInfo(pageInfo.SiteInfo, channelId, contentId);
 
                 if (contentInfo != null)
                 {

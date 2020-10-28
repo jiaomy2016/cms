@@ -1,32 +1,23 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+﻿using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Api
 {
     public static class ApiManager
     {
-        public static string RootUrl => PageUtils.ApplicationPath;
-
-        private static string _innerApiUrl;
+        private static string innerApiUrl;
 
         public static string InnerApiUrl
         {
             get
             {
-                if (string.IsNullOrEmpty(_innerApiUrl))
+                if (string.IsNullOrEmpty(innerApiUrl))
                 {
-                    _innerApiUrl = PageUtils.ParseNavigationUrl("~/api");
+                    innerApiUrl = PageUtils.ParseNavigationUrl("~/api");
                 }
-                return _innerApiUrl;
+                return innerApiUrl;
             }
-        }
-
-        public static async Task<string> GetApiUrlAsync(string route = "")
-        {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            return PageUtils.Combine(config.GetApiUrl(), route);
         }
 
         public static string GetInnerApiUrl(string route)

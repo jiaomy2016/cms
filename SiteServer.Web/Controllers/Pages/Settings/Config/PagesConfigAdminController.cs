@@ -1,15 +1,15 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Pages.Settings.Config
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("pages/settings/configAdmin")]
     public class PagesConfigAdminController : ApiController
     {
@@ -17,22 +17,20 @@ namespace SiteServer.API.Controllers.Pages.Settings.Config
         private const string RouteUpload = "upload";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.SettingsPermissions.Config))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsConfigAdmin))
                 {
                     return Unauthorized();
                 }
 
-                var config = await DataProvider.ConfigRepository.GetAsync();
-
                 return Ok(new
                 {
-                    Value = config,
+                    Value = ConfigManager.Instance.SystemConfigInfo,
                     request.AdminToken
                 });
             }
@@ -43,30 +41,28 @@ namespace SiteServer.API.Controllers.Pages.Settings.Config
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.SettingsPermissions.Config))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsConfigAdmin))
                 {
                     return Unauthorized();
                 }
 
-                var config = await DataProvider.ConfigRepository.GetAsync();
+                ConfigManager.SystemConfigInfo.AdminTitle = request.GetPostString("adminTitle");
+                ConfigManager.SystemConfigInfo.AdminLogoUrl = request.GetPostString("adminLogoUrl");
+                ConfigManager.SystemConfigInfo.AdminWelcomeHtml = request.GetPostString("adminWelcomeHtml");
 
-                config.AdminTitle = request.GetPostString("adminTitle");
-                config.AdminLogoUrl = request.GetPostString("adminLogoUrl");
-                config.AdminWelcomeHtml = request.GetPostString("adminWelcomeHtml");
+                DataProvider.ConfigDao.Update(ConfigManager.Instance);
 
-                await DataProvider.ConfigRepository.UpdateAsync(config);
-
-                await request.AddAdminLogAsync("修改管理后台设置");
+                request.AddAdminLog("修改管理后台设置");
 
                 return Ok(new
                 {
-                    Value = config
+                    Value = ConfigManager.SystemConfigInfo
                 });
             }
             catch (Exception ex)
@@ -76,13 +72,13 @@ namespace SiteServer.API.Controllers.Pages.Settings.Config
         }
 
         [HttpPost, Route(RouteUpload)]
-        public async Task<IHttpActionResult> Upload()
+        public IHttpActionResult Upload()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
                 if (!request.IsAdminLoggin ||
-                    !await request.AdminPermissionsImpl.HasSystemPermissionsAsync(Constants.SettingsPermissions.Config))
+                    !request.AdminPermissionsImpl.HasSystemPermissions(ConfigManager.AppPermissions.SettingsConfigAdmin))
                 {
                     return Unauthorized();
                 }
@@ -118,7 +114,7 @@ namespace SiteServer.API.Controllers.Pages.Settings.Config
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

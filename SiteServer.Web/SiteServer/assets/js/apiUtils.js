@@ -1,6 +1,6 @@
 var apiUtils = {
   Api: function (apiUrl) {
-    this.getQueryString = function (name) {
+    this.getQueryStringByName = function (name) {
       var result = location.search.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
       if (!result || result.length < 1) {
         return "";
@@ -8,7 +8,7 @@ var apiUtils = {
       return decodeURIComponent(result[1]);
     };
 
-    this.apiUrl = apiUrl || 'https://api.siteserver.cn/v1.1';
+    this.apiUrl = apiUrl || 'https://api.sscms.com/v6';
 
     this._getURL = function (url, data, method) {
       url += ((/\?/).test(url) ? '&' : '?');

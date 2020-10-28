@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -69,7 +69,7 @@ namespace SiteServer.BackgroundPages.Cms
                 if (AuthRequest.IsQueryExists("channelId"))
                 {
                     var channelId = AuthRequest.GetQueryInt("channelId");
-                    var nodeNames = ChannelManager.GetChannelNameNavigationAsync(SiteId, channelId).GetAwaiter().GetResult();
+                    var nodeNames = ChannelManager.GetChannelNameNavigation(SiteId, channelId);
 
                     if (!string.IsNullOrEmpty(_jsMethod))
                     {
@@ -78,7 +78,7 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                     else
                     {
-                        var pageUrl = PageUtility.GetChannelUrlAsync(Site, ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult(), false).GetAwaiter().GetResult();
+                        var pageUrl = PageUtility.GetChannelUrl(SiteInfo, ChannelManager.GetChannelInfo(SiteId, channelId), false);
                         if (_isProtocol)
                         {
                             pageUrl = PageUtils.AddProtocolToUrl(pageUrl);
@@ -90,7 +90,7 @@ namespace SiteServer.BackgroundPages.Cms
                 }
                 else
                 {
-                    var nodeInfo = ChannelManager.GetChannelAsync(SiteId, SiteId).GetAwaiter().GetResult();
+                    var nodeInfo = ChannelManager.GetChannelInfo(SiteId, SiteId);
 
                     var linkUrl = PageUtils.GetCmsUrl(SiteId, nameof(ModalChannelSelect), new NameValueCollection
                     {
@@ -100,7 +100,7 @@ namespace SiteServer.BackgroundPages.Cms
                         {"itemIndex", _itemIndex.ToString()}
                     });
                     LtlSite.Text = $"<a href='{linkUrl}'>{nodeInfo.ChannelName}</a>";
-                    ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(Site, string.Empty, ELoadingType.ChannelClickSelect, null));
+                    ClientScriptRegisterClientScriptBlock("NodeTreeScript", ChannelLoading.GetScript(SiteInfo, string.Empty, ELoadingType.ChannelClickSelect, null));
                     BindGrid();
                 }
 			}
@@ -108,7 +108,7 @@ namespace SiteServer.BackgroundPages.Cms
 
         public void BindGrid()
         {
-            var channelIdList = ChannelManager.GetChannelIdListAsync(ChannelManager.GetChannelAsync(SiteId, SiteId).GetAwaiter().GetResult(), EScopeType.Children, string.Empty, string.Empty, string.Empty).GetAwaiter().GetResult();
+            var channelIdList = ChannelManager.GetChannelIdList(ChannelManager.GetChannelInfo(SiteId, SiteId), EScopeType.Children, string.Empty, string.Empty, string.Empty);
             RptChannel.DataSource = channelIdList;
             RptChannel.ItemDataBound += rptChannel_ItemDataBound;
             RptChannel.DataBind();
@@ -122,11 +122,11 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 if (!IsDescendantOwningChannelId(channelId)) e.Item.Visible = false;
             }
-            var nodeInfo = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
+            var nodeInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
             var ltlHtml = (Literal)e.Item.FindControl("ltlHtml");
 
-            ltlHtml.Text = ChannelLoading.GetChannelRowHtmlAsync(Site, nodeInfo, enabled, ELoadingType.ChannelClickSelect, _additional, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+            ltlHtml.Text = ChannelLoading.GetChannelRowHtml(SiteInfo, nodeInfo, enabled, ELoadingType.ChannelClickSelect, _additional, AuthRequest.AdminPermissionsImpl);
         }
 	}
 }

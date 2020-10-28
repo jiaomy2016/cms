@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
 
 namespace SiteServer.CMS.DataCache
 {
@@ -12,6 +11,8 @@ namespace SiteServer.CMS.DataCache
 	{
 	    private static class UserMenuManagerCache
         {
+	        private static readonly object LockObject = new object();
+
 	        private static readonly string CacheKey = DataCacheManager.GetCacheKey(nameof(UserMenuManager));
 
 	        public static void Clear()
@@ -19,20 +20,23 @@ namespace SiteServer.CMS.DataCache
 	            DataCacheManager.Remove(CacheKey);
 	        }
 
-            public static async Task<List<UserMenu>> GetAllUserMenusAsync()
+            public static List<UserMenuInfo> GetAllUserMenus()
 	        {
-	            var retVal = DataCacheManager.Get<List<UserMenu>>(CacheKey);
+	            var retVal = DataCacheManager.Get<List<UserMenuInfo>>(CacheKey);
 	            if (retVal != null) return retVal;
 
-                retVal = DataCacheManager.Get<List<UserMenu>>(CacheKey);
-                if (retVal == null)
-                {
-                    retVal = await DataProvider.UserMenuRepository.GetUserMenuListAsync();
+	            lock (LockObject)
+	            {
+	                retVal = DataCacheManager.Get<List<UserMenuInfo>>(CacheKey);
+	                if (retVal == null)
+	                {
+	                    retVal = DataProvider.UserMenuDao.GetUserMenuInfoList();
 
-                    DataCacheManager.Insert(CacheKey, retVal);
-                }
+	                    DataCacheManager.Insert(CacheKey, retVal);
+	                }
+	            }
 
-                return retVal;
+	            return retVal;
 	        }
 	    }
 
@@ -41,15 +45,15 @@ namespace SiteServer.CMS.DataCache
 	        UserMenuManagerCache.Clear();
 	    }
 
-        public static async Task<UserMenu> GetUserMenuAsync(int menuId)
+        public static UserMenuInfo GetUserMenuInfo(int menuId)
 	    {
-	        var list = await UserMenuManagerCache.GetAllUserMenusAsync();
+	        var list = UserMenuManagerCache.GetAllUserMenus();
 	        return list.FirstOrDefault(menu => menu.Id == menuId);
 	    }
 
-	    public static async Task<List<UserMenu>> GetAllUserMenuListAsync()
+	    public static List<UserMenuInfo> GetAllUserMenuInfoList()
 	    {
-	        return await UserMenuManagerCache.GetAllUserMenusAsync();
+	        return UserMenuManagerCache.GetAllUserMenus();
 	    }
 
 	    private const string Dashboard = nameof(Dashboard);
@@ -57,16 +61,16 @@ namespace SiteServer.CMS.DataCache
 	    private const string Contents = nameof(Contents);
 	    private const string Return = nameof(Return);
 
-        public static readonly Lazy<List<KeyValuePair<UserMenu, List<UserMenu>>>> SystemMenus =
-	        new Lazy<List<KeyValuePair<UserMenu, List<UserMenu>>>>(() =>
-	            new List<KeyValuePair<UserMenu, List<UserMenu>>>
+        public static readonly Lazy<List<KeyValuePair<UserMenuInfo, List<UserMenuInfo>>>> SystemMenus =
+	        new Lazy<List<KeyValuePair<UserMenuInfo, List<UserMenuInfo>>>>(() =>
+	            new List<KeyValuePair<UserMenuInfo, List<UserMenuInfo>>>
 	            {
-	                new KeyValuePair<UserMenu, List<UserMenu>>(new UserMenu
+	                new KeyValuePair<UserMenuInfo, List<UserMenuInfo>>(new UserMenuInfo
 	                {
 	                    Id = 0,
 	                    SystemId = Dashboard,
-	                    GroupIds = new List<int>(),
-	                    Disabled = false,
+	                    GroupIdCollection = string.Empty,
+	                    IsDisabled = false,
 	                    ParentId = 0,
 	                    Taxis = 1,
 	                    Text = "用户中心",
@@ -74,12 +78,12 @@ namespace SiteServer.CMS.DataCache
                         Href = "index.html",
 	                    Target = "_top"
 	                }, null),
-	                new KeyValuePair<UserMenu, List<UserMenu>>(new UserMenu
+	                new KeyValuePair<UserMenuInfo, List<UserMenuInfo>>(new UserMenuInfo
 	                {
 	                    Id = 0,
 	                    SystemId = ContentAdd,
-                        GroupIds = new List<int>(),
-                        Disabled = false,
+	                    GroupIdCollection = string.Empty,
+	                    IsDisabled = false,
 	                    ParentId = 0,
 	                    Taxis = 2,
 	                    Text = "新增稿件",
@@ -87,12 +91,12 @@ namespace SiteServer.CMS.DataCache
 	                    Href = "pages/contentAdd.html",
 	                    Target = "_self"
                     }, null),
-	                new KeyValuePair<UserMenu, List<UserMenu>>(new UserMenu
+	                new KeyValuePair<UserMenuInfo, List<UserMenuInfo>>(new UserMenuInfo
 	                {
 	                    Id = 0,
 	                    SystemId = Contents,
-                        GroupIds = new List<int>(),
-                        Disabled = false,
+	                    GroupIdCollection = string.Empty,
+	                    IsDisabled = false,
 	                    ParentId = 0,
 	                    Taxis = 3,
 	                    Text = "稿件管理",
@@ -100,12 +104,12 @@ namespace SiteServer.CMS.DataCache
 	                    Href = "pages/contents.html",
 	                    Target = "_self"
                     }, null),
-	                new KeyValuePair<UserMenu, List<UserMenu>>(new UserMenu
+	                new KeyValuePair<UserMenuInfo, List<UserMenuInfo>>(new UserMenuInfo
 	                {
 	                    Id = 0,
 	                    SystemId = Return,
-                        GroupIds = new List<int>(),
-                        Disabled = false,
+	                    GroupIdCollection = string.Empty,
+	                    IsDisabled = false,
 	                    ParentId = 0,
 	                    Taxis = 4,
 	                    Text = "返回网站",

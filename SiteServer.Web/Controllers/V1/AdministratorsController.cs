@@ -1,21 +1,16 @@
 ﻿using System;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Api.V1;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.V1
 {
-    /// <summary>
-    /// Administrators
-    /// </summary>
     [RoutePrefix("v1/administrators")]
-    public partial class AdministratorsController : ApiController
+    public class AdministratorsController : ApiController
     {
         private const string Route = "";
         private const string RouteActionsLogin = "actions/login";
@@ -23,211 +18,212 @@ namespace SiteServer.API.Controllers.V1
         private const string RouteActionsResetPassword = "actions/resetPassword";
         private const string RouteAdministrator = "{id:int}";
 
+        [OpenApiOperation("新增管理员 API", "https://sscms.com/docs/v6/api/guide/administrators/create.html")]
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Create()
+        public IHttpActionResult Create([FromBody] AdministratorInfoCreateUpdate adminInfo)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
-                var administrator = request.GetPostObject<Administrator>("administrator");
-                var password = request.GetPostString("password");
-
-                var retVal = await DataProvider.AdministratorRepository.InsertAsync(administrator, password);
-                if (!retVal.IsValid)
+                var retVal = DataProvider.AdministratorDao.ApiInsert(adminInfo, out var errorMessage);
+                if (retVal == null)
                 {
-                    return BadRequest(retVal.ErrorMessage);
+                    return BadRequest(errorMessage);
                 }
 
                 return Ok(new
                 {
-                    Value = administrator
+                    Value = retVal
                 });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("修改管理员 API", "https://sscms.com/docs/v6/api/guide/administrators/update.html")]
         [HttpPut, Route(RouteAdministrator)]
-        public async Task<IHttpActionResult> Update(int id, [FromBody] Administrator administrator)
+        public IHttpActionResult Update(int id, [FromBody] AdministratorInfoCreateUpdate adminInfo)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
-                if (administrator == null) return BadRequest("Could not read administrator from body");
+                if (adminInfo == null) return BadRequest("Could not read administrator from body");
 
-                if (!await DataProvider.AdministratorRepository.IsExistsAsync(id)) return NotFound();
+                if (!DataProvider.AdministratorDao.ApiIsExists(id)) return NotFound();
 
-                administrator.Id = id;
-
-                var retVal = await DataProvider.AdministratorRepository.UpdateAsync(administrator);
-                if (!retVal.IsValid)
+                var retVal = DataProvider.AdministratorDao.ApiUpdate(id, adminInfo, out var errorMessage);
+                if (retVal == null)
                 {
-                    return BadRequest(retVal.ErrorMessage);
+                    return BadRequest(errorMessage);
                 }
 
                 return Ok(new
                 {
-                    Value = administrator
+                    Value = retVal
                 });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("删除管理员 API", "https://sscms.com/docs/v6/api/guide/administrators/delete.html")]
         [HttpDelete, Route(RouteAdministrator)]
-        public async Task<IHttpActionResult> Delete(int id)
+        public IHttpActionResult Delete(int id)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
-                if (!await DataProvider.AdministratorRepository.IsExistsAsync(id)) return NotFound();
+                if (!DataProvider.AdministratorDao.ApiIsExists(id)) return NotFound();
 
-                var administrator = await DataProvider.AdministratorRepository.DeleteAsync(id);
+                var adminInfo = DataProvider.AdministratorDao.ApiDelete(id);
 
                 return Ok(new
                 {
-                    Value = administrator
+                    Value = adminInfo
                 });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("获取管理员 API", "https://sscms.com/docs/v6/api/guide/administrators/get.html")]
         [HttpGet, Route(RouteAdministrator)]
-        public async Task<IHttpActionResult> Get(int id)
+        public IHttpActionResult Get(int id)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
-                if (!await DataProvider.AdministratorRepository.IsExistsAsync(id)) return NotFound();
+                if (!DataProvider.AdministratorDao.ApiIsExists(id)) return NotFound();
 
-                var administrator = await DataProvider.AdministratorRepository.GetByUserIdAsync(id);
+                var adminInfo = DataProvider.AdministratorDao.ApiGetAdministrator(id);
 
                 return Ok(new
                 {
-                    Value = administrator
+                    Value = adminInfo
                 });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("获取管理员列表 API", "https://sscms.com/docs/v6/api/guide/administrators/list.html")]
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> List()
+        public IHttpActionResult List()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
                 var top = request.GetQueryInt("top", 20);
                 var skip = request.GetQueryInt("skip");
 
-                var administrators = await DataProvider.AdministratorRepository.GetAdministratorsAsync(skip, top);
-                var count = await DataProvider.AdministratorRepository.GetCountAsync();
+                var administrators = DataProvider.AdministratorDao.ApiGetAdministrators(skip, top);
+                var count = DataProvider.AdministratorDao.ApiGetCount();
 
                 return Ok(new PageResponse(administrators, top, skip, request.HttpRequest.Url.AbsoluteUri) { Count = count });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("管理员登录 API", "https://sscms.com/docs/v6/api/guide/administrators/login.html")]
         [HttpPost, Route(RouteActionsLogin)]
-        public async Task<LoginResult> Login([FromBody] LoginRequest request)
-        {
-            var context = await AuthenticatedRequest.GetAuthAsync();
-
-            Administrator adminInfo;
-
-            var (isValid, userName, errorMessage) = await DataProvider.AdministratorRepository.ValidateAsync(request.Account, request.Password, true);
-
-            if (!isValid)
-            {
-                adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(userName);
-                if (adminInfo != null)
-                {
-                    await DataProvider.AdministratorRepository.UpdateLastActivityDateAndCountOfFailedLoginAsync(adminInfo); // 记录最后登录时间、失败次数+1
-                }
-
-                throw new HttpResponseException(Request.CreateErrorResponse(
-                    HttpStatusCode.BadRequest,
-                    errorMessage
-                ));
-            }
-
-            adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(userName);
-            await DataProvider.AdministratorRepository.UpdateLastActivityDateAndCountOfLoginAsync(adminInfo); // 记录最后登录时间、失败次数清零
-            var accessToken = await context.AdminLoginAsync(adminInfo.UserName, request.IsAutoLogin);
-            var expiresAt = DateTime.Now.AddDays(Constants.AccessTokenExpireDays);
-
-            var sessionId = StringUtils.Guid();
-            var cacheKey = Constants.GetSessionIdCacheKey(adminInfo.Id);
-            CacheUtils.Insert(cacheKey, sessionId);
-
-            var config = await DataProvider.ConfigRepository.GetAsync();
-
-            var isEnforcePasswordChange = false;
-            if (config.IsAdminEnforcePasswordChange)
-            {
-                if (adminInfo.LastChangePasswordDate == null)
-                {
-                    isEnforcePasswordChange = true;
-                }
-                else
-                {
-                    var ts = new TimeSpan(DateTime.Now.Ticks - adminInfo.LastChangePasswordDate.Value.Ticks);
-                    if (ts.TotalDays > config.AdminEnforcePasswordChangeDays)
-                    {
-                        isEnforcePasswordChange = true;
-                    }
-                }
-            }
-
-            return new LoginResult
-            {
-                Value = adminInfo,
-                AccessToken = accessToken,
-                ExpiresAt = expiresAt,
-                SessionId = sessionId,
-                IsEnforcePasswordChange = isEnforcePasswordChange
-            };
-        }
-
-        [HttpPost, Route(RouteActionsLogout)]
-        public async Task<IHttpActionResult> Logout()
+        public IHttpActionResult Login()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var adminInfo = request.IsAdminLoggin ? request.Administrator : null;
+                var request = new AuthenticatedRequest();
+
+                var account = request.GetPostString("account");
+                var password = request.GetPostString("password");
+                var isAutoLogin = request.GetPostBool("isAutoLogin");
+
+                AdministratorInfo adminInfo;
+
+                if (!DataProvider.AdministratorDao.Validate(account, password, true, out var userName, out var errorMessage))
+                {
+                    adminInfo = AdminManager.GetAdminInfoByUserName(userName);
+                    if (adminInfo != null)
+                    {
+                        DataProvider.AdministratorDao.UpdateLastActivityDateAndCountOfFailedLogin(adminInfo); // 记录最后登录时间、失败次数+1
+                    }
+                    return BadRequest(errorMessage);
+                }
+
+                adminInfo = AdminManager.GetAdminInfoByUserName(userName);
+                DataProvider.AdministratorDao.UpdateLastActivityDateAndCountOfLogin(adminInfo); // 记录最后登录时间、失败次数清零
+                var accessToken = request.AdminLogin(adminInfo.UserName, isAutoLogin);
+                var expiresAt = DateTime.Now.AddDays(Constants.AccessTokenExpireDays);
+
+                var isEnforcePasswordChange = false;
+                if (ConfigManager.SystemConfigInfo.IsAdminEnforcePasswordChange)
+                {
+                    if (adminInfo.LastChangePasswordDate == null)
+                    {
+                        isEnforcePasswordChange = true;
+                    }
+                    else
+                    {
+                        var ts = new TimeSpan(DateTime.Now.Ticks - adminInfo.LastChangePasswordDate.Value.Ticks);
+                        if (ts.TotalDays > ConfigManager.SystemConfigInfo.AdminEnforcePasswordChangeDays)
+                        {
+                            isEnforcePasswordChange = true;
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    Value = adminInfo,
+                    AccessToken = accessToken,
+                    ExpiresAt = expiresAt,
+                    IsEnforcePasswordChange = isEnforcePasswordChange
+                });
+            }
+            catch (Exception ex)
+            {
+                LogUtils.AddErrorLog(ex);
+                return InternalServerError(ex);
+            }
+        }
+
+        [OpenApiOperation("管理员退出登录 API", "https://sscms.com/docs/v6/api/guide/administrators/logout.html")]
+        [HttpPost, Route(RouteActionsLogout)]
+        public IHttpActionResult Logout()
+        {
+            try
+            {
+                var request = new AuthenticatedRequest();
+                var adminInfo = request.IsAdminLoggin ? request.AdminInfo : null;
                 request.AdminLogout();
 
                 return Ok(new
@@ -237,36 +233,35 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("修改管理员密码 API", "https://sscms.com/docs/v6/api/guide/administrators/resetPassword.html")]
         [HttpPost, Route(RouteActionsResetPassword)]
-        public async Task<IHttpActionResult> ResetPassword()
+        public IHttpActionResult ResetPassword()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isApiAuthorized = request.IsApiAuthenticated && await DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeAdministrators);
+                var request = new AuthenticatedRequest();
+                var isApiAuthorized = request.IsApiAuthenticated && AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeAdministrators);
                 if (!isApiAuthorized) return Unauthorized();
 
                 var account = request.GetPostString("account");
                 var password = request.GetPostString("password");
                 var newPassword = request.GetPostString("newPassword");
 
-                var valid1 = await DataProvider.AdministratorRepository.ValidateAsync(account, password, true);
-                if (!valid1.IsValid)
+                if (!DataProvider.AdministratorDao.Validate(account, password, true, out var userName, out var errorMessage))
                 {
-                    return BadRequest(valid1.ErrorMessage);
+                    return BadRequest(errorMessage);
                 }
 
-                var adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(valid1.UserName);
+                var adminInfo = AdminManager.GetAdminInfoByUserName(userName);
 
-                var valid2 = await DataProvider.AdministratorRepository.ChangePasswordAsync(adminInfo, newPassword);
-                if (!valid2.IsValid)
+                if (!DataProvider.AdministratorDao.ChangePassword(adminInfo, newPassword, out errorMessage))
                 {
-                    return BadRequest(valid2.ErrorMessage);
+                    return BadRequest(errorMessage);
                 }
 
                 return Ok(new
@@ -276,7 +271,7 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

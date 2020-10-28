@@ -1,27 +1,20 @@
 ﻿using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
 using SiteServer.CMS.StlParser.Model;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Impl
 {
-    public class ParseContextImpl : IParseContext
+    public class ParseContextImpl: IParseContext
     {
-        public ParseContextImpl()
+        public ParseContextImpl(string stlOuterHtml, string stlInnerHtml, NameValueCollection stlAttributes, PageInfo pageInfo, ContextInfo contextInfo)
         {
-
-        }
-
-        public async Task LoadAsync(string stlOuterHtml, string stlInnerHtml, NameValueCollection stlAttributes, PageInfo pageInfo, ContextInfo contextInfo)
-        {
-            SiteId = contextInfo.Site.Id;
+            SiteId = contextInfo.SiteInfo.Id;
             ChannelId = contextInfo.ChannelId;
             ContentId = contextInfo.ContentId;
-            ContentInfo = await contextInfo.GetContentAsync();
-            TemplateType = pageInfo.Template.Type;
-            TemplateId = pageInfo.Template.Id;
+            ContentInfo = contextInfo.ContentInfo;
+            TemplateType = pageInfo.TemplateInfo.TemplateType;
+            TemplateId = pageInfo.TemplateInfo.Id;
 
             HeadCodes = pageInfo.HeadCodes;
             BodyCodes = pageInfo.BodyCodes;
@@ -34,7 +27,7 @@ namespace SiteServer.CMS.Plugin.Impl
             PluginItems = pageInfo.PluginItems;
         }
 
-        public Dictionary<string, object> PluginItems { get; private set; }
+        public Dictionary<string, object> PluginItems { get; }
 
         public void Set<T>(string key, T objectValue)
         {
@@ -58,30 +51,30 @@ namespace SiteServer.CMS.Plugin.Impl
             return default(T);
         }
 
-        public int SiteId  { get; private set; }
+        public int SiteId  { get; }
 
-        public int ChannelId { get; private set; }
+        public int ChannelId  { get; }
 
-        public int ContentId { get; private set; }
+        public int ContentId { get; }
 
-        public Content ContentInfo { get; private set; }
+        public IContentInfo ContentInfo { get; }
 
-        public TemplateType TemplateType { get; private set; }
+        public TemplateType TemplateType { get; }
 
-        public int TemplateId { get; private set; }
+        public int TemplateId { get; }
 
-        public SortedDictionary<string, string> HeadCodes { get; private set; }
+        public SortedDictionary<string, string> HeadCodes { get; }
 
-        public SortedDictionary<string, string> BodyCodes { get; private set; }
+        public SortedDictionary<string, string> BodyCodes { get; }
 
-        public SortedDictionary<string, string> FootCodes { get; private set; }
+        public SortedDictionary<string, string> FootCodes { get; }
 
-        public string StlOuterHtml { get; private set; }
+        public string StlOuterHtml { get; }
 
-        public string StlInnerHtml { get; private set; }
+        public string StlInnerHtml { get; }
 
-        public NameValueCollection StlAttributes { get; private set; }
+        public NameValueCollection StlAttributes { get; }
 
-        public bool IsStlElement { get; private set; }
+        public bool IsStlElement { get; }
     }
 }

@@ -2,15 +2,15 @@
 using System.Web;
 using System.Collections;
 using System.IO;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
     public class UEditorUploader
     {
-        Site site = null;
+        SiteInfo siteInfo = null;
         EUploadType uploadType = EUploadType.Image;
 
         string state = "SUCCESS";
@@ -19,13 +19,13 @@ namespace SiteServer.CMS.Core
         string originalName = null;
         HttpPostedFile uploadFile = null;
 
-        public UEditorUploader(Site site, EUploadType uploadType)
+        public UEditorUploader(SiteInfo siteInfo, EUploadType uploadType)
         {
-            this.site = site;
+            this.siteInfo = siteInfo;
             this.uploadType = uploadType;
         }
 
-        public async Task<Hashtable> upFileAsync(HttpContext cxt)
+        public Hashtable upFile(HttpContext cxt)
         {
             try
             {
@@ -33,17 +33,17 @@ namespace SiteServer.CMS.Core
                 originalName = uploadFile.FileName;
                 currentType = PathUtils.GetExtension(originalName);
 
-                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(site, uploadType);
-                var localFileName = PathUtility.GetUploadFileName(site, originalName);
+                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, uploadType);
+                var localFileName = PathUtility.GetUploadFileName(siteInfo, originalName);
                 var localFilePath = PathUtils.Combine(localDirectoryPath, localFileName);
 
                 //格式验证
-                if (!PathUtility.IsUploadExtensionAllowed(uploadType, site, currentType))
+                if (!PathUtility.IsUploadExtenstionAllowed(uploadType, siteInfo, currentType))
                 {
                     state = "不允许的文件类型";
                 }
                 //大小验证
-                if (!PathUtility.IsUploadSizeAllowed(uploadType, site, uploadFile.ContentLength))
+                if (!PathUtility.IsUploadSizeAllowed(uploadType, siteInfo, uploadFile.ContentLength))
                 {
                     state = "文件大小超出网站限制";
                 }
@@ -51,11 +51,11 @@ namespace SiteServer.CMS.Core
                 if (state == "SUCCESS")
                 {
                     uploadFile.SaveAs(localFilePath);
-                    URL = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, localFilePath, true);
+                    URL = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, localFilePath, true);
                     //URL = pathbase + filename;
                     if (uploadType == EUploadType.Image)
                         //添加水印
-                        FileUtility.AddWaterMark(site, localFilePath);
+                        FileUtility.AddWaterMark(siteInfo, localFilePath);
                 }
             }
             catch (Exception e)
@@ -66,20 +66,20 @@ namespace SiteServer.CMS.Core
             return getUploadInfo();
         }
 
-        public async Task<Hashtable> upScrawlAsync(HttpContext cxt, string base64Data)
+        public Hashtable upScrawl(HttpContext cxt, string base64Data)
         {
             FileStream fs = null;
             try
             {
                 var fileExtension = ".png";
-                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(site, fileExtension);
+                var localDirectoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, fileExtension);
                 var fileName = Guid.NewGuid() + fileExtension;
                 var localFilePath = PathUtils.Combine(localDirectoryPath, fileName);
                 fs = File.Create(localFilePath);
                 var bytes = Convert.FromBase64String(base64Data);
                 fs.Write(bytes, 0, bytes.Length);
 
-                URL = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, localFilePath, true);
+                URL = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, localFilePath, true);
             }
             catch
             {

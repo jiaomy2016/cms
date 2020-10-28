@@ -1,12 +1,11 @@
-﻿using System.Threading.Tasks;
-using System.Web.UI;
+﻿using System.Web.UI;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Stl;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
@@ -67,7 +66,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "是否转换为大写")]
         private const string IsUpper = nameof(IsUpper);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static object Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
 		    var connectionString = string.Empty;
             var queryString = string.Empty;
@@ -104,7 +103,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, QueryString))
                 {
-                    queryString = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    queryString = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Type))
                 {
@@ -193,32 +192,16 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (!string.IsNullOrEmpty(type) && contextInfo.ItemContainer?.SqlItem != null)
             {
-                if (!string.IsNullOrEmpty(formatString))
-                {
-                    formatString = formatString.Trim();
-                    if (!formatString.StartsWith("{0"))
-                    {
-                        formatString = "{0:" + formatString;
-                    }
-                    if (!formatString.EndsWith("}"))
-                    {
-                        formatString = formatString + "}";
-                    }
-                }
-                else
-                {
-                    formatString = "{0}";
-                }
-
                 if (StringUtils.StartsWithIgnoreCase(type, StlParserUtility.ItemIndex))
                 {
                     var itemIndex = StlParserUtility.ParseItemIndex(contextInfo.ItemContainer.SqlItem.ItemIndex, type, contextInfo);
 
-                    parsedContent = !string.IsNullOrEmpty(formatString) ? string.Format(formatString, itemIndex) : itemIndex.ToString();
+                    parsedContent = itemIndex.ToString();
                 }
                 else
                 {
-                    parsedContent = DataBinder.Eval(contextInfo.ItemContainer.SqlItem.DataItem, type, formatString);
+                    var obj = DataBinder.Eval(contextInfo.ItemContainer.SqlItem.DataItem, type);
+                    parsedContent = obj != null ? obj.ToString() : string.Empty;
                 }
             }
             else if (!string.IsNullOrEmpty(queryString))
@@ -228,7 +211,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                     connectionString = WebConfigUtils.ConnectionString;
                 }
 
-                //parsedContent = DataProvider.DatabaseRepository.GetString(connectionString, queryString);
+                //parsedContent = DataProvider.DatabaseDao.GetString(connectionString, queryString);
                 parsedContent = StlDatabaseCache.GetString(connectionString, queryString);
             }
 

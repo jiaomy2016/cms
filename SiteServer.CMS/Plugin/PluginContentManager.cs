@@ -1,20 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Plugin.Impl;
-
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Plugin
 {
     public static class PluginContentManager
     {
-        public static async Task<List<IPackageMetadata>> GetContentModelPluginsAsync()
+        public static List<IMetadata> GetContentModelPlugins()
         {
-            var list = new List<IPackageMetadata>();
+            var list = new List<IMetadata>();
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 if (PluginContentTableManager.IsContentTable(service))
                 {
@@ -25,11 +24,11 @@ namespace SiteServer.CMS.Plugin
             return list;
         }
 
-        public static async Task<List<string>> GetContentTableNameListAsync()
+        public static List<string> GetContentTableNameList()
         {
             var list = new List<string>();
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 if (PluginContentTableManager.IsContentTable(service))
                 {
@@ -43,11 +42,11 @@ namespace SiteServer.CMS.Plugin
             return list;
         }
 
-        public static async Task<List<IPackageMetadata>> GetAllContentRelatedPluginsAsync(bool includeContentTable)
+        public static List<IMetadata> GetAllContentRelatedPlugins(bool includeContentTable)
         {
-            var list = new List<IPackageMetadata>();
+            var list = new List<IMetadata>();
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 var isContentModel = PluginContentTableManager.IsContentTable(service);
 
@@ -70,16 +69,16 @@ namespace SiteServer.CMS.Plugin
             return list;
         }
 
-        public static async Task<List<ServiceImpl>> GetContentPluginsAsync(Channel channel, bool includeContentTable)
+        public static List<ServiceImpl> GetContentPlugins(ChannelInfo channelInfo, bool includeContentTable)
         {
             var list = new List<ServiceImpl>();
-            var pluginIds = new List<string>(channel.ContentRelatedPluginIdList);
-            if (!string.IsNullOrEmpty(channel.ContentModelPluginId))
+            var pluginIds = TranslateUtils.StringCollectionToStringList(channelInfo.ContentRelatedPluginIds);
+            if (!string.IsNullOrEmpty(channelInfo.ContentModelPluginId))
             {
-                pluginIds.Add(channel.ContentModelPluginId);
+                pluginIds.Add(channelInfo.ContentModelPluginId);
             }
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 if (!pluginIds.Contains(service.PluginId)) continue;
 
@@ -91,29 +90,29 @@ namespace SiteServer.CMS.Plugin
             return list;
         }
 
-        public static List<string> GetContentPluginIds(Channel channel)
+        public static List<string> GetContentPluginIds(ChannelInfo channelInfo)
         {
-            if (channel.ContentRelatedPluginIds.Any() &&
-                string.IsNullOrEmpty(channel.ContentModelPluginId))
+            if (string.IsNullOrEmpty(channelInfo.ContentRelatedPluginIds) &&
+                string.IsNullOrEmpty(channelInfo.ContentModelPluginId))
             {
                 return null;
             }
 
-            var pluginIds = new List<string>(channel.ContentRelatedPluginIdList);
-            if (!string.IsNullOrEmpty(channel.ContentModelPluginId))
+            var pluginIds = TranslateUtils.StringCollectionToStringList(channelInfo.ContentRelatedPluginIds);
+            if (!string.IsNullOrEmpty(channelInfo.ContentModelPluginId))
             {
-                pluginIds.Add(channel.ContentModelPluginId);
+                pluginIds.Add(channelInfo.ContentModelPluginId);
             }
 
             return pluginIds;
         }
 
-        public static async Task<Dictionary<string, Dictionary<string, Func<IContentContext, string>>>> GetContentColumnsAsync(List<string> pluginIds)
+        public static Dictionary<string, Dictionary<string, Func<IContentContext, string>>> GetContentColumns(List<string> pluginIds)
         {
             var dict = new Dictionary<string, Dictionary<string, Func<IContentContext, string>>>();
             if (pluginIds == null || pluginIds.Count == 0) return dict;
 
-            foreach (var service in await PluginManager.GetServicesAsync())
+            foreach (var service in PluginManager.Services)
             {
                 if (!pluginIds.Contains(service.PluginId) || service.ContentColumns == null || service.ContentColumns.Count == 0) continue;
 

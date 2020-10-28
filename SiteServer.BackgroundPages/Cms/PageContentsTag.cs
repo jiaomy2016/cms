@@ -1,17 +1,15 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Data;
-using System.Linq;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Controls;
 using SiteServer.BackgroundPages.Core;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
-using Content = SiteServer.Abstractions.Content;
-using WebUtils = SiteServer.BackgroundPages.Core.WebUtils;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -43,56 +41,38 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 var channelId = AuthRequest.GetQueryInt("channelId");
                 var contentId = AuthRequest.GetQueryInt("contentId");
-                var channelInfo = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
+                var channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
-                var contentInfo = DataProvider.ContentRepository.GetAsync(Site, channelInfo, contentId).GetAwaiter().GetResult();
+                var contentInfo = ContentManager.GetContentInfo(SiteInfo, channelInfo, contentId);
                 
-                var tagList = StringUtils.GetStringList(contentInfo.Tags, ' ');
+                var tagList = TranslateUtils.StringCollectionToStringList(contentInfo.Tags, ' ');
                 if (tagList.Contains(_tag))
                 {
                     tagList.Remove(_tag);
                 }
 
                 contentInfo.Tags = TranslateUtils.ObjectCollectionToString(tagList, " ");
-                DataProvider.ContentRepository.UpdateAsync(Site, channelInfo, contentInfo).GetAwaiter().GetResult();
+                DataProvider.ContentDao.Update(SiteInfo, channelInfo, contentInfo);
 
-                ContentTagUtils.RemoveTagsAsync(SiteId, contentId).GetAwaiter().GetResult();
+                TagUtils.RemoveTags(SiteId, contentId);
 
-                AuthRequest.AddSiteLogAsync(SiteId, "移除内容", $"内容:{contentInfo.Title}").GetAwaiter().GetResult();
+                AuthRequest.AddSiteLog(SiteId, "移除内容", $"内容:{contentInfo.Title}");
                 SuccessMessage("移除成功");
                 AddWaitAndRedirectScript(PageUrl);
             }
 
             SpContents.ControlToPaginate = RptContents;
             RptContents.ItemDataBound += RptContents_ItemDataBound;
-            SpContents.ItemsPerPage = Site.PageSize;
-            SpContents.SelectCommand = DataProvider.ContentRepository.GetSqlStringByContentTag(Site.TableName, _tag, siteId);
+            SpContents.ItemsPerPage = SiteInfo.Additional.PageSize;
+            SpContents.SelectCommand = DataProvider.ContentDao.GetSqlStringByContentTag(SiteInfo.TableName, _tag, siteId);
             SpContents.SortField = ContentAttribute.AddDate;
             SpContents.SortMode = SortMode.DESC;
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigGroups);
             LtlContentTag.Text = "标签：" + _tag;
             SpContents.DataBind();
-        }
-
-        public Content GetContent(DataRow row)
-        {
-            if (row == null) return null;
-
-            var content = new Content();
-
-            var dict = row.Table.Columns
-                .Cast<DataColumn>()
-                .ToDictionary(c => c.ColumnName, c => row[c]);
-
-            foreach (var key in dict.Keys)
-            {
-                content.Set(key, dict[key]);
-            }
-
-            return content;
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
@@ -106,15 +86,14 @@ namespace SiteServer.BackgroundPages.Cms
             var ltlItemEditUrl = (Literal) e.Item.FindControl("ltlItemEditUrl");
             var ltlItemDeleteUrl = (Literal) e.Item.FindControl("ltlItemDeleteUrl");
 
-            var rowView = (DataRowView)e.Item.DataItem;
-            var contentInfo = GetContent(rowView.Row);
+            var contentInfo = new ContentInfo((DataRowView)e.Item.DataItem);
 
-            ltlItemTitle.Text = WebUtils.GetContentTitle(Site, contentInfo, PageUrl);
-            ltlItemChannel.Text = ChannelManager.GetChannelNameNavigationAsync(SiteId, contentInfo.ChannelId).GetAwaiter().GetResult();
+            ltlItemTitle.Text = WebUtils.GetContentTitle(SiteInfo, contentInfo, PageUrl);
+            ltlItemChannel.Text = ChannelManager.GetChannelNameNavigation(SiteId, contentInfo.ChannelId);
             ltlItemAddDate.Text = DateUtils.GetDateAndTimeString(contentInfo.AddDate);
-            ltlItemStatus.Text = CheckManager.GetCheckState(Site, contentInfo);
+            ltlItemStatus.Text = CheckManager.GetCheckState(SiteInfo, contentInfo);
 
-            if (!HasChannelPermissions(contentInfo.ChannelId, Constants.ChannelPermissions.ContentEdit) &&
+            if (!HasChannelPermissions(contentInfo.ChannelId, ConfigManager.ChannelPermissions.ContentEdit) &&
                 AuthRequest.AdminName != contentInfo.AddUserName) return;
 
             ltlItemEditUrl.Text =

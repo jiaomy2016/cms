@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.StlParser.Model;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Core
 {
@@ -28,16 +27,15 @@ namespace SiteServer.CMS.Core
                 return list;
             });
 
-        private static async Task<int> AddErrorLogAsync(ErrorLog log)
+        private static int AddErrorLog(ErrorLogInfo logInfo)
         {
             try
             {
-                var config = await DataProvider.ConfigRepository.GetAsync();
-                if (!config.IsLogError) return 0;
+                if (!ConfigManager.SystemConfigInfo.IsLogError) return 0;
 
-                await DataProvider.ErrorLogRepository.DeleteIfThresholdAsync();
+                DataProvider.ErrorLogDao.DeleteIfThreshold();
 
-                return await DataProvider.ErrorLogRepository.InsertAsync(log);
+                return DataProvider.ErrorLogDao.Insert(logInfo);
             }
             catch
             {
@@ -47,11 +45,11 @@ namespace SiteServer.CMS.Core
             return 0;
         }
 
-        public static async Task AddErrorLogAndRedirectAsync(Exception ex, string summary = "")
+        public static void AddErrorLogAndRedirect(Exception ex, string summary = "")
         {
             if (ex == null || ex.StackTrace.Contains("System.Web.HttpResponse.set_StatusCode(Int32 value)")) return;
 
-            var logId = await AddErrorLogAsync(ex, summary);
+            var logId = AddErrorLog(ex, summary);
             if (logId > 0)
             {
                 PageUtils.RedirectToErrorPage(logId);
@@ -62,55 +60,28 @@ namespace SiteServer.CMS.Core
             }
         }
 
-        public static async Task<int> AddErrorLogAsync(Exception ex, string summary = "")
+        public static int AddErrorLog(Exception ex, string summary = "")
         {
-            return await AddErrorLogAsync(new ErrorLog
-            {
-                Id = 0,
-                Category = CategoryAdmin,
-                PluginId = string.Empty,
-                Message = ex.Message,
-                Stacktrace = ex.StackTrace,
-                Summary = summary,
-                AddDate = DateTime.Now
-            });
+            return AddErrorLog(new ErrorLogInfo(0, CategoryAdmin, string.Empty, ex.Message, ex.StackTrace, summary, DateTime.Now));
         }
-        public static async Task<int> AddErrorLogAsync(string pluginId, Exception ex, string summary = "")
+        public static int AddErrorLog(string pluginId, Exception ex, string summary = "")
         {
-            return await AddErrorLogAsync(new ErrorLog
-            {
-                Id = 0,
-                Category = CategoryAdmin,
-                PluginId = pluginId,
-                Message = ex.Message,
-                Stacktrace = ex.StackTrace,
-                Summary = summary,
-                AddDate = DateTime.Now
-            });
+            return AddErrorLog(new ErrorLogInfo(0, CategoryAdmin, pluginId, ex.Message, ex.StackTrace, summary, DateTime.Now));
         }
 
-        public static async Task<string> AddStlErrorLogAsync(PageInfo pageInfo, string elementName, string stlContent, Exception ex)
+        public static string AddStlErrorLog(PageInfo pageInfo, string elementName, string stlContent, Exception ex)
         {
             var summary = string.Empty;
             if (pageInfo != null)
             {
-                summary = $@"站点名称：{pageInfo.Site.SiteName}，
-模板类型：{TemplateTypeUtils.GetText(pageInfo.Template.Type)}，
-模板名称：{pageInfo.Template.TemplateName}
+                summary = $@"站点名称：{pageInfo.SiteInfo.SiteName}，
+模板类型：{TemplateTypeUtils.GetText(pageInfo.TemplateInfo.TemplateType)}，
+模板名称：{pageInfo.TemplateInfo.TemplateName}
 <br />";
             }
 
-            summary += $@"STL标签：{WebUtils.HtmlEncode(stlContent)}";
-            await AddErrorLogAsync(new ErrorLog
-            {
-                Id = 0,
-                Category = CategoryStl,
-                PluginId = string.Empty,
-                Message = ex.Message,
-                Stacktrace = ex.StackTrace,
-                Summary = summary,
-                AddDate = DateTime.Now
-            });
+            summary += $@"STL标签：{StringUtils.HtmlEncode(stlContent)}";
+            AddErrorLog(new ErrorLogInfo(0, CategoryStl, string.Empty, ex.Message, ex.StackTrace, summary, DateTime.Now));
 
             return $@"
 <!--
@@ -120,130 +91,99 @@ stl: {stlContent}
 -->";
         }
 
-        public static async Task AddSiteLogAsync(int siteId, int channelId, int contentId, Administrator adminInfo, string action, string summary)
+        public static void AddSiteLog(int siteId, int channelId, int contentId, AdministratorInfo adminInfo, string action, string summary)
         {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            if (!config.IsLogSite) return;
+            if (!ConfigManager.SystemConfigInfo.IsLogSite) return;
 
             if (siteId <= 0)
             {
-                await AddAdminLogAsync(adminInfo, action, summary);
+                AddAdminLog(adminInfo, action, summary);
             }
             else
             {
                 try
                 {
-                    await DataProvider.SiteLogRepository.DeleteIfThresholdAsync();
+                    DataProvider.SiteLogDao.DeleteIfThreshold();
 
                     if (!string.IsNullOrEmpty(action))
                     {
-                        action = WebUtils.MaxLengthText(action, 250);
+                        action = StringUtils.MaxLengthText(action, 250);
                     }
                     if (!string.IsNullOrEmpty(summary))
                     {
-                        summary = WebUtils.MaxLengthText(summary, 250);
+                        summary = StringUtils.MaxLengthText(summary, 250);
                     }
                     if (channelId < 0)
                     {
                         channelId = -channelId;
                     }
+                    var siteLogInfo = new SiteLogInfo(0, siteId, channelId, contentId, adminInfo.UserName, PageUtils.GetIpAddress(), DateTime.Now, action, summary);
 
-                    var siteLogInfo = new SiteLog
-                    {
-                        Id = 0,
-                        SiteId = siteId,
-                        ChannelId = channelId,
-                        ContentId = contentId,
-                        UserName = adminInfo.UserName,
-                        IpAddress = PageUtils.GetIpAddress(),
-                        AddDate = DateTime.Now,
-                        Action = action,
-                        Summary = summary
-                    };
+                    DataProvider.SiteLogDao.Insert(siteLogInfo);
 
-                    await DataProvider.SiteLogRepository.InsertAsync(siteLogInfo);
-
-                    await DataProvider.AdministratorRepository.UpdateLastActivityDateAsync(adminInfo);
+                    DataProvider.AdministratorDao.UpdateLastActivityDate(adminInfo);
                 }
                 catch (Exception ex)
                 {
-                    await AddErrorLogAsync(ex);
+                    AddErrorLog(ex);
                 }
             }
         }
 
-        public static async Task AddAdminLogAsync(Administrator adminInfo, string action, string summary = "")
+        public static void AddAdminLog(AdministratorInfo adminInfo, string action, string summary = "")
         {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            if (!config.IsLogAdmin) return;
+            if (!ConfigManager.SystemConfigInfo.IsLogAdmin) return;
 
             try
             {
-                await DataProvider.LogRepository.DeleteIfThresholdAsync();
+                DataProvider.LogDao.DeleteIfThreshold();
 
                 if (!string.IsNullOrEmpty(action))
                 {
-                    action = WebUtils.MaxLengthText(action, 250);
+                    action = StringUtils.MaxLengthText(action, 250);
                 }
                 if (!string.IsNullOrEmpty(summary))
                 {
-                    summary = WebUtils.MaxLengthText(summary, 250);
+                    summary = StringUtils.MaxLengthText(summary, 250);
                 }
+                var logInfo = new LogInfo(0, adminInfo.UserName, PageUtils.GetIpAddress(), DateTime.Now, action, summary);
 
-                var logInfo = new Log
-                {
-                    Id = 0,
-                    UserName = adminInfo.UserName,
-                    IpAddress = PageUtils.GetIpAddress(),
-                    AddDate = DateTime.Now,
-                    Action = action,
-                    Summary = summary
-                };
+                DataProvider.LogDao.Insert(logInfo);
 
-                await DataProvider.LogRepository.InsertAsync(logInfo);
-
-                await DataProvider.AdministratorRepository.UpdateLastActivityDateAsync(adminInfo);
+                DataProvider.AdministratorDao.UpdateLastActivityDate(adminInfo);
             }
             catch (Exception ex)
             {
-                await AddErrorLogAsync(ex);
+                AddErrorLog(ex);
             }
         }
 
-        public static async Task AddUserLoginLogAsync(string userName)
+        public static void AddUserLoginLog(string userName)
         {
-            await AddUserLogAsync(userName, "用户登录", string.Empty);
+            AddUserLog(userName, "用户登录", string.Empty);
         }
 
-        public static async Task AddUserLogAsync(string userName, string actionType, string summary)
+        public static void AddUserLog(string userName, string actionType, string summary)
         {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            if (!config.IsLogUser) return;
+            if (!ConfigManager.SystemConfigInfo.IsLogUser) return;
 
             try
             {
-                await DataProvider.UserLogRepository.DeleteIfThresholdAsync();
+                DataProvider.UserLogDao.DeleteIfThreshold();
 
                 if (!string.IsNullOrEmpty(summary))
                 {
-                    summary = WebUtils.MaxLengthText(summary, 250);
+                    summary = StringUtils.MaxLengthText(summary, 250);
                 }
 
-                var userLogInfo = new UserLog
-                {
-                    Id = 0,
-                    UserName = userName,
-                    IpAddress = PageUtils.GetIpAddress(),
-                    AddDate = DateTime.Now,
-                    Action = actionType,
-                    Summary = summary
-                };
+                var userLogInfo = new UserLogInfo(0, userName, PageUtils.GetIpAddress(), DateTime.Now, actionType,
+                    summary);
 
-                await DataProvider.UserLogRepository.InsertAsync(userLogInfo);
+                DataProvider.UserLogDao.Insert(userLogInfo);
             }
             catch (Exception ex)
             {
-                await AddErrorLogAsync(ex);
+                AddErrorLog(ex);
             }
         }
     }

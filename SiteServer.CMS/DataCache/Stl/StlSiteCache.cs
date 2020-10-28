@@ -1,41 +1,49 @@
-using System.Threading.Tasks;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache.Core;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.CMS.DataCache.Stl
 {
     public static class StlSiteCache
     {
-        public static async Task<int> GetSiteIdByIsRootAsync()
+        private static readonly object LockObject = new object();
+
+        public static int GetSiteIdByIsRoot()
         {
             var cacheKey = StlCacheManager.GetCacheKey(nameof(StlSiteCache),
-                       nameof(GetSiteIdByIsRootAsync));
+                       nameof(GetSiteIdByIsRoot));
             var retVal = StlCacheManager.GetInt(cacheKey);
             if (retVal != -1) return retVal;
 
-            retVal = StlCacheManager.GetInt(cacheKey);
-            if (retVal == -1)
+            lock (LockObject)
             {
-                retVal = await DataProvider.SiteRepository.GetIdByIsRootAsync();
-                StlCacheManager.Set(cacheKey, retVal);
+                retVal = StlCacheManager.GetInt(cacheKey);
+                if (retVal == -1)
+                {
+                    retVal = DataProvider.SiteDao.GetIdByIsRoot();
+                    StlCacheManager.Set(cacheKey, retVal);
+                }
             }
 
             return retVal;
         }
 
-        public static async Task<int> GetSiteIdBySiteDirAsync(string siteDir)
+        public static int GetSiteIdBySiteDir(string siteDir)
         {
             var cacheKey = StlCacheManager.GetCacheKey(nameof(StlSiteCache),
-                       nameof(GetSiteIdBySiteDirAsync), siteDir);
+                       nameof(GetSiteIdBySiteDir), siteDir);
             var retVal = StlCacheManager.GetInt(cacheKey);
             if (retVal != -1) return retVal;
 
-            retVal = StlCacheManager.GetInt(cacheKey);
-            if (retVal == -1)
+            lock (LockObject)
             {
-                retVal =
-                    await DataProvider.SiteRepository.GetIdBySiteDirAsync(siteDir);
-                StlCacheManager.Set(cacheKey, retVal);
+                retVal = StlCacheManager.GetInt(cacheKey);
+                if (retVal == -1)
+                {
+                    retVal =
+                        DataProvider.SiteDao.GetIdBySiteDir(
+                            siteDir);
+                    StlCacheManager.Set(cacheKey, retVal);
+                }
             }
 
             return retVal;

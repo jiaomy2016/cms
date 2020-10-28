@@ -1,69 +1,67 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class AdminApi
+    public class AdminApi : IAdminApi
     {
         private AdminApi() { }
 
         private static AdminApi _instance;
-        public static AdminApi Instance => _instance ??= new AdminApi();
+        public static AdminApi Instance => _instance ?? (_instance = new AdminApi());
 
-        public async Task<Administrator> GetByUserIdAsync(int userId)
+        public IAdministratorInfo GetAdminInfoByUserId(int userId)
         {
-            return await DataProvider.AdministratorRepository.GetByUserIdAsync(userId);
+            return AdminManager.GetAdminInfoByUserId(userId);
         }
 
-        public async Task<Administrator> GetByUserNameAsync(string userName)
+        public IAdministratorInfo GetAdminInfoByUserName(string userName)
         {
-            return await DataProvider.AdministratorRepository.GetByUserNameAsync(userName);
+            return AdminManager.GetAdminInfoByUserName(userName);
         }
 
-        public async Task<Administrator> GetByEmailAsync(string email)
+        public IAdministratorInfo GetAdminInfoByEmail(string email)
         {
-            return await DataProvider.AdministratorRepository.GetByEmailAsync(email);
+            return AdminManager.GetAdminInfoByEmail(email);
         }
 
-        public async Task<Administrator> GetByMobileAsync(string mobile)
+        public IAdministratorInfo GetAdminInfoByMobile(string mobile)
         {
-            return await DataProvider.AdministratorRepository.GetByMobileAsync(mobile);
+            return AdminManager.GetAdminInfoByMobile(mobile);
         }
 
-        public async Task<Administrator> GetByAccountAsync(string account)
+        public IAdministratorInfo GetAdminInfoByAccount(string account)
         {
-            return await DataProvider.AdministratorRepository.GetByAccountAsync(account);
+            return AdminManager.GetAdminInfoByAccount(account);
         }
 
-        public async Task<IEnumerable<string>> GetUserNameListAsync()
+        public List<string> GetUserNameList()
         {
-            return await DataProvider.AdministratorRepository.GetUserNameListAsync();
+            return DataProvider.AdministratorDao.GetUserNameList();
         }
 
-        public async Task<PermissionsImpl> GetPermissionsAsync(string userName)
+        public IPermissions GetPermissions(string userName)
         {
-            var adminInfo = await DataProvider.AdministratorRepository.GetByUserNameAsync(userName);
-            return new PermissionsImpl(adminInfo);
+            return new PermissionsImpl(AdminManager.GetAdminInfoByUserName(userName));
         }
 
-        public async Task<bool> IsUserNameExistsAsync(string userName)
+        public bool IsUserNameExists(string userName)
         {
-            return await DataProvider.AdministratorRepository.IsUserNameExistsAsync(userName);
+            return DataProvider.AdministratorDao.IsUserNameExists(userName);
         }
 
-        public async Task<bool> IsEmailExistsAsync(string email)
+        public bool IsEmailExists(string email)
         {
-            return await DataProvider.AdministratorRepository.IsEmailExistsAsync(email);
+            return DataProvider.AdministratorDao.IsEmailExists(email);
         }
 
-        public async Task<bool> IsMobileExistsAsync(string mobile)
+        public bool IsMobileExists(string mobile)
         {
-            return await DataProvider.AdministratorRepository.IsMobileExistsAsync(mobile);
+            return DataProvider.AdministratorDao.IsMobileExists(mobile);
         }
 
         public string GetAccessToken(int userId, string userName, TimeSpan expiresAt)
@@ -76,7 +74,7 @@ namespace SiteServer.CMS.Plugin.Apis
             return AuthenticatedRequest.GetAccessToken(userId, userName, expiresAt);
         }
 
-        public AccessTokenImpl ParseAccessToken(string accessToken)
+        public IAccessToken ParseAccessToken(string accessToken)
         {
             return AuthenticatedRequest.ParseAccessToken(accessToken);
         }

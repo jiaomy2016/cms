@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.HtmlControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.ImportExport;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -50,9 +49,9 @@ namespace SiteServer.BackgroundPages.Cms
 
                     HifMyFile.PostedFile.SaveAs(localFilePath);
 
-                    ImportObject.ImportTableStyleByZipFileAsync(_tableName, _relatedIdentity, localFilePath).GetAwaiter().GetResult();
+                    ImportObject.ImportTableStyleByZipFile(_tableName, _relatedIdentity, localFilePath);
 
-                    AuthRequest.AddSiteLogAsync(SiteId, "导入表单显示样式").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, "导入表单显示样式");
 
                     LayerUtils.Close(Page);
 				}

@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.Core.Create;
+using SiteServer.CMS.Model.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -46,15 +48,15 @@ namespace SiteServer.BackgroundPages.Cms
             _type = AuthRequest.GetQueryString("type");
             if (_type == PageTemplateAssets.TypeInclude)
             {
-                _assetsDir = Site.TemplatesAssetsIncludeDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsIncludeDir.Trim('/');
             }
             else if (_type == PageTemplateAssets.TypeJs)
             {
-                _assetsDir = Site.TemplatesAssetsJsDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsJsDir.Trim('/');
             }
             else if (_type == PageTemplateAssets.TypeCss)
             {
-                _assetsDir = Site.TemplatesAssetsCssDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsCssDir.Trim('/');
             }
 
             if (string.IsNullOrEmpty(_assetsDir)) return;
@@ -73,20 +75,20 @@ namespace SiteServer.BackgroundPages.Cms
                 var assetsDir = TbDirectoryPath.Text.Trim('/');
                 if (_type == PageTemplateAssets.TypeInclude)
                 {
-                    Site.TemplatesAssetsIncludeDir = assetsDir;
+                    SiteInfo.Additional.TemplatesAssetsIncludeDir = assetsDir;
                 }
                 else if (_type == PageTemplateAssets.TypeJs)
                 {
-                    Site.TemplatesAssetsJsDir = assetsDir;
+                    SiteInfo.Additional.TemplatesAssetsJsDir = assetsDir;
                 }
                 else if (_type == PageTemplateAssets.TypeCss)
                 {
-                    Site.TemplatesAssetsCssDir = assetsDir;
+                    SiteInfo.Additional.TemplatesAssetsCssDir = assetsDir;
                 }
 
-                DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
+                DataProvider.SiteDao.Update(SiteInfo);
 
-                AuthRequest.AddSiteLogAsync(SiteId, "模板文件夹设置").GetAwaiter().GetResult();
+                AuthRequest.AddSiteLog(SiteId, "模板文件夹设置");
 
                 isSuccess = true;
             }

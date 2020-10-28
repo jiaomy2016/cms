@@ -1,19 +1,20 @@
 ﻿using System.Collections.Specialized;
 using System.Text;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.DataCache;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.StlElement;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Repositories;
 
 namespace SiteServer.CMS.StlParser.Utility
 {
 	public static class TemplateUtility
 	{
-        public static async Task<string> GetContentsItemTemplateStringAsync(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
+        public static string GetContentsItemTemplateString(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
         {
             var itemContainer = DbItemContainer.GetItemContainer(pageInfo);
             //var contentInfo = new BackgroundContentInfo(itemContainer.ContentItem.DataItem);
@@ -24,7 +25,7 @@ namespace SiteServer.CMS.StlParser.Utility
                 contentItemInfo = pageInfo.ContentItems.Peek();
             }
             if (contentItemInfo == null) return string.Empty;
-            var contentInfo = await DataProvider.ContentRepository.GetAsync(pageInfo.Site, contentItemInfo.ChannelId,
+            var contentInfo = ContentManager.GetContentInfo(pageInfo.SiteInfo, contentItemInfo.ChannelId,
                 contentItemInfo.ContentId);
 
             var contextInfo = contextInfoRef.Clone();
@@ -33,16 +34,19 @@ namespace SiteServer.CMS.StlParser.Utility
             contextInfo.ContainerClientId = containerClientId;
             contextInfo.ChannelId = contentInfo.ChannelId;
             contextInfo.ContentId = contentInfo.Id;
-            contextInfo.SetContentInfo(contentInfo);
+            contextInfo.ContentInfo = contentInfo;
 
-            var preSite = pageInfo.Site;
+            var preSiteInfo = pageInfo.SiteInfo;
             var prePageChannelId = pageInfo.PageChannelId;
             var prePageContentId = pageInfo.PageContentId;
             if (contentInfo.SiteId != pageInfo.SiteId)
             {
-                var siteInfo = await DataProvider.SiteRepository.GetAsync(contentInfo.SiteId);
-                contextInfo.Site = siteInfo;
-                pageInfo.ChangeSite(siteInfo, siteInfo.Id, 0, contextInfo);
+                var siteInfo = SiteManager.GetSiteInfo(contentInfo.SiteId);
+                if (siteInfo != null)
+                {
+                    contextInfo.SiteInfo = siteInfo;
+                    pageInfo.ChangeSite(siteInfo, siteInfo.Id, 0, contextInfo);
+                }
             }
 
             var theTemplateString = string.Empty;
@@ -51,19 +55,13 @@ namespace SiteServer.CMS.StlParser.Utility
             {
                 foreach (var itemTypes in selectedItems.AllKeys)
                 {
-                    var itemTypeArrayList = StringUtils.GetStringList(itemTypes);
+                    var itemTypeArrayList = TranslateUtils.StringCollectionToStringList(itemTypes);
                     var isTrue = true;
                     foreach (var itemType in itemTypeArrayList)
                     {
-                        var (success, contentTemplateString) = await IsContentTemplateStringAsync(itemType, itemTypes,
-                            selectedItems, selectedValues, pageInfo, contextInfo);
-                        if (!success)
+                        if (!IsContentTemplateString(itemType, itemTypes, ref theTemplateString, selectedItems, selectedValues, pageInfo, contextInfo))
                         {
                             isTrue = false;
-                        }
-                        else
-                        {
-                            theTemplateString = contentTemplateString;
                         }
                     }
                     if (isTrue)
@@ -80,99 +78,108 @@ namespace SiteServer.CMS.StlParser.Utility
             }
 
             var innerBuilder = new StringBuilder(theTemplateString);
-            await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
 
             DbItemContainer.PopContentItem(pageInfo);
 
             if (contentInfo.SiteId != pageInfo.SiteId)
             {
-                pageInfo.ChangeSite(preSite, prePageChannelId, prePageContentId, contextInfoRef);
+                pageInfo.ChangeSite(preSiteInfo, prePageChannelId, prePageContentId, contextInfoRef);
             }
 
             return innerBuilder.ToString();
         }
 
-        private static async Task<(bool Success, string TemplateString)> IsContentTemplateStringAsync(string itemType, string itemTypes, NameValueCollection selectedItems, NameValueCollection selectedValues, PageInfo pageInfo, ContextInfo contextInfo)
+        private static bool IsContentTemplateString(string itemType, string itemTypes, ref string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, PageInfo pageInfo, ContextInfo contextInfo)
         {
-            var contentInfo = await contextInfo.GetContentAsync();
             if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedCurrent))//当前内容
             {
-                if (contentInfo.Id == pageInfo.PageContentId)
+                if (contextInfo.ContentInfo.Id == pageInfo.PageContentId)
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedIsTop))//置顶内容
             {
-                if (contentInfo.Top)
+                if (contextInfo.ContentInfo.IsTop)
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedImage))//带图片的内容
             {
-                if (!string.IsNullOrEmpty(contentInfo.Get<string>(ContentAttribute.ImageUrl)))
+                if (!string.IsNullOrEmpty(contextInfo.ContentInfo.GetString(BackgroundContentAttribute.ImageUrl)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedVideo))//带视频的内容
             {
-                if (!string.IsNullOrEmpty(contentInfo.Get<string>(ContentAttribute.VideoUrl)))
+                if (!string.IsNullOrEmpty(contextInfo.ContentInfo.GetString(BackgroundContentAttribute.VideoUrl)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedFile))//带附件的内容
             {
-                if (!string.IsNullOrEmpty(contentInfo.Get<string>(ContentAttribute.FileUrl)))
+                if (!string.IsNullOrEmpty(contextInfo.ContentInfo.GetString(BackgroundContentAttribute.FileUrl)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedIsRecommend))//推荐的内容
             {
-                if (TranslateUtils.ToBool(contentInfo.Get<string>(ContentAttribute.IsRecommend)))
+                if (TranslateUtils.ToBool(contextInfo.ContentInfo.GetString(ContentAttribute.IsRecommend)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedIsHot))//热点内容
             {
-                if (TranslateUtils.ToBool(contentInfo.Get<string>(ContentAttribute.IsHot)))
+                if (TranslateUtils.ToBool(contextInfo.ContentInfo.GetString(ContentAttribute.IsHot)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedIsColor))//醒目内容
             {
-                if (TranslateUtils.ToBool(contentInfo.Get<string>(ContentAttribute.IsColor)))
+                if (TranslateUtils.ToBool(contextInfo.ContentInfo.GetString(ContentAttribute.IsColor)))
                 {
-                    return (true, selectedItems.Get(itemTypes));
+                    templateString = selectedItems.Get(itemTypes);
+                    return true;
                 }
             }
             else if (StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedChannelName))//带有附件的内容
             {
                 if (selectedValues.Count > 0)
                 {
-                    var nodeInfo = await ChannelManager.GetChannelAsync(contentInfo.SiteId, contentInfo.ChannelId);
+                    var nodeInfo = ChannelManager.GetChannelInfo(contextInfo.ContentInfo.SiteId, contextInfo.ContentInfo.ChannelId);
                     if (nodeInfo != null)
                     {
                         if (selectedValues.Get(nodeInfo.ChannelName) != null)
                         {
-                            return (true, selectedValues.Get(nodeInfo.ChannelName));
+                            templateString = selectedValues.Get(nodeInfo.ChannelName);
+                            return true;
                         }
                     }
                 }
             }
             else if (IsNumberInRange(contextInfo.ItemContainer.ContentItem.ItemIndex + 1, itemType))
             {
-                return (true, selectedItems.Get(itemTypes));
+                templateString = selectedItems.Get(itemTypes);
+                return true;
             }
-            return (false, string.Empty);
+            return false;
         }
 
-        public static async Task<string> GetChannelsItemTemplateStringAsync(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
+        public static string GetChannelsItemTemplateString(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
         {
             var itemContainer = DbItemContainer.GetItemContainer(pageInfo);
 
@@ -184,7 +191,7 @@ namespace SiteServer.CMS.StlParser.Utility
             contextInfo.ContainerClientId = containerClientId;
             contextInfo.ChannelId = channelId;
 
-            var nodeInfo = await ChannelManager.GetChannelAsync(pageInfo.SiteId, channelId);
+            var nodeInfo = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
             if (selectedItems != null && selectedItems.Count > 0)
             {
                 foreach (var itemType in selectedItems.AllKeys)
@@ -210,7 +217,7 @@ namespace SiteServer.CMS.StlParser.Utility
                         var upLevel = StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedUp) ? 1 : TranslateUtils.ToInt(itemType.Substring(2));
                         if (upLevel > 0)
                         {
-                            var theChannelId = await StlDataUtility.GetChannelIdByLevelAsync(pageInfo.SiteId, pageInfo.PageChannelId, upLevel, -1);
+                            var theChannelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, pageInfo.PageChannelId, upLevel, -1);
                             if (channelId == theChannelId)
                             {
                                 templateString = selectedItems.Get(itemType);
@@ -223,7 +230,7 @@ namespace SiteServer.CMS.StlParser.Utility
                         var topLevel = StringUtils.EqualsIgnoreCase(itemType, StlItemTemplate.SelectedTop) ? 1 : TranslateUtils.ToInt(itemType.Substring(3));
                         if (topLevel >= 0)
                         {
-                            var theChannelId = await StlDataUtility.GetChannelIdByLevelAsync(pageInfo.SiteId, pageInfo.PageChannelId, 0, topLevel);
+                            var theChannelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, pageInfo.PageChannelId, 0, topLevel);
                             if (channelId == theChannelId)
                             {
                                 templateString = selectedItems.Get(itemType);
@@ -240,14 +247,14 @@ namespace SiteServer.CMS.StlParser.Utility
             }
 
             var innerBuilder = new StringBuilder(templateString);
-            await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
 
             DbItemContainer.PopChannelItem(pageInfo);
 
             return innerBuilder.ToString();
         }
 
-        public static async Task<string> GetSqlContentsTemplateStringAsync(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
+        public static string GetSqlContentsTemplateString(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
         {
             var itemContainer = DbItemContainer.GetItemContainer(pageInfo);
 
@@ -269,41 +276,41 @@ namespace SiteServer.CMS.StlParser.Utility
             }
 
             var innerBuilder = new StringBuilder(templateString);
-            await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
 
             DbItemContainer.PopSqlItem(pageInfo);
 
             return innerBuilder.ToString();
         }
 
-        public static async Task<string> GetSitesTemplateStringAsync(string templateString, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
+        public static string GetSitesTemplateString(string templateString, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
         {
             var itemContainer = DbItemContainer.GetItemContainer(pageInfo);
 
-            var siteId = SqlUtils.EvalInt(itemContainer.SiteItem.DataItem, nameof(Site.Id));
-            var siteInfo = await DataProvider.SiteRepository.GetAsync(siteId);
+            var siteId = SqlUtils.EvalInt(itemContainer.SiteItem.DataItem, SiteAttribute.Id);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
 
             var contextInfo = contextInfoRef.Clone();
             contextInfo.ContainerClientId = containerClientId;
             contextInfo.ItemContainer = itemContainer;
             contextInfo.ContextType = contextType;
 
-            var preSite = pageInfo.Site;
+            var preSiteInfo = pageInfo.SiteInfo;
             var prePageChannelId = pageInfo.PageChannelId;
             var prePageContentId = pageInfo.PageContentId;
             pageInfo.ChangeSite(siteInfo, siteInfo.Id, 0, contextInfo);
 
             var innerBuilder = new StringBuilder(templateString);
-            await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
 
             DbItemContainer.PopSiteItems(pageInfo);
 
-            pageInfo.ChangeSite(preSite, prePageChannelId, prePageContentId, contextInfo);
+            pageInfo.ChangeSite(preSiteInfo, prePageChannelId, prePageContentId, contextInfo);
 
             return innerBuilder.ToString();
         }
 
-        public static async Task<string> GetEachsTemplateStringAsync(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
+        public static string GetEachsTemplateString(string templateString, NameValueCollection selectedItems, NameValueCollection selectedValues, string containerClientId, PageInfo pageInfo, EContextType contextType, ContextInfo contextInfoRef)
         {
             var itemContainer = DbItemContainer.GetItemContainer(pageInfo);
 
@@ -325,7 +332,7 @@ namespace SiteServer.CMS.StlParser.Utility
             }
 
             var innerBuilder = new StringBuilder(templateString);
-            await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+            StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
 
             DbItemContainer.PopEachItem(pageInfo);
 
@@ -340,19 +347,19 @@ namespace SiteServer.CMS.StlParser.Utility
 			myDataList.Width = listInfo.Width;
             if (!string.IsNullOrEmpty(listInfo.Align))
             {
-                myDataList.HorizontalAlign = WebUtils.ToHorizontalAlign(listInfo.Align);
+                myDataList.HorizontalAlign = TranslateUtils.ToHorizontalAlign(listInfo.Align);
             }
 			myDataList.ItemStyle.Height = listInfo.ItemHeight;
 			myDataList.ItemStyle.Width = listInfo.ItemWidth;
             myDataList.ItemStyle.HorizontalAlign = HorizontalAlign.Left;
             if (!string.IsNullOrEmpty(listInfo.ItemAlign))
             {
-                myDataList.ItemStyle.HorizontalAlign = WebUtils.ToHorizontalAlign(listInfo.ItemAlign);
+                myDataList.ItemStyle.HorizontalAlign = TranslateUtils.ToHorizontalAlign(listInfo.ItemAlign);
             }
             myDataList.ItemStyle.VerticalAlign = VerticalAlign.Top;
             if (!string.IsNullOrEmpty(listInfo.ItemVerticalAlign))
             {
-                myDataList.ItemStyle.VerticalAlign = WebUtils.ToVerticalAlign(listInfo.ItemVerticalAlign);
+                myDataList.ItemStyle.VerticalAlign = TranslateUtils.ToVerticalAlign(listInfo.ItemVerticalAlign);
             }
             if (!string.IsNullOrEmpty(listInfo.ItemClass))
             {

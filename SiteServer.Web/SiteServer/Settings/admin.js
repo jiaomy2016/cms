@@ -1,5 +1,4 @@
-﻿var $url = '/pages/settings/admin';
-var $urlUpload = apiUrl + '/pages/settings/admin/actions/import';
+﻿var $api = new apiUtils.Api(apiUrl + '/pages/settings/admin');
 
 var data = {
   pageLoad: false,
@@ -19,29 +18,21 @@ var data = {
     offset: 0,
     limit: 30
   },
-  permissionInfo: {},
-  uploadPanel: false,
-  uploadLoading: false,
-  uploadList: []
+  permissionInfo: {}
 };
 
 var methods = {
   apiGetConfig: function () {
     var $this = this;
 
-    $api.get($url, {
-      params: this.formInline
-    }).then(function (response) {
-      var res = response.data;
+    $api.get(this.formInline, function (err, res) {
+      if (err || !res || !res.value) return;
 
       $this.items = res.value;
       $this.count = res.count;
       $this.roles = res.roles;
       $this.isSuperAdmin = res.isSuperAdmin;
       $this.adminId = res.adminId;
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
       $this.pageLoad = true;
     });
   },
@@ -57,9 +48,10 @@ var methods = {
   btnPermissionsClick: function(row) {
     var $this = this;
 
-    utils.loading(true);
-    $api.get($url + '/permissions/' + row.id).then(function (response) {
-      var res = response.data;
+    pageUtils.loading(true);
+    $api.getAt('permissions/' + row.id, null, function (err, res) {
+      pageUtils.loading(false);
+      if (err || !res || !res.value) return;
 
       var allRoles = [];
       for (var i = 0; i < res.roles.length; i++) {
@@ -82,10 +74,6 @@ var methods = {
       };
 
       $this.drawer = true;
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
-      utils.loading(false);
     });
   },
 
@@ -93,12 +81,12 @@ var methods = {
     var $this = this;
     this.permissionInfo.loading = true;
 
-    $api.post($url + '/permissions/' + this.permissionInfo.adminId, {
+    $api.postAt('permissions/' + this.permissionInfo.adminId, {
       adminLevel: this.permissionInfo.adminLevel,
       checkedSites: this.permissionInfo.checkedSites,
       checkedRoles: this.permissionInfo.checkedRoles,
-    }).then(function (response) {
-      var res = response.data;
+    }, function (err, res) {
+      if (err || !res || !res.value) return;
 
       for (var i = 0; i < $this.items.length; i++) {
         var adminInfo = $this.items[i];
@@ -108,33 +96,24 @@ var methods = {
       }
 
       $this.drawer = false;
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
-      utils.loading(false);
     });
   },
 
   btnDeleteClick: function (item) {
     var $this = this;
 
-    utils.alertDelete({
+    pageUtils.alertDelete({
       title: '删除管理员',
       text: '此操作将删除管理员 ' + item.userName + '，确定吗？',
       callback: function () {
-        utils.loading(true);
-        $api.delete($url, {
-          data: {
-            id: item.id
-          }
-        }).then(function (response) {
-          var res = response.data;
-    
+        pageUtils.loading(true);
+        $api.delete({
+          id: item.id
+        }, function (err, res) {
+          pageUtils.loading(false);
+          if (err || !res || !res.value) return;
+
           $this.items.splice($this.items.indexOf(item), 1);
-        }).catch(function (error) {
-          $this.pageAlert = utils.getPageAlert(error);
-        }).then(function () {
-          utils.loading(false);
         });
       }
     });
@@ -143,21 +122,18 @@ var methods = {
   btnLockClick: function(item) {
     var $this = this;
 
-    utils.alertWarning({
+    pageUtils.alertWarning({
       title: '锁定管理员',
       text: '此操作将锁定管理员 ' + item.userName + '，确定吗？',
       callback: function () {
-        utils.loading(true);
-        $api.post($url + '/actions/lock', {
+        pageUtils.loading(true);
+        $api.postAt('actions/lock', {
           id: item.id
-        }).then(function (response) {
-          var res = response.data;
-    
+        }, function (err, res) {
+          pageUtils.loading(false);
+          if (err || !res || !res.value) return;
+
           item.locked = true;
-        }).catch(function (error) {
-          $this.pageAlert = utils.getPageAlert(error);
-        }).then(function () {
-          utils.loading(false);
         });
       }
     });
@@ -166,21 +142,18 @@ var methods = {
   btnUnLockClick: function(item) {
     var $this = this;
 
-    utils.alertWarning({
+    pageUtils.alertWarning({
       title: '解锁管理员',
       text: '此操作将解锁管理员 ' + item.userName + '，确定吗？',
       callback: function () {
-        utils.loading(true);
-        $api.post($url + '/actions/unLock', {
+        pageUtils.loading(true);
+        $api.postAt('actions/unLock', {
           id: item.id
-        }).then(function (response) {
-          var res = response.data;
-    
+        }, function (err, res) {
+          pageUtils.loading(false);
+          if (err || !res || !res.value) return;
+
           item.locked = false;
-        }).catch(function (error) {
-          $this.pageAlert = utils.getPageAlert(error);
-        }).then(function () {
-          utils.loading(false);
         });
       }
     });
@@ -189,31 +162,13 @@ var methods = {
   btnSearchClick() {
     var $this = this;
 
-    utils.loading(true);
-    $api.get($url, {
-      params: this.formInline
-    }).then(function (response) {
-      var res = response.data;
+    pageUtils.loading(true);
+    $api.get(this.formInline, function (err, res) {
+      pageUtils.loading(false);
+      if (err || !res || !res.value) return;
 
       $this.items = res.value;
       $this.count = res.count;
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
-      utils.loading(false);
-    });
-  },
-
-  btnExportClick: function() {
-    utils.loading(true);
-    $api.post($url + '/actions/export').then(function (response) {
-      var res = response.data;
-
-      window.open(res.value);
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
-      utils.loading(false);
     });
   },
 
@@ -222,60 +177,6 @@ var methods = {
     this.formInline.offset = this.formInline.limit * (val - 1);
 
     this.btnSearchClick();
-  },
-
-  btnImportClick: function() {
-    this.uploadPanel = true;
-  },
-
-  uploadBefore(file) {
-    var isExcel = file.name.indexOf('.xlsx', file.name.length - '.xlsx'.length) !== -1;
-    if (!isExcel) {
-      this.$message.error('管理员导入文件只能是 Excel 格式!');
-    }
-    return isExcel;
-  },
-
-  uploadProgress: function() {
-    utils.loading(true)
-  },
-
-  uploadSuccess: function(res, file) {
-    this.uploadPanel = false;
-
-    var success = res.success;
-    var failure = res.failure;
-    var errorMessage = res.errorMessage;
-
-    var $this = this;
-
-    $api.get($url, {
-      params: this.formInline
-    }).then(function (response) {
-      var res = response.data;
-
-      $this.items = res.value;
-      $this.count = res.count;
-      $this.roles = res.roles;
-      $this.isSuperAdmin = res.isSuperAdmin;
-      $this.adminId = res.adminId;
-    }).catch(function (error) {
-      $this.pageAlert = utils.getPageAlert(error);
-    }).then(function () {
-      if (success) {
-        $this.$message.success('成功导入 ' + success + ' 名管理员！');
-      }
-      if (errorMessage) {
-        $this.$message.error(failure + ' 名管理员导入失败：' + errorMessage);
-      }
-      utils.loading(false);
-    });
-  },
-
-  uploadError: function(err) {
-    utils.loading(false);
-    var error = JSON.parse(err.message);
-    this.$message.error(error.message);
   }
 };
 

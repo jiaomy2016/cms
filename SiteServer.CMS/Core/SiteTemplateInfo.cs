@@ -37,7 +37,5 @@ namespace SiteServer.CMS.Core
 
         public string DirectoryName { get; set; }
 
-        public bool FileExists { get; set; }
-
     }
 }

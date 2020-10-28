@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
-using TableStyle = SiteServer.Abstractions.TableStyle;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -30,7 +29,7 @@ namespace SiteServer.BackgroundPages.Cms
         private string _tableName;
         private string _attributeName;
         private string _redirectUrl;
-        private TableStyle _style;
+        private TableStyleInfo _styleInfo;
 
         public static string GetOpenWindowString(int siteId, int tableStyleId, List<int> relatedIdentities, string tableName, string attributeName, string redirectUrl)
         {
@@ -49,7 +48,7 @@ namespace SiteServer.BackgroundPages.Cms
             if (IsForbidden) return;
 
             _tableStyleId = AuthRequest.GetQueryInt("TableStyleID");
-            _relatedIdentities = StringUtils.GetIntList(AuthRequest.GetQueryString("RelatedIdentities"));
+            _relatedIdentities = TranslateUtils.StringCollectionToIntList(AuthRequest.GetQueryString("RelatedIdentities"));
             if (_relatedIdentities.Count == 0)
             {
                 _relatedIdentities.Add(0);
@@ -58,32 +57,32 @@ namespace SiteServer.BackgroundPages.Cms
             _attributeName = AuthRequest.GetQueryString("AttributeName");
             _redirectUrl = StringUtils.ValueFromUrl(AuthRequest.GetQueryString("RedirectUrl"));
 
-            _style = _tableStyleId != 0
-                ? TableStyleManager.GetTableStyleAsync(_tableStyleId).GetAwaiter().GetResult()
-                : TableStyleManager.GetTableStyleAsync(_tableName, _attributeName, _relatedIdentities).GetAwaiter().GetResult();
+            _styleInfo = _tableStyleId != 0
+                ? TableStyleManager.GetTableStyleInfo(_tableStyleId)
+                : TableStyleManager.GetTableStyleInfo(_tableName, _attributeName, _relatedIdentities);
 
             if (IsPostBack) return;
 
             DdlIsValidate.Items[0].Value = true.ToString();
             DdlIsValidate.Items[1].Value = false.ToString();
 
-            ControlUtils.SelectSingleItem(DdlIsValidate, _style.IsValidate.ToString());
+            ControlUtils.SelectSingleItem(DdlIsValidate, _styleInfo.Additional.IsValidate.ToString());
 
             DdlIsRequired.Items[0].Value = true.ToString();
             DdlIsRequired.Items[1].Value = false.ToString();
 
-            ControlUtils.SelectSingleItem(DdlIsRequired, _style.IsRequired.ToString());
+            ControlUtils.SelectSingleItem(DdlIsRequired, _styleInfo.Additional.IsRequired.ToString());
 
-            PhNum.Visible = InputTypeUtils.EqualsAny(_style.Type, InputType.Text, InputType.TextArea);
+            PhNum.Visible = InputTypeUtils.EqualsAny(_styleInfo.InputType, InputType.Text, InputType.TextArea);
 
-            TbMinNum.Text = _style.MinNum.ToString();
-            TbMaxNum.Text = _style.MaxNum.ToString();
+            TbMinNum.Text = _styleInfo.Additional.MinNum.ToString();
+            TbMaxNum.Text = _styleInfo.Additional.MaxNum.ToString();
 
             ValidateTypeUtils.AddListItems(DdlValidateType);
-            ControlUtils.SelectSingleItem(DdlValidateType, _style.ValidateType.Value);
+            ControlUtils.SelectSingleItem(DdlValidateType, _styleInfo.Additional.ValidateType.Value);
 
-            TbRegExp.Text = _style.RegExp;
-            TbErrorMessage.Text = _style.ErrorMessage;
+            TbRegExp.Text = _styleInfo.Additional.RegExp;
+            TbErrorMessage.Text = _styleInfo.Additional.ErrorMessage;
 
             DdlValidate_SelectedIndexChanged(null, EventArgs.Empty);
         }
@@ -97,7 +96,7 @@ namespace SiteServer.BackgroundPages.Cms
 
         public override void Submit_OnClick(object sender, EventArgs e)
         {
-            var isChanged = InsertOrUpdateTableStyle();
+            var isChanged = InsertOrUpdateTableStyleInfo();
 
             if (isChanged)
             {
@@ -105,36 +104,36 @@ namespace SiteServer.BackgroundPages.Cms
             }
 		}
 
-        private bool InsertOrUpdateTableStyle()
+        private bool InsertOrUpdateTableStyleInfo()
         {
             var isChanged = false;
 
-            _style.IsValidate = TranslateUtils.ToBool(DdlIsValidate.SelectedValue);
-            _style.IsRequired = TranslateUtils.ToBool(DdlIsRequired.SelectedValue);
-            _style.MinNum = TranslateUtils.ToInt(TbMinNum.Text);
-            _style.MaxNum = TranslateUtils.ToInt(TbMaxNum.Text);
-            _style.ValidateType = ValidateTypeUtils.GetEnumType(DdlValidateType.SelectedValue);
-            _style.RegExp = TbRegExp.Text.Trim('/');
-            _style.ErrorMessage = TbErrorMessage.Text;
+            _styleInfo.Additional.IsValidate = TranslateUtils.ToBool(DdlIsValidate.SelectedValue);
+            _styleInfo.Additional.IsRequired = TranslateUtils.ToBool(DdlIsRequired.SelectedValue);
+            _styleInfo.Additional.MinNum = TranslateUtils.ToInt(TbMinNum.Text);
+            _styleInfo.Additional.MaxNum = TranslateUtils.ToInt(TbMaxNum.Text);
+            _styleInfo.Additional.ValidateType = ValidateTypeUtils.GetEnumType(DdlValidateType.SelectedValue);
+            _styleInfo.Additional.RegExp = TbRegExp.Text.Trim('/');
+            _styleInfo.Additional.ErrorMessage = TbErrorMessage.Text;
 
             try
             {
                 if (_tableStyleId == 0)//数据库中没有此项的表样式，但是有父项的表样式
                 {
                     var relatedIdentity = _relatedIdentities[0];
-                    _style.RelatedIdentity = relatedIdentity;
-                    _style.Id = DataProvider.TableStyleRepository.InsertAsync(_style).GetAwaiter().GetResult();
+                    _styleInfo.RelatedIdentity = relatedIdentity;
+                    _styleInfo.Id = DataProvider.TableStyleDao.Insert(_styleInfo);
                 }
 
-                if (_style.Id > 0)
+                if (_styleInfo.Id > 0)
                 {
-                    DataProvider.TableStyleRepository.UpdateAsync(_style).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改表单验证", $"字段:{_style.AttributeName}").GetAwaiter().GetResult();
+                    DataProvider.TableStyleDao.Update(_styleInfo);
+                    AuthRequest.AddSiteLog(SiteId, "修改表单验证", $"字段:{_styleInfo.AttributeName}");
                 }
                 else
                 {
-                    DataProvider.TableStyleRepository.InsertAsync(_style).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "新增表单验证", $"字段:{_style.AttributeName}").GetAwaiter().GetResult();
+                    DataProvider.TableStyleDao.Insert(_styleInfo);
+                    AuthRequest.AddSiteLog(SiteId, "新增表单验证", $"字段:{_styleInfo.AttributeName}");
                 }
                 isChanged = true;
             }

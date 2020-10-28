@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -21,9 +20,9 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Create);
+            VerifySitePermissions(ConfigManager.SitePermissions.CreateSpecials);
 
-            var specialInfoList = DataProvider.SpecialRepository.GetSpecialListAsync(SiteId).GetAwaiter().GetResult();
+            var specialInfoList = DataProvider.SpecialDao.GetSpecialInfoList(SiteId);
 
             foreach (var specialInfo in specialInfoList)
             {
@@ -53,7 +52,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             foreach (var specialId in specialIdList)
             {
-                CreateManager.CreateSpecialAsync(SiteId, specialId).GetAwaiter().GetResult();
+                CreateManager.CreateSpecial(SiteId, specialId);
             }
 
             PageUtils.Redirect(CmsPages.GetCreateStatusUrl(SiteId));

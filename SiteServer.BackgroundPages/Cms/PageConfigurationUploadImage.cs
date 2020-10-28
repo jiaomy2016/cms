@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -26,24 +26,24 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Configuration);
+            VerifySitePermissions(ConfigManager.SitePermissions.ConfigUpload);
 
-            TbImageUploadDirectoryName.Text = Site.ImageUploadDirectoryName;
+            TbImageUploadDirectoryName.Text = SiteInfo.Additional.ImageUploadDirectoryName;
 
             DdlImageUploadDateFormatString.Items.Add(new ListItem("按年存入不同目录(不推荐)", EDateFormatTypeUtils.GetValue(EDateFormatType.Year)));
             DdlImageUploadDateFormatString.Items.Add(new ListItem("按年/月存入不同目录", EDateFormatTypeUtils.GetValue(EDateFormatType.Month)));
             DdlImageUploadDateFormatString.Items.Add(new ListItem("按年/月/日存入不同目录", EDateFormatTypeUtils.GetValue(EDateFormatType.Day)));
-            ControlUtils.SelectSingleItemIgnoreCase(DdlImageUploadDateFormatString, Site.ImageUploadDateFormatString);
+            ControlUtils.SelectSingleItemIgnoreCase(DdlImageUploadDateFormatString, SiteInfo.Additional.ImageUploadDateFormatString);
 
             EBooleanUtils.AddListItems(DdlIsImageUploadChangeFileName, "自动修改文件名", "保持文件名不变");
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsImageUploadChangeFileName, Site.IsImageUploadChangeFileName.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsImageUploadChangeFileName, SiteInfo.Additional.IsImageUploadChangeFileName.ToString());
 
-            TbImageUploadTypeCollection.Text = Site.ImageUploadTypeCollection.Replace("|", ",");
-            var mbSize = GetMbSize(Site.ImageUploadTypeMaxSize);
+            TbImageUploadTypeCollection.Text = SiteInfo.Additional.ImageUploadTypeCollection.Replace("|", ",");
+            var mbSize = GetMbSize(SiteInfo.Additional.ImageUploadTypeMaxSize);
             if (mbSize == 0)
             {
                 DdlImageUploadTypeUnit.SelectedIndex = 0;
-                TbImageUploadTypeMaxSize.Text = Site.ImageUploadTypeMaxSize.ToString();
+                TbImageUploadTypeMaxSize.Text = SiteInfo.Additional.ImageUploadTypeMaxSize.ToString();
             }
             else
             {
@@ -51,8 +51,8 @@ namespace SiteServer.BackgroundPages.Cms
                 TbImageUploadTypeMaxSize.Text = mbSize.ToString();
             }
 
-            TbPhotoSmallWidth.Text = Site.PhotoSmallWidth.ToString();
-            TbPhotoMiddleWidth.Text = Site.PhotoMiddleWidth.ToString();
+            TbPhotoSmallWidth.Text = SiteInfo.Additional.PhotoSmallWidth.ToString();
+            TbPhotoMiddleWidth.Text = SiteInfo.Additional.PhotoMiddleWidth.ToString();
         }
 
 		private static int GetMbSize(int kbSize)
@@ -69,23 +69,23 @@ namespace SiteServer.BackgroundPages.Cms
 		{
 		    if (!Page.IsPostBack || !Page.IsValid) return;
 
-		    Site.ImageUploadDirectoryName = TbImageUploadDirectoryName.Text;
+		    SiteInfo.Additional.ImageUploadDirectoryName = TbImageUploadDirectoryName.Text;
 
-		    Site.ImageUploadDateFormatString = EDateFormatTypeUtils.GetValue(EDateFormatTypeUtils.GetEnumType(DdlImageUploadDateFormatString.SelectedValue));
-		    Site.IsImageUploadChangeFileName = TranslateUtils.ToBool(DdlIsImageUploadChangeFileName.SelectedValue);
+		    SiteInfo.Additional.ImageUploadDateFormatString = EDateFormatTypeUtils.GetValue(EDateFormatTypeUtils.GetEnumType(DdlImageUploadDateFormatString.SelectedValue));
+		    SiteInfo.Additional.IsImageUploadChangeFileName = TranslateUtils.ToBool(DdlIsImageUploadChangeFileName.SelectedValue);
 
-		    Site.ImageUploadTypeCollection = TbImageUploadTypeCollection.Text.Replace(",", "|");
+		    SiteInfo.Additional.ImageUploadTypeCollection = TbImageUploadTypeCollection.Text.Replace(",", "|");
 		    var kbSize = int.Parse(TbImageUploadTypeMaxSize.Text);
-		    Site.ImageUploadTypeMaxSize = DdlImageUploadTypeUnit.SelectedIndex == 0 ? kbSize : 1024 * kbSize;
+		    SiteInfo.Additional.ImageUploadTypeMaxSize = DdlImageUploadTypeUnit.SelectedIndex == 0 ? kbSize : 1024 * kbSize;
 
-            Site.PhotoSmallWidth = TranslateUtils.ToInt(TbPhotoSmallWidth.Text, Site.PhotoSmallWidth);
-            Site.PhotoMiddleWidth = TranslateUtils.ToInt(TbPhotoMiddleWidth.Text, Site.PhotoMiddleWidth);
+            SiteInfo.Additional.PhotoSmallWidth = TranslateUtils.ToInt(TbPhotoSmallWidth.Text, SiteInfo.Additional.PhotoSmallWidth);
+            SiteInfo.Additional.PhotoMiddleWidth = TranslateUtils.ToInt(TbPhotoMiddleWidth.Text, SiteInfo.Additional.PhotoMiddleWidth);
 
             try
 		    {
-		        DataProvider.SiteRepository.UpdateAsync(Site).GetAwaiter().GetResult();
+		        DataProvider.SiteDao.Update(SiteInfo);
 
-		        AuthRequest.AddSiteLogAsync(SiteId, "修改图片上传设置").GetAwaiter().GetResult();
+		        AuthRequest.AddSiteLog(SiteId, "修改图片上传设置");
 
 		        SuccessMessage("上传图片设置修改成功！");
 		    }

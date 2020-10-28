@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Create;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.V1
 {
@@ -18,54 +18,124 @@ namespace SiteServer.API.Controllers.V1
         private const string RouteSite = "{siteId:int}";
         private const string RouteChannel = "{siteId:int}/{channelId:int}";
 
-        [HttpPost, Route(RouteSite)]
-        public async Task<IHttpActionResult> Create(int siteId)
+        [OpenApiOperation("获取栏目列表 API", "https://sscms.com/docs/v6/api/guide/channels/list.html")]
+        [HttpGet, Route(RouteSite)]
+        public IHttpActionResult List(int siteId)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var parentId = request.GetPostInt(nameof(Channel.ParentId), siteId);
-
-                var isAuth = request.IsApiAuthenticated && await
-                                 DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeChannels) ||
-                              request.IsAdminLoggin &&
-                              await request.AdminPermissions.HasChannelPermissionsAsync(siteId, parentId,
-                                  Constants.ChannelPermissions.ChannelAdd);
+                var request = new AuthenticatedRequest();
+                var isAuth = request.IsApiAuthenticated &&
+                             AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeChannels) ||
+                             request.IsAdminLoggin;
                 if (!isAuth) return Unauthorized();
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var contentModelPluginId = request.GetPostString(nameof(Channel.ContentModelPluginId));
-                var contentRelatedPluginIds = StringUtils.GetStringList(request.GetPostString(nameof(Channel.ContentRelatedPluginIds)));
+                var root = ChannelManager.GetChannelInfo(siteId, siteId);
+                var channelIdList = ChannelManager.GetChannelIdList(root, EScopeType.Children);
 
-                var channelName = request.GetPostString(nameof(Channel.ChannelName));
-                var indexName = request.GetPostString(nameof(Channel.IndexName));
-                var filePath = request.GetPostString(nameof(Channel.FilePath));
-                var channelFilePathRule = request.GetPostString(nameof(Channel.ChannelFilePathRule));
-                var contentFilePathRule = request.GetPostString(nameof(Channel.ContentFilePathRule));
-                var groupNames = StringUtils.GetStringList(request.GetPostString(nameof(Channel.GroupNames)));
-                var imageUrl = request.GetPostString(nameof(Channel.ImageUrl));
-                var content = request.GetPostString(nameof(Channel.Content));
-                var keywords = request.GetPostString(nameof(Channel.Keywords));
-                var description = request.GetPostString(nameof(Channel.Description));
-                var linkUrl = request.GetPostString(nameof(Channel.LinkUrl));
-                var linkType = request.GetPostString(nameof(Channel.LinkType));
-                var channelTemplateId = request.GetPostInt(nameof(Channel.ChannelTemplateId));
-                var contentTemplateId = request.GetPostInt(nameof(Channel.ContentTemplateId));
+                var dictInfoList = new List<Dictionary<string, object>>();
+                foreach (var channelId in channelIdList)
+                {
+                    var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+                    dictInfoList.Add(channelInfo.ToDictionary());
+                }
 
-                var channelInfo = new Channel
+                return Ok(new
+                {
+                    Value = dictInfoList
+                });
+            }
+            catch (Exception ex)
+            {
+                LogUtils.AddErrorLog(ex);
+                return InternalServerError(ex);
+            }
+        }
+
+        [OpenApiOperation("获取栏目 API", "https://sscms.com/docs/v6/api/guide/channels/get.html")]
+        [HttpGet, Route(RouteChannel)]
+        public IHttpActionResult Get(int siteId, int channelId)
+        {
+            try
+            {
+                var request = new AuthenticatedRequest();
+                var isAuth = request.IsApiAuthenticated &&
+                             AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeChannels) ||
+                             request.IsAdminLoggin;
+                if (!isAuth) return Unauthorized();
+
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
+
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+                if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
+
+                channelInfo.Children = ChannelManager.GetChildren(siteId, channelId);
+
+                return Ok(new
+                {
+                    Value = channelInfo.ToDictionary()
+                });
+            }
+            catch (Exception ex)
+            {
+                LogUtils.AddErrorLog(ex);
+                return InternalServerError(ex);
+            }
+        }
+
+        [OpenApiOperation("新增栏目 API", "https://sscms.com/docs/v6/api/guide/channels/create.html")]
+        [HttpPost, Route(RouteSite)]
+        public IHttpActionResult Create(int siteId)
+        {
+            try
+            {
+                var request = new AuthenticatedRequest();
+                var parentId = request.GetPostInt(ChannelAttribute.ParentId, siteId);
+
+                var isAuth = request.IsApiAuthenticated &&
+                              AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeChannels) ||
+                              request.IsAdminLoggin &&
+                              request.AdminPermissions.HasChannelPermissions(siteId, parentId,
+                                  ConfigManager.ChannelPermissions.ChannelAdd);
+                if (!isAuth) return Unauthorized();
+
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
+
+                var contentModelPluginId = request.GetPostString(ChannelAttribute.ContentModelPluginId);
+                var contentRelatedPluginIds = request.GetPostString(ChannelAttribute.ContentRelatedPluginIds);
+
+                var channelName = request.GetPostString(ChannelAttribute.ChannelName);
+                var indexName = request.GetPostString(ChannelAttribute.IndexName);
+                var filePath = request.GetPostString(ChannelAttribute.FilePath);
+                var channelFilePathRule = request.GetPostString(ChannelAttribute.ChannelFilePathRule);
+                var contentFilePathRule = request.GetPostString(ChannelAttribute.ContentFilePathRule);
+                var groupNameCollection = request.GetPostString(ChannelAttribute.GroupNameCollection);
+                var imageUrl = request.GetPostString(ChannelAttribute.ImageUrl);
+                var content = request.GetPostString(ChannelAttribute.Content);
+                var keywords = request.GetPostString(ChannelAttribute.Keywords);
+                var description = request.GetPostString(ChannelAttribute.Description);
+                var linkUrl = request.GetPostString(ChannelAttribute.LinkUrl);
+                var linkType = request.GetPostString(ChannelAttribute.LinkType);
+                var channelTemplateId = request.GetPostInt(ChannelAttribute.ChannelTemplateId);
+                var contentTemplateId = request.GetPostInt(ChannelAttribute.ContentTemplateId);
+
+                var channelInfo = new ChannelInfo
                 {
                     SiteId = siteId,
                     ParentId = parentId,
                     ContentModelPluginId = contentModelPluginId,
-                    ContentRelatedPluginIdList = contentRelatedPluginIds
+                    ContentRelatedPluginIds = contentRelatedPluginIds
                 };
 
                 if (!string.IsNullOrEmpty(indexName))
                 {
-                    var indexNameList = await DataProvider.ChannelRepository.GetIndexNameListAsync(siteId);
-                    if (indexNameList.Contains(indexName))
+                    var indexNameList = DataProvider.ChannelDao.GetIndexNameList(siteId);
+                    if (indexNameList.IndexOf(indexName) != -1)
                     {
                         return BadRequest("栏目添加失败，栏目索引已存在！");
                     }
@@ -83,8 +153,8 @@ namespace SiteServer.API.Controllers.V1
                         filePath = PageUtils.Combine(filePath, "index.html");
                     }
 
-                    var filePathList = await DataProvider.ChannelRepository.GetAllFilePathBySiteIdAsync(siteId);
-                    if (filePathList.Contains(filePath))
+                    var filePathList = DataProvider.ChannelDao.GetAllFilePathBySiteId(siteId);
+                    if (filePathList.IndexOf(filePath) != -1)
                     {
                         return BadRequest("栏目添加失败，栏目页面路径已存在！");
                     }
@@ -114,18 +184,13 @@ namespace SiteServer.API.Controllers.V1
                     }
                 }
 
-                //var parentChannel = await ChannelManager.GetChannelAsync(siteId, parentId);
-                //var styleList = TableStyleManager.GetChannelStyleList(parentChannel);
-                //var extendedAttributes = BackgroundInputTypeParser.SaveAttributes(site, styleList, Request.Form, null);
-
-                var dict = request.GetPostObject<Dictionary<string, object>>();
-                foreach (var o in dict)
-                {
-                    channelInfo.Set(o.Key, o.Value);
-                }
+                //var parentChannelInfo = ChannelManager.GetChannelInfo(siteId, parentId);
+                //var styleInfoList = TableStyleManager.GetChannelStyleInfoList(parentChannelInfo);
+                //var extendedAttributes = BackgroundInputTypeParser.SaveAttributes(siteInfo, styleInfoList, Request.Form, null);
+                channelInfo.Additional.Load(request.GetPostObject<Dictionary<string, object>>());
                 //foreach (string key in attributes)
                 //{
-                //    channel.SetExtendedAttribute(key, attributes[key]);
+                //    channelInfo.Additional.SetExtendedAttribute(key, attributes[key]);
                 //}
 
                 channelInfo.ChannelName = channelName;
@@ -134,7 +199,7 @@ namespace SiteServer.API.Controllers.V1
                 channelInfo.ChannelFilePathRule = channelFilePathRule;
                 channelInfo.ContentFilePathRule = contentFilePathRule;
 
-                channelInfo.GroupNames = groupNames;
+                channelInfo.GroupNameCollection = groupNameCollection;
                 channelInfo.ImageUrl = imageUrl;
                 channelInfo.Content = content;
                 channelInfo.Keywords = keywords;
@@ -145,12 +210,12 @@ namespace SiteServer.API.Controllers.V1
                 channelInfo.ContentTemplateId = contentTemplateId;
 
                 channelInfo.AddDate = DateTime.Now;
-                channelInfo.Id = await DataProvider.ChannelRepository.InsertAsync(channelInfo);
+                channelInfo.Id = DataProvider.ChannelDao.Insert(channelInfo);
                 //栏目选择投票样式后，内容
 
-                await CreateManager.CreateChannelAsync(siteId, channelInfo.Id);
+                CreateManager.CreateChannel(siteId, channelInfo.Id);
 
-                await request.AddSiteLogAsync(siteId, "添加栏目", $"栏目:{channelName}");
+                request.AddSiteLog(siteId, "添加栏目", $"栏目:{channelName}");
 
                 return Ok(new
                 {
@@ -159,48 +224,45 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("修改栏目 API", "https://sscms.com/docs/v6/api/guide/channels/update.html")]
         [HttpPut, Route(RouteChannel)]
-        public async Task<IHttpActionResult> Update(int siteId, int channelId)
+        public IHttpActionResult Update(int siteId, int channelId)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isAuth = request.IsApiAuthenticated && await
-                                 DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeChannels) ||
+                var request = new AuthenticatedRequest();
+                var isAuth = request.IsApiAuthenticated &&
+                              AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeChannels) ||
                               request.IsAdminLoggin &&
-                              await request.AdminPermissions.HasChannelPermissionsAsync(siteId, channelId,
-                                  Constants.ChannelPermissions.ChannelEdit);
+                              request.AdminPermissions.HasChannelPermissions(siteId, channelId,
+                                  ConfigManager.ChannelPermissions.ChannelEdit);
                 if (!isAuth) return Unauthorized();
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var dict = request.GetPostObject<Dictionary<string, object>>();
-                foreach (var o in dict)
+                channelInfo.Additional.Load(request.GetPostObject<Dictionary<string, object>>());
+
+                if (request.IsPostExists(ChannelAttribute.ChannelName))
                 {
-                    channelInfo.Set(o.Key, o.Value);
+                    channelInfo.ChannelName = request.GetPostString(ChannelAttribute.ChannelName);
                 }
 
-                if (request.IsPostExists(nameof(Channel.ChannelName)))
+                if (request.IsPostExists(ChannelAttribute.IndexName))
                 {
-                    channelInfo.ChannelName = request.GetPostString(nameof(Channel.ChannelName));
-                }
-
-                if (request.IsPostExists(nameof(Channel.IndexName)))
-                {
-                    var indexName = request.GetPostString(nameof(Channel.IndexName));
+                    var indexName = request.GetPostString(ChannelAttribute.IndexName);
                     if (!channelInfo.IndexName.Equals(indexName) && !string.IsNullOrEmpty(indexName))
                     {
-                        var indexNameList = await DataProvider.ChannelRepository.GetIndexNameListAsync(siteId);
-                        if (indexNameList.Contains(indexName))
+                        var indexNameList = DataProvider.ChannelDao.GetIndexNameList(siteId);
+                        if (indexNameList.IndexOf(indexName) != -1)
                         {
                             return BadRequest("栏目属性修改失败，栏目索引已存在！");
                         }
@@ -208,23 +270,23 @@ namespace SiteServer.API.Controllers.V1
                     channelInfo.IndexName = indexName;
                 }
 
-                if (request.IsPostExists(nameof(Channel.ContentModelPluginId)))
+                if (request.IsPostExists(ChannelAttribute.ContentModelPluginId))
                 {
-                    var contentModelPluginId = request.GetPostString(nameof(Channel.ContentModelPluginId));
+                    var contentModelPluginId = request.GetPostString(ChannelAttribute.ContentModelPluginId);
                     if (channelInfo.ContentModelPluginId != contentModelPluginId)
                     {
                         channelInfo.ContentModelPluginId = contentModelPluginId;
                     }
                 }
 
-                if (request.IsPostExists(nameof(Channel.ContentRelatedPluginIds)))
+                if (request.IsPostExists(ChannelAttribute.ContentRelatedPluginIds))
                 {
-                    channelInfo.ContentRelatedPluginIdList = StringUtils.GetStringList(request.GetPostString(nameof(Channel.ContentRelatedPluginIds)));
+                    channelInfo.ContentRelatedPluginIds = request.GetPostString(ChannelAttribute.ContentRelatedPluginIds);
                 }
 
-                if (request.IsPostExists(nameof(Channel.FilePath)))
+                if (request.IsPostExists(ChannelAttribute.FilePath))
                 {
-                    var filePath = request.GetPostString(nameof(Channel.FilePath));
+                    var filePath = request.GetPostString(ChannelAttribute.FilePath);
                     filePath = filePath.Trim();
                     if (!channelInfo.FilePath.Equals(filePath) && !string.IsNullOrEmpty(filePath))
                     {
@@ -238,8 +300,8 @@ namespace SiteServer.API.Controllers.V1
                             filePath = PageUtils.Combine(filePath, "index.html");
                         }
 
-                        var filePathList = await DataProvider.ChannelRepository.GetAllFilePathBySiteIdAsync(siteId);
-                        if (filePathList.Contains(filePath))
+                        var filePathList = DataProvider.ChannelDao.GetAllFilePathBySiteId(siteId);
+                        if (filePathList.IndexOf(filePath) != -1)
                         {
                             return BadRequest("栏目修改失败，栏目页面路径已存在！");
                         }
@@ -247,9 +309,9 @@ namespace SiteServer.API.Controllers.V1
                     channelInfo.FilePath = filePath;
                 }
 
-                if (request.IsPostExists(nameof(Channel.ChannelFilePathRule)))
+                if (request.IsPostExists(ChannelAttribute.ChannelFilePathRule))
                 {
-                    var channelFilePathRule = request.GetPostString(nameof(Channel.ChannelFilePathRule));
+                    var channelFilePathRule = request.GetPostString(ChannelAttribute.ChannelFilePathRule);
 
                     if (!string.IsNullOrEmpty(channelFilePathRule))
                     {
@@ -267,9 +329,9 @@ namespace SiteServer.API.Controllers.V1
                     channelInfo.ChannelFilePathRule = channelFilePathRule;
                 }
 
-                if (request.IsPostExists(nameof(Channel.ContentFilePathRule)))
+                if (request.IsPostExists(ChannelAttribute.ContentFilePathRule))
                 {
-                    var contentFilePathRule = request.GetPostString(nameof(Channel.ContentFilePathRule));
+                    var contentFilePathRule = request.GetPostString(ChannelAttribute.ContentFilePathRule);
 
                     if (!string.IsNullOrEmpty(contentFilePathRule))
                     {
@@ -287,52 +349,52 @@ namespace SiteServer.API.Controllers.V1
                     channelInfo.ContentFilePathRule = contentFilePathRule;
                 }
 
-                if (request.IsPostExists(nameof(Channel.GroupNames)))
+                if (request.IsPostExists(ChannelAttribute.GroupNameCollection))
                 {
-                    channelInfo.GroupNames = StringUtils.GetStringList(request.GetPostString(nameof(Channel.GroupNames)));
+                    channelInfo.GroupNameCollection = request.GetPostString(ChannelAttribute.GroupNameCollection);
                 }
 
-                if (request.IsPostExists(nameof(Channel.ImageUrl)))
+                if (request.IsPostExists(ChannelAttribute.ImageUrl))
                 {
-                    channelInfo.ImageUrl = request.GetPostString(nameof(Channel.ImageUrl));
+                    channelInfo.ImageUrl = request.GetPostString(ChannelAttribute.ImageUrl);
                 }
 
-                if (request.IsPostExists(nameof(Channel.Content)))
+                if (request.IsPostExists(ChannelAttribute.Content))
                 {
-                    channelInfo.Content = request.GetPostString(nameof(Channel.Content));
+                    channelInfo.Content = request.GetPostString(ChannelAttribute.Content);
                 }
 
-                if (request.IsPostExists(nameof(Channel.Keywords)))
+                if (request.IsPostExists(ChannelAttribute.Keywords))
                 {
-                    channelInfo.Keywords = request.GetPostString(nameof(Channel.Keywords));
+                    channelInfo.Keywords = request.GetPostString(ChannelAttribute.Keywords);
                 }
 
-                if (request.IsPostExists(nameof(Channel.Description)))
+                if (request.IsPostExists(ChannelAttribute.Description))
                 {
-                    channelInfo.Description = request.GetPostString(nameof(Channel.Description));
+                    channelInfo.Description = request.GetPostString(ChannelAttribute.Description);
                 }
 
-                if (request.IsPostExists(nameof(Channel.LinkUrl)))
+                if (request.IsPostExists(ChannelAttribute.LinkUrl))
                 {
-                    channelInfo.LinkUrl = request.GetPostString(nameof(Channel.LinkUrl));
+                    channelInfo.LinkUrl = request.GetPostString(ChannelAttribute.LinkUrl);
                 }
 
-                if (request.IsPostExists(nameof(Channel.LinkType)))
+                if (request.IsPostExists(ChannelAttribute.LinkType))
                 {
-                    channelInfo.LinkType = request.GetPostString(nameof(Channel.LinkType));
+                    channelInfo.LinkType = request.GetPostString(ChannelAttribute.LinkType);
                 }
 
-                if (request.IsPostExists(nameof(Channel.ChannelTemplateId)))
+                if (request.IsPostExists(ChannelAttribute.ChannelTemplateId))
                 {
-                    channelInfo.ChannelTemplateId = request.GetPostInt(nameof(Channel.ChannelTemplateId));
+                    channelInfo.ChannelTemplateId = request.GetPostInt(ChannelAttribute.ChannelTemplateId);
                 }
 
-                if (request.IsPostExists(nameof(Channel.ContentTemplateId)))
+                if (request.IsPostExists(ChannelAttribute.ContentTemplateId))
                 {
-                    channelInfo.ContentTemplateId = request.GetPostInt(nameof(Channel.ContentTemplateId));
+                    channelInfo.ContentTemplateId = request.GetPostInt(ChannelAttribute.ContentTemplateId);
                 }
 
-                await DataProvider.ChannelRepository.UpdateAsync(channelInfo);
+                DataProvider.ChannelDao.Update(channelInfo);
 
                 return Ok(new
                 {
@@ -341,33 +403,34 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
+        [OpenApiOperation("删除栏目 API", "https://sscms.com/docs/v6/api/guide/channels/delete.html")]
         [HttpDelete, Route(RouteChannel)]
-        public async Task<IHttpActionResult> Delete(int siteId, int channelId)
+        public IHttpActionResult Delete(int siteId, int channelId)
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isAuth = request.IsApiAuthenticated && await
-                                 DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeChannels) ||
+                var request = new AuthenticatedRequest();
+                var isAuth = request.IsApiAuthenticated &&
+                              AccessTokenManager.IsScope(request.ApiToken, AccessTokenManager.ScopeChannels) ||
                               request.IsAdminLoggin &&
-                              await request.AdminPermissions.HasChannelPermissionsAsync(siteId, channelId,
-                                  Constants.ChannelPermissions.ChannelDelete);
+                              request.AdminPermissions.HasChannelPermissions(siteId, channelId,
+                                  ConfigManager.ChannelPermissions.ChannelDelete);
                 if (!isAuth) return Unauthorized();
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
-                var tableName = await ChannelManager.GetTableNameAsync(site, channelId);
-                await DataProvider.ContentRepository.UpdateTrashContentsByChannelIdAsync(siteId, channelId, tableName);
-                await DataProvider.ChannelRepository.DeleteAsync(siteId, channelId);
+                var tableName = ChannelManager.GetTableName(siteInfo, channelId);
+                DataProvider.ContentDao.UpdateTrashContentsByChannelId(siteId, channelId, tableName);
+                DataProvider.ChannelDao.Delete(siteId, channelId);
 
                 return Ok(new
                 {
@@ -376,72 +439,7 @@ namespace SiteServer.API.Controllers.V1
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
-                return InternalServerError(ex);
-            }
-        }
-
-        [HttpGet, Route(RouteChannel)]
-        public async Task<IHttpActionResult> Get(int siteId, int channelId)
-        {
-            try
-            {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isAuth = request.IsApiAuthenticated && await
-                                 DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeChannels) ||
-                              request.IsAdminLoggin;
-                if (!isAuth) return Unauthorized();
-
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
-
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
-                if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
-
-                channelInfo.Children = await ChannelManager.GetChildrenAsync(siteId, channelId);
-
-                return Ok(new
-                {
-                    Value = channelInfo.ToDictionary()
-                });
-            }
-            catch (Exception ex)
-            {
-                await LogUtils.AddErrorLogAsync(ex);
-                return InternalServerError(ex);
-            }
-        }
-
-        [HttpGet, Route(RouteSite)]
-        public async Task<IHttpActionResult> GetChannels(int siteId)
-        {
-            try
-            {
-                var request = await AuthenticatedRequest.GetAuthAsync();
-                var isAuth = request.IsApiAuthenticated && await
-                                 DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeChannels) ||
-                             request.IsAdminLoggin;
-                if (!isAuth) return Unauthorized();
-
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
-
-                var channelInfoList = await ChannelManager.GetChannelListAsync(siteId);
-
-                var dictInfoList = new List<IDictionary<string, object>>();
-                foreach (var channelInfo in channelInfoList)
-                {
-                    dictInfoList.Add(channelInfo.ToDictionary());
-                }
-
-                return Ok(new
-                {
-                    Value = dictInfoList
-                });
-            }
-            catch (Exception ex)
-            {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

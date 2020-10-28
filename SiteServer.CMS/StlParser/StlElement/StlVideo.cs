@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Stl;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 
 namespace SiteServer.CMS.StlParser.StlElement
@@ -37,9 +37,9 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "是否循环播放")]
         private const string IsLoop = nameof(IsLoop);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
-            var type = ContentAttribute.VideoUrl;
+            var type = BackgroundContentAttribute.VideoUrl;
             var playUrl = string.Empty;
             var imageUrl = string.Empty;
             var width = string.Empty;
@@ -86,10 +86,10 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, type, playUrl, imageUrl, width, height, isAutoPlay, isControls, isLoop);
+            return ParseImpl(pageInfo, contextInfo, type, playUrl, imageUrl, width, height, isAutoPlay, isControls, isLoop);
 		}
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, string type, string playUrl, string imageUrl, string width, string height, bool isAutoPlay, bool isControls, bool isLoop)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string type, string playUrl, string imageUrl, string width, string height, bool isAutoPlay, bool isControls, bool isLoop)
         {
             var videoUrl = string.Empty;
             if (!string.IsNullOrEmpty(playUrl))
@@ -103,24 +103,23 @@ namespace SiteServer.CMS.StlParser.StlElement
                 {
                     if (contentId != 0)//获取内容视频
                     {
-                        var contentInfo = await contextInfo.GetContentAsync();
-                        if (contentInfo == null)
+                        if (contextInfo.ContentInfo == null)
                         {
-                            videoUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, type);
+                            videoUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, type);
                             if (string.IsNullOrEmpty(videoUrl))
                             {
-                                if (!StringUtils.EqualsIgnoreCase(type, ContentAttribute.VideoUrl))
+                                if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.VideoUrl))
                                 {
-                                    videoUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, ContentAttribute.VideoUrl);
+                                    videoUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.VideoUrl);
                                 }
                             }
                         }
                         else
                         {
-                            videoUrl = contentInfo.Get<string>(type);
+                            videoUrl = contextInfo.ContentInfo.GetString(type);
                             if (string.IsNullOrEmpty(videoUrl))
                             {
-                                videoUrl = contentInfo.Get<string>(ContentAttribute.VideoUrl);
+                                videoUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.VideoUrl);
                             }
                         }
                     }
@@ -133,8 +132,8 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (string.IsNullOrEmpty(videoUrl)) return string.Empty;
 
-            videoUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, videoUrl, pageInfo.IsLocal);
-            imageUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, imageUrl, pageInfo.IsLocal);
+            videoUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, videoUrl, pageInfo.IsLocal);
+            imageUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, imageUrl, pageInfo.IsLocal);
 
             pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.JsAcVideoJs);
 

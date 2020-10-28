@@ -1,6 +1,5 @@
 ﻿using System.Collections.Specialized;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Api.Sys.Stl
 {
@@ -15,7 +14,7 @@ namespace SiteServer.CMS.Api.Sys.Stl
                 {"siteId", siteId.ToString()},
                 {"channelId", channelId.ToString()},
                 {"contentId", contentId.ToString()},
-                {"fileUrl", WebConfigUtils.EncryptStringBySecretKey(fileUrl)}
+                {"fileUrl", TranslateUtils.EncryptStringBySecretKey(fileUrl)}
             });
         }
 
@@ -24,7 +23,7 @@ namespace SiteServer.CMS.Api.Sys.Stl
             return PageUtils.AddQueryString(PageUtils.Combine(apiUrl, Route), new NameValueCollection
             {
                 {"siteId", siteId.ToString()},
-                {"fileUrl", WebConfigUtils.EncryptStringBySecretKey(fileUrl)}
+                {"fileUrl", TranslateUtils.EncryptStringBySecretKey(fileUrl)}
             });
         }
 
@@ -32,7 +31,7 @@ namespace SiteServer.CMS.Api.Sys.Stl
         {
             return PageUtils.AddQueryString(PageUtils.Combine(apiUrl, Route), new NameValueCollection
             {
-                {"filePath", WebConfigUtils.EncryptStringBySecretKey(filePath)}
+                {"filePath", TranslateUtils.EncryptStringBySecretKey(filePath)}
             });
         }
     }

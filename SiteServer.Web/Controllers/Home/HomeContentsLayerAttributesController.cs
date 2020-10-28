@@ -1,29 +1,29 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.Utils;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentsLayerAttributes")]
     public class HomeContentsLayerAttributesController : ApiController
     {
         private const string Route = "";
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
-                var contentIdList = StringUtils.GetIntList(request.GetPostString("contentIds"));
+                var contentIdList = TranslateUtils.StringCollectionToIntList(request.GetPostString("contentIds"));
                 var pageType = request.GetPostString("pageType");
                 var isRecommend = request.GetPostBool("isRecommend");
                 var isHot = request.GetPostBool("isHot");
@@ -32,16 +32,16 @@ namespace SiteServer.API.Controllers.Home
                 var hits = request.GetPostInt("hits");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentEdit))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentEdit))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
                 if (pageType == "setAttributes")
@@ -50,29 +50,29 @@ namespace SiteServer.API.Controllers.Home
                     {
                         foreach (var contentId in contentIdList)
                         {
-                            var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                            var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                             if (contentInfo == null) continue;
 
                             if (isRecommend)
                             {
-                                contentInfo.Recommend = true;
+                                contentInfo.IsRecommend = true;
                             }
                             if (isHot)
                             {
-                                contentInfo.Hot = true;
+                                contentInfo.IsHot = true;
                             }
                             if (isColor)
                             {
-                                contentInfo.Color = true;
+                                contentInfo.IsColor = true;
                             }
                             if (isTop)
                             {
-                                contentInfo.Top = true;
+                                contentInfo.IsTop = true;
                             }
-                            await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                            DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                         }
 
-                        await request.AddSiteLogAsync(siteId, "设置内容属性");
+                        request.AddSiteLog(siteId, "设置内容属性");
                     }
                 }
                 else if(pageType == "cancelAttributes")
@@ -81,43 +81,43 @@ namespace SiteServer.API.Controllers.Home
                     {
                         foreach (var contentId in contentIdList)
                         {
-                            var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                            var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                             if (contentInfo == null) continue;
 
                             if (isRecommend)
                             {
-                                contentInfo.Recommend = false;
+                                contentInfo.IsRecommend = false;
                             }
                             if (isHot)
                             {
-                                contentInfo.Hot = false;
+                                contentInfo.IsHot = false;
                             }
                             if (isColor)
                             {
-                                contentInfo.Color = false;
+                                contentInfo.IsColor = false;
                             }
                             if (isTop)
                             {
-                                contentInfo.Top = false;
+                                contentInfo.IsTop = false;
                             }
-                            await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                            DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                         }
 
-                        await request.AddSiteLogAsync(siteId, "取消内容属性");
+                        request.AddSiteLog(siteId, "取消内容属性");
                     }
                 }
                 else if (pageType == "setHits")
                 {
                     foreach (var contentId in contentIdList)
                     {
-                        var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                        var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
                         if (contentInfo == null) continue;
 
                         contentInfo.Hits = hits;
-                        await DataProvider.ContentRepository.UpdateAsync(site, channelInfo, contentInfo);
+                        DataProvider.ContentDao.Update(siteInfo, channelInfo, contentInfo);
                     }
 
-                    await request.AddSiteLogAsync(siteId, "设置内容点击量");
+                    request.AddSiteLog(siteId, "设置内容点击量");
                 }
 
                 return Ok(new
@@ -127,7 +127,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

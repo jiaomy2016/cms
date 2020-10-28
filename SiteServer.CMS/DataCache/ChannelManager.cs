@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache.Content;
 using SiteServer.CMS.DataCache.Core;
 using SiteServer.CMS.DataCache.Stl;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.Plugin;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
-using TableStyle = SiteServer.Abstractions.TableStyle;
+using SiteServer.Plugin;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.DataCache
 {
@@ -22,7 +24,7 @@ namespace SiteServer.CMS.DataCache
             private static readonly object LockObject = new object();
             private static readonly string CacheKey = DataCacheManager.GetCacheKey(nameof(ChannelManager));
 
-            private static void Update(Dictionary<int, Dictionary<int, Channel>> allDict, Dictionary<int, Channel> dic, int siteId)
+            private static void Update(Dictionary<int, Dictionary<int, ChannelInfo>> allDict, Dictionary<int, ChannelInfo> dic, int siteId)
             {
                 lock (LockObject)
                 {
@@ -30,12 +32,12 @@ namespace SiteServer.CMS.DataCache
                 }
             }
 
-            private static Dictionary<int, Dictionary<int, Channel>> GetAllDictionary()
+            private static Dictionary<int, Dictionary<int, ChannelInfo>> GetAllDictionary()
             {
-                var allDict = DataCacheManager.Get<Dictionary<int, Dictionary<int, Channel>>>(CacheKey);
+                var allDict = DataCacheManager.Get<Dictionary<int, Dictionary<int, ChannelInfo>>>(CacheKey);
                 if (allDict != null) return allDict;
 
-                allDict = new Dictionary<int, Dictionary<int, Channel>>();
+                allDict = new Dictionary<int, Dictionary<int, ChannelInfo>>();
                 DataCacheManager.Insert(CacheKey, allDict);
                 return allDict;
             }
@@ -50,25 +52,26 @@ namespace SiteServer.CMS.DataCache
                 }
             }
 
-            public static async Task UpdateAsync(int siteId, Channel channel)
+            public static void Update(int siteId, ChannelInfo channelInfo)
             {
-                var dict = await GetChannelDictionaryBySiteIdAsync(siteId);
+                var dict = GetChannelInfoDictionaryBySiteId(siteId);
 
                 lock (LockObject)
                 {
-                    dict[channel.Id] = channel;
+                    dict[channelInfo.Id] = channelInfo;
                 }
             }
 
-            public static async Task<Dictionary<int, Channel>> GetChannelDictionaryBySiteIdAsync(int siteId)
+            public static Dictionary<int, ChannelInfo> GetChannelInfoDictionaryBySiteId(int siteId)
             {
                 var allDict = GetAllDictionary();
 
-                allDict.TryGetValue(siteId, out var dict);
+                Dictionary<int, ChannelInfo> dict;
+                allDict.TryGetValue(siteId, out dict);
 
                 if (dict != null) return dict;
 
-                dict = await DataProvider.ChannelRepository.GetChannelDictionaryBySiteIdAsync(siteId);
+                dict = DataProvider.ChannelDao.GetChannelInfoDictionaryBySiteId(siteId);
                 Update(allDict, dict, siteId);
                 return dict;
             }
@@ -80,33 +83,33 @@ namespace SiteServer.CMS.DataCache
             StlChannelCache.ClearCache();
         }
 
-        public static async Task UpdateCacheAsync(int siteId, Channel channel)
+        public static void UpdateCache(int siteId, ChannelInfo channelInfo)
         {
-            await ChannelManagerCache.UpdateAsync(siteId, channel);
+            ChannelManagerCache.Update(siteId, channelInfo);
             StlChannelCache.ClearCache();
         }
 
-        public static async Task<Channel> GetChannelAsync(int siteId, int channelId)
+        public static ChannelInfo GetChannelInfo(int siteId, int channelId)
         {
-            Channel channel = null;
-            var dict = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            ChannelInfo channelInfo = null;
+            var dict = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             if (channelId == 0) channelId = siteId;
-            dict?.TryGetValue(Math.Abs(channelId), out channel);
-            return channel;
+            dict?.TryGetValue(Math.Abs(channelId), out channelInfo);
+            return channelInfo;
         }
 
-        public static async Task<IList<Channel>> GetChildrenAsync(int siteId, int parentId)
+        public static IList<ChannelInfo> GetChildren(int siteId, int parentId)
         {
-            var list = new List<Channel>();
+            var list = new List<ChannelInfo>();
 
-            var dic = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
 
             foreach (var channelInfo in dic.Values)
             {
                 if (channelInfo == null) continue;
                 if (channelInfo.ParentId == parentId)
                 {
-                    channelInfo.Children = await GetChildrenAsync(siteId, channelInfo.Id);
+                    channelInfo.Children = GetChildren(siteId, channelInfo.Id);
                     list.Add(channelInfo);
                 }
             }
@@ -114,13 +117,13 @@ namespace SiteServer.CMS.DataCache
             return list;
         }
 
-        public static async Task<int> GetChannelIdAsync(int siteId, int channelId, string channelIndex, string channelName)
+        public static int GetChannelId(int siteId, int channelId, string channelIndex, string channelName)
         {
             var retVal = channelId;
 
             if (!string.IsNullOrEmpty(channelIndex))
             {
-                var theChannelId = await GetChannelIdByIndexNameAsync(siteId, channelIndex);
+                var theChannelId = GetChannelIdByIndexName(siteId, channelIndex);
                 if (theChannelId != 0)
                 {
                     retVal = theChannelId;
@@ -128,10 +131,10 @@ namespace SiteServer.CMS.DataCache
             }
             if (!string.IsNullOrEmpty(channelName))
             {
-                var theChannelId = await GetChannelIdByParentIdAndChannelNameAsync(siteId, retVal, channelName, true);
+                var theChannelId = GetChannelIdByParentIdAndChannelName(siteId, retVal, channelName, true);
                 if (theChannelId == 0)
                 {
-                    theChannelId = await GetChannelIdByParentIdAndChannelNameAsync(siteId, siteId, channelName, true);
+                    theChannelId = GetChannelIdByParentIdAndChannelName(siteId, siteId, channelName, true);
                 }
                 if (theChannelId != 0)
                 {
@@ -142,35 +145,35 @@ namespace SiteServer.CMS.DataCache
             return retVal;
         }
 
-        public static async Task<int> GetChannelIdByIndexNameAsync(int siteId, string indexName)
+        public static int GetChannelIdByIndexName(int siteId, string indexName)
         {
             if (string.IsNullOrEmpty(indexName)) return 0;
 
-            var dict = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var dict = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             var channelInfo = dict.Values.FirstOrDefault(x => x != null && x.IndexName == indexName);
             return channelInfo?.Id ?? 0;
         }
 
-        public static async Task<int> GetChannelIdByParentIdAndChannelNameAsync(int siteId, int parentId, string channelName, bool recursive)
+        public static int GetChannelIdByParentIdAndChannelName(int siteId, int parentId, string channelName, bool recursive)
         {
             if (parentId <= 0 || string.IsNullOrEmpty(channelName)) return 0;
 
-            var dict = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var dict = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             var channelInfoList = dict.Values.OrderBy(x => x.Taxis).ToList();
 
-            Channel channel;
+            ChannelInfo channelInfo;
 
             if (recursive)
             {
                 if (siteId == parentId)
                 {
-                    channel = channelInfoList.FirstOrDefault(x => x.ChannelName == channelName);
+                    channelInfo = channelInfoList.FirstOrDefault(x => x.ChannelName == channelName);
 
                     //sqlString = $"SELECT Id FROM siteserver_Channel WHERE (SiteId = {siteId} AND ChannelName = '{AttackUtils.FilterSql(channelName)}') ORDER BY Taxis";
                 }
                 else
                 {
-                    channel = channelInfoList.FirstOrDefault(x => (x.ParentId == parentId || StringUtils.GetIntList(x.ParentsPath).Contains(parentId)) && x.ChannelName == channelName);
+                    channelInfo = channelInfoList.FirstOrDefault(x => (x.ParentId == parentId || TranslateUtils.StringCollectionToIntList(x.ParentsPath).Contains(parentId)) && x.ChannelName == channelName);
 
 //                    sqlString = $@"SELECT Id
 //FROM siteserver_Channel 
@@ -184,41 +187,41 @@ namespace SiteServer.CMS.DataCache
             }
             else
             {
-                channel = channelInfoList.FirstOrDefault(x => x.ParentId == parentId && x.ChannelName == channelName);
+                channelInfo = channelInfoList.FirstOrDefault(x => x.ParentId == parentId && x.ChannelName == channelName);
 
                 //sqlString = $"SELECT Id FROM siteserver_Channel WHERE (ParentId = {parentId} AND ChannelName = '{AttackUtils.FilterSql(channelName)}') ORDER BY Taxis";
             }
 
-            return channel?.Id ?? 0;
+            return channelInfo?.Id ?? 0;
         }
 
         //public static List<string> GetIndexNameList(int siteId)
         //{
-        //    var dic = ChannelManagerCache.GetChannelDictionaryBySiteId(siteId);
+        //    var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
         //    return dic.Values.Where(x => !string.IsNullOrEmpty(x?.IndexName)).Select(x => x.IndexName).Distinct().ToList();
         //}
 
-        public static async Task<List<Channel>> GetChannelListAsync(int siteId)
+        public static List<ChannelInfo> GetChannelInfoList(int siteId)
         {
-            var dic = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             return dic.Values.Where(channelInfo => channelInfo != null).ToList();
         }
 
-        public static async Task<List<int>> GetChannelIdListAsync(int siteId)
+        public static List<int> GetChannelIdList(int siteId)
         {
-            var dic = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             return dic.Values.OrderBy(c => c.Taxis).Select(channelInfo => channelInfo.Id).ToList();
         }
 
-        public static async Task<List<int>> GetChannelIdListAsync(int siteId, string channelGroup)
+        public static List<int> GetChannelIdList(int siteId, string channelGroup)
         {
-            var channelInfoList = new List<Channel>();
-            var dic = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(siteId);
+            var channelInfoList = new List<ChannelInfo>();
+            var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(siteId);
             foreach (var channelInfo in dic.Values)
             {
-                if (channelInfo.GroupNames == null) continue;
+                if (string.IsNullOrEmpty(channelInfo.GroupNameCollection)) continue;
 
-                if (StringUtils.ContainsIgnoreCase(channelInfo.GroupNames, channelGroup))
+                if (StringUtils.Contains(channelInfo.GroupNameCollection, channelGroup))
                 {
                     channelInfoList.Add(channelInfo);
                 }
@@ -226,34 +229,34 @@ namespace SiteServer.CMS.DataCache
             return channelInfoList.OrderBy(c => c.Taxis).Select(channelInfo => channelInfo.Id).ToList();
         }
 
-        public static async Task<List<int>> GetChannelIdListAsync(Channel channel, EScopeType scopeType)
+        public static List<int> GetChannelIdList(ChannelInfo channelInfo, EScopeType scopeType)
         {
-            return await GetChannelIdListAsync(channel, scopeType, string.Empty, string.Empty, string.Empty);
+            return GetChannelIdList(channelInfo, scopeType, string.Empty, string.Empty, string.Empty);
         }
 
-        public static async Task<List<int>> GetChannelIdListAsync(Channel channel, EScopeType scopeType, string group, string groupNot, string contentModelPluginId)
+        public static List<int> GetChannelIdList(ChannelInfo channelInfo, EScopeType scopeType, string group, string groupNot, string contentModelPluginId)
         {
-            if (channel == null) return new List<int>();
+            if (channelInfo == null) return new List<int>();
 
-            var dic = await ChannelManagerCache.GetChannelDictionaryBySiteIdAsync(channel.SiteId);
-            var channelInfoList = new List<Channel>();
+            var dic = ChannelManagerCache.GetChannelInfoDictionaryBySiteId(channelInfo.SiteId);
+            var channelInfoList = new List<ChannelInfo>();
 
-            if (channel.ChildrenCount == 0)
+            if (channelInfo.ChildrenCount == 0)
             {
                 if (scopeType != EScopeType.Children && scopeType != EScopeType.Descendant)
                 {
-                    channelInfoList.Add(channel);
+                    channelInfoList.Add(channelInfo);
                 }
             }
             else if (scopeType == EScopeType.Self)
             {
-                channelInfoList.Add(channel);
+                channelInfoList.Add(channelInfo);
             }
             else if (scopeType == EScopeType.All)
             {
                 foreach (var nodeInfo in dic.Values)
                 {
-                    if (nodeInfo.Id == channel.Id || nodeInfo.ParentId == channel.Id || StringUtils.In(nodeInfo.ParentsPath, channel.Id))
+                    if (nodeInfo.Id == channelInfo.Id || nodeInfo.ParentId == channelInfo.Id || StringUtils.In(nodeInfo.ParentsPath, channelInfo.Id))
                     {
                         channelInfoList.Add(nodeInfo);
                     }
@@ -263,7 +266,7 @@ namespace SiteServer.CMS.DataCache
             {
                 foreach (var nodeInfo in dic.Values)
                 {
-                    if (nodeInfo.ParentId == channel.Id)
+                    if (nodeInfo.ParentId == channelInfo.Id)
                     {
                         channelInfoList.Add(nodeInfo);
                     }
@@ -273,7 +276,7 @@ namespace SiteServer.CMS.DataCache
             {
                 foreach (var nodeInfo in dic.Values)
                 {
-                    if (nodeInfo.ParentId == channel.Id || StringUtils.In(nodeInfo.ParentsPath, channel.Id))
+                    if (nodeInfo.ParentId == channelInfo.Id || StringUtils.In(nodeInfo.ParentsPath, channelInfo.Id))
                     {
                         channelInfoList.Add(nodeInfo);
                     }
@@ -283,26 +286,26 @@ namespace SiteServer.CMS.DataCache
             {
                 foreach (var nodeInfo in dic.Values)
                 {
-                    if (nodeInfo.Id == channel.Id || nodeInfo.ParentId == channel.Id)
+                    if (nodeInfo.Id == channelInfo.Id || nodeInfo.ParentId == channelInfo.Id)
                     {
                         channelInfoList.Add(nodeInfo);
                     }
                 }
             }
 
-            var filteredChannelList = new List<Channel>();
+            var filteredChannelInfoList = new List<ChannelInfo>();
             foreach (var nodeInfo in channelInfoList)
             {
                 if (!string.IsNullOrEmpty(group))
                 {
-                    if (!StringUtils.ContainsIgnoreCase(nodeInfo.GroupNames, group))
+                    if (!StringUtils.In(nodeInfo.GroupNameCollection, group))
                     {
                         continue;
                     }
                 }
                 if (!string.IsNullOrEmpty(groupNot))
                 {
-                    if (StringUtils.ContainsIgnoreCase(nodeInfo.GroupNames, groupNot))
+                    if (StringUtils.In(nodeInfo.GroupNameCollection, groupNot))
                     {
                         continue;
                     }
@@ -314,60 +317,60 @@ namespace SiteServer.CMS.DataCache
                         continue;
                     }
                 }
-                filteredChannelList.Add(nodeInfo);
+                filteredChannelInfoList.Add(nodeInfo);
             }
 
-            return filteredChannelList.OrderBy(c => c.Taxis).Select(channelInfoInList => channelInfoInList.Id).ToList();
+            return filteredChannelInfoList.OrderBy(c => c.Taxis).Select(channelInfoInList => channelInfoInList.Id).ToList();
         }
 
-        public static async Task<bool> IsExistsAsync(int siteId, int channelId)
+        public static bool IsExists(int siteId, int channelId)
         {
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             return nodeInfo != null;
         }
 
-        public static async Task<bool> IsExistsAsync(int channelId)
+        public static bool IsExists(int channelId)
         {
-            var list = await DataProvider.SiteRepository.GetSiteIdListAsync();
+            var list = SiteManager.GetSiteIdList();
             foreach (var siteId in list)
             {
-                var nodeInfo = await GetChannelAsync(siteId, channelId);
+                var nodeInfo = GetChannelInfo(siteId, channelId);
                 if (nodeInfo != null) return true;
             }
 
             return false;
         }
 
-        public static async Task<int> GetChannelIdByParentsCountAsync(int siteId, int channelId, int parentsCount)
+        public static int GetChannelIdByParentsCount(int siteId, int channelId, int parentsCount)
         {
             if (parentsCount == 0) return siteId;
             if (channelId == 0 || channelId == siteId) return siteId;
 
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
-                return nodeInfo.ParentsCount == parentsCount ? nodeInfo.Id : await GetChannelIdByParentsCountAsync(siteId, nodeInfo.ParentId, parentsCount);
+                return nodeInfo.ParentsCount == parentsCount ? nodeInfo.Id : GetChannelIdByParentsCount(siteId, nodeInfo.ParentId, parentsCount);
             }
             return siteId;
         }
 
-        public static async Task<string> GetTableNameAsync(Site site, int channelId)
+        public static string GetTableName(SiteInfo siteInfo, int channelId)
         {
-            return await GetTableNameAsync(site, await GetChannelAsync(site.Id, channelId));
+            return GetTableName(siteInfo, GetChannelInfo(siteInfo.Id, channelId));
         }
 
-        public static async Task<string> GetTableNameAsync(Site site, Channel channel)
+        public static string GetTableName(SiteInfo siteInfo, ChannelInfo channelInfo)
         {
-            return channel != null ? await GetTableNameAsync(site, channel.ContentModelPluginId) : string.Empty;
+            return channelInfo != null ? GetTableName(siteInfo, channelInfo.ContentModelPluginId) : string.Empty;
         }
 
-        public static async Task<string> GetTableNameAsync(Site site, string pluginId)
+        public static string GetTableName(SiteInfo siteInfo, string pluginId)
         {
-            var tableName = site.TableName;
+            var tableName = siteInfo.TableName;
 
             if (string.IsNullOrEmpty(pluginId)) return tableName;
 
-            var contentTable = await PluginContentTableManager.GetTableNameAsync(pluginId);
+            var contentTable = PluginContentTableManager.GetTableName(pluginId);
             if (!string.IsNullOrEmpty(contentTable))
             {
                 tableName = contentTable;
@@ -376,18 +379,18 @@ namespace SiteServer.CMS.DataCache
             return tableName;
         }
 
-        //public static ETableStyle GetTableStyle(Site site, int channelId)
+        //public static ETableStyle GetTableStyle(SiteInfo siteInfo, int channelId)
         //{
-        //    return GetTableStyle(site, GetChannel(site.Id, channelId));
+        //    return GetTableStyle(siteInfo, GetChannelInfo(siteInfo.Id, channelId));
         //}
 
-        //public static ETableStyle GetTableStyle(Site site, NodeInfo node)
+        //public static ETableStyle GetTableStyle(SiteInfo siteInfo, NodeInfo nodeInfo)
         //{
         //    var tableStyle = ETableStyle.BackgroundContent;
 
-        //    if (string.IsNullOrEmpty(node.ContentModelPluginId)) return tableStyle;
+        //    if (string.IsNullOrEmpty(nodeInfo.ContentModelPluginId)) return tableStyle;
 
-        //    var contentTable = PluginCache.GetEnabledPluginMetadata<IContentModel>(node.ContentModelPluginId);
+        //    var contentTable = PluginCache.GetEnabledPluginMetadata<IContentModel>(nodeInfo.ContentModelPluginId);
         //    if (contentTable != null)
         //    {
         //        tableStyle = ETableStyle.Custom;
@@ -396,20 +399,20 @@ namespace SiteServer.CMS.DataCache
         //    return tableStyle;
         //}
 
-        public static async Task<bool> IsContentModelPluginAsync(Site site, Channel node)
+        public static bool IsContentModelPlugin(SiteInfo siteInfo, ChannelInfo nodeInfo)
         {
-            if (string.IsNullOrEmpty(node.ContentModelPluginId)) return false;
+            if (string.IsNullOrEmpty(nodeInfo.ContentModelPluginId)) return false;
 
-            var contentTable = await PluginContentTableManager.GetTableNameAsync(node.ContentModelPluginId);
+            var contentTable = PluginContentTableManager.GetTableName(nodeInfo.ContentModelPluginId);
             return !string.IsNullOrEmpty(contentTable);
         }
 
-        public static async Task<string> GetNodeTreeLastImageHtmlAsync(Site site, Channel node)
+        public static string GetNodeTreeLastImageHtml(SiteInfo siteInfo, ChannelInfo nodeInfo)
         {
             var imageHtml = string.Empty;
-            if (!string.IsNullOrEmpty(node.ContentModelPluginId) || node.ContentRelatedPluginIds.Any())
+            if (!string.IsNullOrEmpty(nodeInfo.ContentModelPluginId) || !string.IsNullOrEmpty(nodeInfo.ContentRelatedPluginIds))
             {
-                var list = await PluginContentManager.GetContentPluginsAsync(node, true);
+                var list = PluginContentManager.GetContentPlugins(nodeInfo, true);
                 if (list != null && list.Count > 0)
                 {
                     imageHtml += @"<i class=""ion-cube"" style=""font-size: 15px;vertical-align: baseline;""></i>&nbsp;";
@@ -418,10 +421,10 @@ namespace SiteServer.CMS.DataCache
             return imageHtml;
         }
 
-        public static async Task<DateTime> GetAddDateAsync(int siteId, int channelId)
+        public static DateTime GetAddDate(int siteId, int channelId)
         {
             var retVal = DateTime.MinValue;
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo != null && nodeInfo.AddDate.HasValue)
             {
                 retVal = nodeInfo.AddDate.Value;
@@ -429,10 +432,10 @@ namespace SiteServer.CMS.DataCache
             return retVal;
         }
 
-        public static async Task<int> GetParentIdAsync(int siteId, int channelId)
+        public static int GetParentId(int siteId, int channelId)
         {
             var retVal = 0;
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 retVal = nodeInfo.ParentId;
@@ -440,10 +443,10 @@ namespace SiteServer.CMS.DataCache
             return retVal;
         }
 
-        public static async Task<string> GetParentsPathAsync(int siteId, int channelId)
+        public static string GetParentsPath(int siteId, int channelId)
         {
             var retVal = string.Empty;
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 retVal = nodeInfo.ParentsPath;
@@ -451,16 +454,16 @@ namespace SiteServer.CMS.DataCache
             return retVal;
         }
 
-        public static async Task<int> GetTopLevelAsync(int siteId, int channelId)
+        public static int GetTopLevel(int siteId, int channelId)
         {
-            var parentsPath = await GetParentsPathAsync(siteId, channelId);
+            var parentsPath = GetParentsPath(siteId, channelId);
             return string.IsNullOrEmpty(parentsPath) ? 0 : parentsPath.Split(',').Length;
         }
 
-        public static async Task<string> GetChannelNameAsync(int siteId, int channelId)
+        public static string GetChannelName(int siteId, int channelId)
         {
             var retVal = string.Empty;
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo != null)
             {
                 retVal = nodeInfo.ChannelName;
@@ -468,23 +471,12 @@ namespace SiteServer.CMS.DataCache
             return retVal;
         }
 
-        public static async Task<string> GetIndexNameAsync(int siteId, int channelId)
+        public static string GetChannelNameNavigation(int siteId, int channelId)
         {
-            var retVal = string.Empty;
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
-            if (nodeInfo != null)
-            {
-                retVal = nodeInfo.IndexName;
-            }
-            return retVal;
+            return GetChannelNameNavigation(siteId, siteId, channelId);
         }
 
-        public static async Task<string> GetChannelNameNavigationAsync(int siteId, int channelId)
-        {
-            return await GetChannelNameNavigationAsync(siteId, siteId, channelId);
-        }
-
-        public static async Task<string> GetChannelNameNavigationAsync(int siteId, int currentChannelId, int channelId)
+        public static string GetChannelNameNavigation(int siteId, int currentChannelId, int channelId)
         {
             var nodeNameList = new List<string>();
 
@@ -492,16 +484,16 @@ namespace SiteServer.CMS.DataCache
 
             if (channelId == siteId)
             {
-                var nodeInfo = await GetChannelAsync(siteId, siteId);
+                var nodeInfo = GetChannelInfo(siteId, siteId);
                 return nodeInfo.ChannelName;
             }
 
-            var parentsPath = await GetParentsPathAsync(siteId, channelId);
+            var parentsPath = GetParentsPath(siteId, channelId);
             var channelIdList = new List<int>();
             var indexOf = -1;
             if (!string.IsNullOrEmpty(parentsPath))
             {
-                channelIdList = StringUtils.GetIntList(parentsPath);
+                channelIdList = TranslateUtils.StringCollectionToIntList(parentsPath);
                 indexOf = channelIdList.IndexOf(currentChannelId);
             }
             channelIdList.Add(channelId);
@@ -511,7 +503,7 @@ namespace SiteServer.CMS.DataCache
             {
                 if (index > indexOf)
                 {
-                    var nodeInfo = await GetChannelAsync(siteId, channelIdList[index]);
+                    var nodeInfo = GetChannelInfo(siteId, channelIdList[index]);
                     if (nodeInfo != null)
                     {
                         nodeNameList.Add(nodeInfo.ChannelName);
@@ -522,9 +514,9 @@ namespace SiteServer.CMS.DataCache
             return TranslateUtils.ObjectCollectionToString(nodeNameList, " > ");
         }
 
-        public static async Task AddListItemsAsync(ListItemCollection listItemCollection, Site site, bool isSeeOwning, bool isShowContentNum, PermissionsImpl permissionsImpl)
+        public static void AddListItems(ListItemCollection listItemCollection, SiteInfo siteInfo, bool isSeeOwning, bool isShowContentNum, PermissionsImpl permissionsImpl)
         {
-            var list = await GetChannelIdListAsync(site.Id);
+            var list = GetChannelIdList(siteInfo.Id);
             var nodeCount = list.Count;
             var isLastNodeArray = new bool[nodeCount];
             foreach (var channelId in list)
@@ -532,15 +524,15 @@ namespace SiteServer.CMS.DataCache
                 var enabled = true;
                 if (isSeeOwning)
                 {
-                    enabled = await permissionsImpl.IsOwningChannelIdAsync(channelId);
+                    enabled = permissionsImpl.IsOwningChannelId(channelId);
                     if (!enabled)
                     {
-                        if (!await permissionsImpl.IsDescendantOwningChannelIdAsync(site.Id, channelId)) continue;
+                        if (!permissionsImpl.IsDescendantOwningChannelId(siteInfo.Id, channelId)) continue;
                     }
                 }
-                var nodeInfo = await GetChannelAsync(site.Id, channelId);
+                var nodeInfo = GetChannelInfo(siteInfo.Id, channelId);
 
-                var listitem = new ListItem(await GetSelectTextAsync(site, nodeInfo, permissionsImpl, isLastNodeArray, isShowContentNum), nodeInfo.Id.ToString());
+                var listitem = new ListItem(GetSelectText(siteInfo, nodeInfo, permissionsImpl, isLastNodeArray, isShowContentNum), nodeInfo.Id.ToString());
                 if (!enabled)
                 {
                     listitem.Attributes.Add("style", "color:gray;");
@@ -549,9 +541,9 @@ namespace SiteServer.CMS.DataCache
             }
         }
 
-        public static async Task AddListItemsAsync(ListItemCollection listItemCollection, Site site, bool isSeeOwning, bool isShowContentNum, string contentModelId, PermissionsImpl permissionsImpl)
+        public static void AddListItems(ListItemCollection listItemCollection, SiteInfo siteInfo, bool isSeeOwning, bool isShowContentNum, string contentModelId, PermissionsImpl permissionsImpl)
         {
-            var list = await GetChannelIdListAsync(site.Id);
+            var list = GetChannelIdList(siteInfo.Id);
             var nodeCount = list.Count;
             var isLastNodeArray = new bool[nodeCount];
             foreach (var channelId in list)
@@ -559,15 +551,15 @@ namespace SiteServer.CMS.DataCache
                 var enabled = true;
                 if (isSeeOwning)
                 {
-                    enabled = await permissionsImpl.IsOwningChannelIdAsync(channelId);
+                    enabled = permissionsImpl.IsOwningChannelId(channelId);
                     if (!enabled)
                     {
-                        if (!await permissionsImpl.IsDescendantOwningChannelIdAsync(site.Id, channelId)) continue;
+                        if (!permissionsImpl.IsDescendantOwningChannelId(siteInfo.Id, channelId)) continue;
                     }
                 }
-                var nodeInfo = await GetChannelAsync(site.Id, channelId);
+                var nodeInfo = GetChannelInfo(siteInfo.Id, channelId);
 
-                var listitem = new ListItem(await GetSelectTextAsync(site, nodeInfo, permissionsImpl, isLastNodeArray, isShowContentNum), nodeInfo.Id.ToString());
+                var listitem = new ListItem(GetSelectText(siteInfo, nodeInfo, permissionsImpl, isLastNodeArray, isShowContentNum), nodeInfo.Id.ToString());
                 if (!enabled)
                 {
                     listitem.Attributes.Add("style", "color:gray;");
@@ -580,9 +572,9 @@ namespace SiteServer.CMS.DataCache
             }
         }
 
-        public static async Task AddListItemsForAddContentAsync(ListItemCollection listItemCollection, Site site, bool isSeeOwning, PermissionsImpl permissionsImpl)
+        public static void AddListItemsForAddContent(ListItemCollection listItemCollection, SiteInfo siteInfo, bool isSeeOwning, PermissionsImpl permissionsImpl)
         {
-            var list = await GetChannelIdListAsync(site.Id);
+            var list = GetChannelIdList(siteInfo.Id);
             var nodeCount = list.Count;
             var isLastNodeArray = new bool[nodeCount];
             foreach (var channelId in list)
@@ -590,13 +582,13 @@ namespace SiteServer.CMS.DataCache
                 var enabled = true;
                 if (isSeeOwning)
                 {
-                    enabled = await permissionsImpl.IsOwningChannelIdAsync(channelId);
+                    enabled = permissionsImpl.IsOwningChannelId(channelId);
                 }
 
-                var nodeInfo = await GetChannelAsync(site.Id, channelId);
+                var nodeInfo = GetChannelInfo(siteInfo.Id, channelId);
                 if (enabled)
                 {
-                    if (nodeInfo.IsContentAddable == false) enabled = false;
+                    if (nodeInfo.Additional.IsContentAddable == false) enabled = false;
                 }
 
                 if (!enabled)
@@ -604,7 +596,7 @@ namespace SiteServer.CMS.DataCache
                     continue;
                 }
 
-                var listitem = new ListItem(await GetSelectTextAsync(site, nodeInfo, permissionsImpl, isLastNodeArray, true), nodeInfo.Id.ToString());
+                var listitem = new ListItem(GetSelectText(siteInfo, nodeInfo, permissionsImpl, isLastNodeArray, true), nodeInfo.Id.ToString());
                 listItemCollection.Add(listitem);
             }
         }
@@ -614,9 +606,9 @@ namespace SiteServer.CMS.DataCache
         /// 提供给触发器页面使用
         /// 使用场景：其他栏目的内容变动之后，设置某个栏目（此栏目不能添加内容）触发生成
         /// </summary>
-        public static async Task AddListItemsForCreateChannelAsync(ListItemCollection listItemCollection, Site site, bool isSeeOwning, PermissionsImpl permissionsImpl)
+        public static void AddListItemsForCreateChannel(ListItemCollection listItemCollection, SiteInfo siteInfo, bool isSeeOwning, PermissionsImpl permissionsImpl)
         {
-            var list = await GetChannelIdListAsync(site.Id);
+            var list = GetChannelIdList(siteInfo.Id);
             var nodeCount = list.Count;
             var isLastNodeArray = new bool[nodeCount];
             foreach (var channelId in list)
@@ -624,96 +616,96 @@ namespace SiteServer.CMS.DataCache
                 var enabled = true;
                 if (isSeeOwning)
                 {
-                    enabled = await permissionsImpl.IsOwningChannelIdAsync(channelId);
+                    enabled = permissionsImpl.IsOwningChannelId(channelId);
                 }
 
-                var nodeInfo = await GetChannelAsync(site.Id, channelId);
+                var nodeInfo = GetChannelInfo(siteInfo.Id, channelId);
 
                 if (!enabled)
                 {
                     continue;
                 }
 
-                var listitem = new ListItem(await GetSelectTextAsync(site, nodeInfo, permissionsImpl, isLastNodeArray, true), nodeInfo.Id.ToString());
+                var listitem = new ListItem(GetSelectText(siteInfo, nodeInfo, permissionsImpl, isLastNodeArray, true), nodeInfo.Id.ToString());
                 listItemCollection.Add(listitem);
             }
         }
 
-        public static async Task<string> GetSelectTextAsync(Site site, Channel channel, PermissionsImpl adminPermissions, bool[] isLastNodeArray, bool isShowContentNum)
+        public static string GetSelectText(SiteInfo siteInfo, ChannelInfo channelInfo, PermissionsImpl adminPermissions, bool[] isLastNodeArray, bool isShowContentNum)
         {
             var retVal = string.Empty;
-            if (channel.Id == channel.SiteId)
+            if (channelInfo.Id == channelInfo.SiteId)
             {
-                channel.LastNode = true;
+                channelInfo.IsLastNode = true;
             }
-            if (channel.LastNode == false)
+            if (channelInfo.IsLastNode == false)
             {
-                isLastNodeArray[channel.ParentsCount] = false;
+                isLastNodeArray[channelInfo.ParentsCount] = false;
             }
             else
             {
-                isLastNodeArray[channel.ParentsCount] = true;
+                isLastNodeArray[channelInfo.ParentsCount] = true;
             }
-            for (var i = 0; i < channel.ParentsCount; i++)
+            for (var i = 0; i < channelInfo.ParentsCount; i++)
             {
                 retVal = string.Concat(retVal, isLastNodeArray[i] ? "　" : "│");
             }
-            retVal = string.Concat(retVal, channel.LastNode ? "└" : "├");
-            retVal = string.Concat(retVal, channel.ChannelName);
+            retVal = string.Concat(retVal, channelInfo.IsLastNode ? "└" : "├");
+            retVal = string.Concat(retVal, channelInfo.ChannelName);
 
             if (isShowContentNum)
             {
-                var adminId = await adminPermissions.GetAdminIdAsync(site.Id, channel.Id);
-                var count = await DataProvider.ContentRepository.GetCountAsync(site, channel, adminId);
+                var adminId = adminPermissions.GetAdminId(siteInfo.Id, channelInfo.Id);
+                var count = ContentManager.GetCount(siteInfo, channelInfo, adminId);
                 retVal = string.Concat(retVal, " (", count, ")");
             }
 
             return retVal;
         }
 
-        public static async Task<string> GetContentAttributesOfDisplayAsync(int siteId, int channelId)
+        public static string GetContentAttributesOfDisplay(int siteId, int channelId)
         {
-            var nodeInfo = await GetChannelAsync(siteId, channelId);
+            var nodeInfo = GetChannelInfo(siteId, channelId);
             if (nodeInfo == null) return string.Empty;
-            if (siteId != channelId && string.IsNullOrEmpty(nodeInfo.ContentAttributesOfDisplay))
+            if (siteId != channelId && string.IsNullOrEmpty(nodeInfo.Additional.ContentAttributesOfDisplay))
             {
-                return await GetContentAttributesOfDisplayAsync(siteId, nodeInfo.ParentId);
+                return GetContentAttributesOfDisplay(siteId, nodeInfo.ParentId);
             }
-            return nodeInfo.ContentAttributesOfDisplay;
+            return nodeInfo.Additional.ContentAttributesOfDisplay;
         }
 
-        public static async Task<List<InputListItem>> GetContentsColumnsAsync(Site site, Channel channel, bool includeAll)
+        public static List<InputListItem> GetContentsColumns(SiteInfo siteInfo, ChannelInfo channelInfo, bool includeAll)
         {
             var items = new List<InputListItem>();
 
-            var attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(channel.ContentAttributesOfDisplay);
-            var pluginIds = PluginContentManager.GetContentPluginIds(channel);
-            var pluginColumns = await PluginContentManager.GetContentColumnsAsync(pluginIds);
+            var attributesOfDisplay = TranslateUtils.StringCollectionToStringCollection(channelInfo.Additional.ContentAttributesOfDisplay);
+            var pluginIds = PluginContentManager.GetContentPluginIds(channelInfo);
+            var pluginColumns = PluginContentManager.GetContentColumns(pluginIds);
 
-            var styleList = ContentUtility.GetAllTableStyleList(await TableStyleManager.GetContentStyleListAsync(site, channel));
+            var styleInfoList = ContentUtility.GetAllTableStyleInfoList(TableStyleManager.GetContentStyleInfoList(siteInfo, channelInfo));
 
-            styleList.Insert(0, new TableStyle
+            styleInfoList.Insert(0, new TableStyleInfo
             {
                 AttributeName = ContentAttribute.Sequence,
                 DisplayName = "序号"
             });
 
-            foreach (var style in styleList)
+            foreach (var styleInfo in styleInfoList)
             {
-                if (style.Type == InputType.TextEditor) continue;
+                if (styleInfo.InputType == InputType.TextEditor) continue;
 
                 var listitem = new InputListItem
                 {
-                    Text = style.DisplayName,
-                    Value = style.AttributeName
+                    Text = styleInfo.DisplayName,
+                    Value = styleInfo.AttributeName
                 };
-                if (style.AttributeName == ContentAttribute.Title)
+                if (styleInfo.AttributeName == ContentAttribute.Title)
                 {
                     listitem.Selected = true;
                 }
                 else
                 {
-                    if (attributesOfDisplay.Contains(style.AttributeName))
+                    if (attributesOfDisplay.Contains(styleInfo.AttributeName))
                     {
                         listitem.Selected = true;
                     }
@@ -757,18 +749,18 @@ namespace SiteServer.CMS.DataCache
             return items;
         }
 
-        public static async Task<List<InputStyle>> GetInputStylesAsync(Site site, Channel channel)
+        public static List<InputStyle> GetInputStyles(SiteInfo siteInfo, ChannelInfo channelInfo)
         {
             var items = new List<InputStyle>();
 
-            var styleList = ContentUtility.GetAllTableStyleList(await TableStyleManager.GetContentStyleListAsync(site, channel));
+            var styleInfoList = ContentUtility.GetAllTableStyleInfoList(TableStyleManager.GetContentStyleInfoList(siteInfo, channelInfo));
 
-            foreach (var style in styleList)
+            foreach (var styleInfo in styleInfoList)
             {
                 var listitem = new InputStyle
                 {
-                    DisplayName = style.DisplayName,
-                    AttributeName = style.AttributeName
+                    DisplayName = styleInfo.DisplayName,
+                    AttributeName = styleInfo.AttributeName
                 };
                 items.Add(listitem);
             }
@@ -776,13 +768,13 @@ namespace SiteServer.CMS.DataCache
             return items;
         }
 
-        public static async Task<bool> IsAncestorOrSelfAsync(int siteId, int parentId, int childId)
+        public static bool IsAncestorOrSelf(int siteId, int parentId, int childId)
         {
             if (parentId == childId)
             {
                 return true;
             }
-            var nodeInfo = await GetChannelAsync(siteId, childId);
+            var nodeInfo = GetChannelInfo(siteId, childId);
             if (nodeInfo == null)
             {
                 return false;
@@ -794,25 +786,25 @@ namespace SiteServer.CMS.DataCache
             return false;
         }
 
-        public static async Task<List<KeyValuePair<int, string>>> GetChannelsAsync(int siteId, PermissionsImpl permissionsImpl, params string[] channelPermissions)
+        public static List<KeyValuePair<int, string>> GetChannels(int siteId, PermissionsImpl permissionsImpl, params string[] channelPermissions)
         {
             var options = new List<KeyValuePair<int, string>>();
 
-            var list = await GetChannelIdListAsync(siteId);
+            var list = GetChannelIdList(siteId);
             foreach (var channelId in list)
             {
-                var enabled = await permissionsImpl.HasChannelPermissionsAsync(siteId, channelId, channelPermissions);
+                var enabled = permissionsImpl.HasChannelPermissions(siteId, channelId, channelPermissions);
 
-                var channelInfo = await GetChannelAsync(siteId, channelId);
-                if (enabled && channelPermissions.Contains(Constants.ChannelPermissions.ContentAdd))
+                var channelInfo = GetChannelInfo(siteId, channelId);
+                if (enabled && channelPermissions.Contains(ConfigManager.ChannelPermissions.ContentAdd))
                 {
-                    if (channelInfo.IsContentAddable == false) enabled = false;
+                    if (channelInfo.Additional.IsContentAddable == false) enabled = false;
                 }
 
                 if (enabled)
                 {
                     var tuple = new KeyValuePair<int, string>(channelId,
-                        await GetChannelNameNavigationAsync(siteId, channelId));
+                        GetChannelNameNavigation(siteId, channelId));
                     options.Add(tuple);
                 }
             }
@@ -820,15 +812,15 @@ namespace SiteServer.CMS.DataCache
             return options;
         }
 
-        public static async Task<bool> IsCreatableAsync(Site site, Channel channel)
+        public static bool IsCreatable(SiteInfo siteInfo, ChannelInfo channelInfo)
         {
-            if (site == null || channel == null) return false;
+            if (siteInfo == null || channelInfo == null) return false;
 
-            if (!channel.IsChannelCreatable || !string.IsNullOrEmpty(channel.LinkUrl)) return false;
+            if (!channelInfo.Additional.IsChannelCreatable || !string.IsNullOrEmpty(channelInfo.LinkUrl)) return false;
 
             var isCreatable = false;
 
-            var linkType = ELinkTypeUtils.GetEnumType(channel.LinkType);
+            var linkType = ELinkTypeUtils.GetEnumType(channelInfo.LinkType);
 
             if (linkType == ELinkType.None)
             {
@@ -836,17 +828,17 @@ namespace SiteServer.CMS.DataCache
             }
             else if (linkType == ELinkType.NoLinkIfContentNotExists)
             {
-                var count = await DataProvider.ContentRepository.GetCountAsync(site, channel);
+                var count = ContentManager.GetCount(siteInfo, channelInfo, true);
                 isCreatable = count != 0;
             }
             else if (linkType == ELinkType.LinkToOnlyOneContent)
             {
-                var count = await DataProvider.ContentRepository.GetCountAsync(site, channel);
+                var count = ContentManager.GetCount(siteInfo, channelInfo, true);
                 isCreatable = count != 1;
             }
             else if (linkType == ELinkType.NoLinkIfContentNotExistsAndLinkToOnlyOneContent)
             {
-                var count = await DataProvider.ContentRepository.GetCountAsync(site, channel);
+                var count = ContentManager.GetCount(siteInfo, channelInfo, true);
                 if (count != 0 && count != 1)
                 {
                     isCreatable = true;
@@ -854,20 +846,20 @@ namespace SiteServer.CMS.DataCache
             }
             else if (linkType == ELinkType.LinkToFirstContent)
             {
-                var count = await DataProvider.ContentRepository.GetCountAsync(site, channel);
+                var count = ContentManager.GetCount(siteInfo, channelInfo, true);
                 isCreatable = count < 1;
             }
             else if (linkType == ELinkType.NoLinkIfChannelNotExists)
             {
-                isCreatable = channel.ChildrenCount != 0;
+                isCreatable = channelInfo.ChildrenCount != 0;
             }
             else if (linkType == ELinkType.LinkToLastAddChannel)
             {
-                isCreatable = channel.ChildrenCount <= 0;
+                isCreatable = channelInfo.ChildrenCount <= 0;
             }
             else if (linkType == ELinkType.LinkToFirstChannel)
             {
-                isCreatable = channel.ChildrenCount <= 0;
+                isCreatable = channelInfo.ChildrenCount <= 0;
             }
 
             return isCreatable;

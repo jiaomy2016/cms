@@ -1,5 +1,5 @@
 using System;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.DataCache.Core
 {

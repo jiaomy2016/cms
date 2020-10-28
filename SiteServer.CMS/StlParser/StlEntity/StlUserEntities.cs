@@ -1,7 +1,7 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+﻿using SiteServer.Utils;
+using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -16,79 +16,79 @@ namespace SiteServer.CMS.StlParser.StlEntity
 
         public const string EntityName = "user";
 
-	    internal static async Task<string> ParseAsync(string stlEntity, PageInfo pageInfo)
+	    internal static string Parse(string stlEntity, PageInfo pageInfo)
 	    {
 	        var parsedContent = string.Empty;
-	        if (pageInfo?.User == null) return string.Empty;
+	        if (pageInfo?.UserInfo == null) return string.Empty;
 
 	        try
 	        {
 	            var entityName = StlParserUtility.GetNameFromEntity(stlEntity);
 	            var attributeName = entityName.Substring(6, entityName.Length - 7);
 
-                if (StringUtils.EqualsIgnoreCase(nameof(User.Id), attributeName))
+                if (StringUtils.EqualsIgnoreCase(UserAttribute.Id, attributeName))
                 {
-                    parsedContent = pageInfo.User.Id.ToString();
+                    parsedContent = pageInfo.UserInfo.Id.ToString();
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.UserName), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.UserName, attributeName))
                 {
-                    parsedContent = pageInfo.User.UserName;
+                    parsedContent = pageInfo.UserInfo.UserName;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.CreateDate), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.CreateDate, attributeName))
                 {
-                    parsedContent = DateUtils.Format(pageInfo.User.CreateDate, string.Empty);
+                    parsedContent = DateUtils.Format(pageInfo.UserInfo.CreateDate, string.Empty);
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.LastActivityDate), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.LastActivityDate, attributeName))
                 {
-                    parsedContent = DateUtils.Format(pageInfo.User.LastActivityDate, string.Empty);
+                    parsedContent = DateUtils.Format(pageInfo.UserInfo.LastActivityDate, string.Empty);
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.CountOfLogin), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.CountOfLogin, attributeName))
                 {
-                    parsedContent = pageInfo.User.CountOfLogin.ToString();
+                    parsedContent = pageInfo.UserInfo.CountOfLogin.ToString();
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.DisplayName), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.DisplayName, attributeName))
                 {
-                    parsedContent = pageInfo.User.DisplayName;
+                    parsedContent = pageInfo.UserInfo.DisplayName;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Email), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Email, attributeName))
                 {
-                    parsedContent = pageInfo.User.Email;
+                    parsedContent = pageInfo.UserInfo.Email;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Mobile), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Mobile, attributeName))
                 {
-                    parsedContent = pageInfo.User.Mobile;
+                    parsedContent = pageInfo.UserInfo.Mobile;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.AvatarUrl), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.AvatarUrl, attributeName))
                 {
-                    parsedContent = DataProvider.UserRepository.GetUserAvatarUrl(pageInfo.User);
+                    parsedContent = UserManager.GetUserAvatarUrl(pageInfo.UserInfo);
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Gender), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Gender, attributeName))
                 {
-                    parsedContent = pageInfo.User.Gender;
+                    parsedContent = pageInfo.UserInfo.Gender;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Birthday), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Birthday, attributeName))
                 {
-                    parsedContent = pageInfo.User.Birthday;
+                    parsedContent = pageInfo.UserInfo.Birthday;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.WeiXin), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.WeiXin, attributeName))
                 {
-                    parsedContent = pageInfo.User.WeiXin;
+                    parsedContent = pageInfo.UserInfo.WeiXin;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Qq), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Qq, attributeName))
                 {
-                    parsedContent = pageInfo.User.Qq;
+                    parsedContent = pageInfo.UserInfo.Qq;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.WeiBo), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.WeiBo, attributeName))
                 {
-                    parsedContent = pageInfo.User.WeiBo;
+                    parsedContent = pageInfo.UserInfo.WeiBo;
                 }
-                else if (StringUtils.EqualsIgnoreCase(nameof(User.Bio), attributeName))
+                else if (StringUtils.EqualsIgnoreCase(UserAttribute.Bio, attributeName))
                 {
-                    parsedContent = pageInfo.User.Bio;
+                    parsedContent = pageInfo.UserInfo.Bio;
                 }
                 else
                 {
-                    parsedContent = pageInfo.User.Get<string>(attributeName);
+                    parsedContent = pageInfo.UserInfo.GetString(attributeName);
                 }
             }
 	        catch

@@ -1,12 +1,13 @@
 ﻿using System.Web;
 using System.Web.Http;
+using NSwag.Annotations;
 using SiteServer.CMS.Api.Sys.Editors;
 using SiteServer.CMS.UEditor;
-using EUploadType = SiteServer.CMS.Context.Enumerations.EUploadType;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Sys
 {
-    
+    [OpenApiIgnore]
     public class SysUEditorController : ApiController
     {
         [HttpGet, Route(ApiRouteUEditor.Route)]

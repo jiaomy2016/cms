@@ -3,29 +3,22 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Versioning;
-using System.Threading.Tasks;
-using SiteServer.CMS.Caching;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Plugin;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
     public static class SystemManager
     {
-        public static async Task LoadSettingsAsync(string applicationPhysicalPath)
+        static SystemManager()
         {
-            WebConfigUtils.Load(applicationPhysicalPath, PathUtils.Combine(applicationPhysicalPath, WebConfigUtils.WebConfigFileName));
-
-            await CacheManager.LoadCacheAsync();
-
-            await PluginManager.LoadPluginsAsync(applicationPhysicalPath);
-
             try
             {
                 ProductVersion = FileVersionInfo.GetVersionInfo(PathUtils.GetBinDirectoryPath("SiteServer.CMS.dll")).ProductVersion;
-                PluginVersion = FileVersionInfo.GetVersionInfo(PathUtils.GetBinDirectoryPath("SiteServer.Abstractions.dll")).ProductVersion;
+                PluginVersion = FileVersionInfo.GetVersionInfo(PathUtils.GetBinDirectoryPath("SiteServer.Plugin.dll")).ProductVersion;
 
                 if (Assembly.GetExecutingAssembly()
                     .GetCustomAttributes(typeof(TargetFrameworkAttribute), false)
@@ -42,107 +35,124 @@ namespace SiteServer.CMS.Core
             {
                 // ignored
             }
+
+            //var ssemblyName = assembly.GetName();
+            //var assemblyVersion = ssemblyName.Version;
+            //var version = assemblyVersion.ToString();
+            //if (StringUtils.EndsWith(version, ".0"))
+            //{
+            //    version = version.Substring(0, version.DataLength - 2);
+            //}
+            //Version = version;
         }
 
-        public static string ProductVersion { get; private set; }
+        public static string ProductVersion { get; }
 
-        public static string PluginVersion { get; private set; }
+        public static string PluginVersion { get; }
 
-        public static string TargetFramework { get; private set; }
+        public static string TargetFramework { get; }
 
-        public static string EnvironmentVersion { get; private set; }
+        public static string EnvironmentVersion { get; }
 
-        public static async Task InstallDatabaseAsync(string adminName, string adminPassword)
+        public static void InstallDatabase(string adminName, string adminPassword)
         {
-            await SyncDatabaseAsync();
+            SyncDatabase();
 
             if (!string.IsNullOrEmpty(adminName) && !string.IsNullOrEmpty(adminPassword))
             {
-                var administrator = new Administrator
+                var administratorInfo = new AdministratorInfo
                 {
                     UserName = adminName,
+                    Password = adminPassword
                 };
 
-                await DataProvider.AdministratorRepository.InsertAsync(administrator, adminPassword);
-                await DataProvider.AdministratorsInRolesRepository.AddUserToRoleAsync(adminName, EPredefinedRoleUtils.GetValue(EPredefinedRole.ConsoleAdministrator));
+                DataProvider.AdministratorDao.Insert(administratorInfo, out _);
+                DataProvider.AdministratorsInRolesDao.AddUserToRole(adminName, EPredefinedRoleUtils.GetValue(EPredefinedRole.ConsoleAdministrator));
             }
         }
 
-        public static async Task CreateSiteServerTablesAsync()
+        public static void CreateSiteServerTables()
         {
             foreach (var provider in DataProvider.AllProviders)
             {
                 if (string.IsNullOrEmpty(provider.TableName) || provider.TableColumns == null || provider.TableColumns.Count <= 0) continue;
 
-                if (!await WebConfigUtils.Database.IsTableExistsAsync(provider.TableName))
+                if (!DataProvider.DatabaseDao.IsTableExists(provider.TableName))
                 {
-                    await DataProvider.DatabaseRepository.CreateTableAsync(provider.TableName, provider.TableColumns);
+                    DataProvider.DatabaseDao.CreateTable(provider.TableName, provider.TableColumns, out _, out _);
                 }
                 else
                 {
-                    await DataProvider.DatabaseRepository.AlterSystemTableAsync(provider.TableName, provider.TableColumns);
+                    DataProvider.DatabaseDao.AlterSystemTable(provider.TableName, provider.TableColumns);
                 }
             }
         }
 
-        public static async Task SyncContentTablesAsync()
+        public static void SyncContentTables()
         {
-            var tableNameList = await DataProvider.SiteRepository.GetAllTableNameListAsync();
+            var tableNameList = SiteManager.GetAllTableNameList();
             foreach (var tableName in tableNameList)
             {
-                if (!await WebConfigUtils.Database.IsTableExistsAsync(tableName))
+                if (!DataProvider.DatabaseDao.IsTableExists(tableName))
                 {
-                    await DataProvider.DatabaseRepository.CreateTableAsync(tableName, DataProvider.ContentRepository.GetTableColumns(tableName));
+                    DataProvider.DatabaseDao.CreateTable(tableName, DataProvider.ContentDao.TableColumns, out _, out _);
                 }
                 else
                 {
-                    await DataProvider.DatabaseRepository.AlterSystemTableAsync(tableName, DataProvider.ContentRepository.GetTableColumns(tableName), ContentAttribute.DropAttributes.Value);
+                    DataProvider.DatabaseDao.AlterSystemTable(tableName, DataProvider.ContentDao.TableColumns, ContentAttribute.DropAttributes.Value);
                 }
             }
         }
 
-        public static async Task UpdateConfigVersionAsync()
+        public static void UpdateConfigVersion()
         {
-            var config = await DataProvider.ConfigRepository.GetAsync();
-            if (config.Id == 0)
+            var configInfo = DataProvider.ConfigDao.GetConfigInfo();
+            if (configInfo == null)
             {
-                config = new Config
-                {
-                    Id = 0,
-                    DatabaseVersion = ProductVersion,
-                    UpdateDate = DateTime.Now
-                };
-                config.Id = await DataProvider.ConfigRepository.InsertAsync(config);
+                configInfo = new ConfigInfo(0, true, ProductVersion, DateTime.Now, string.Empty);
+                DataProvider.ConfigDao.Insert(configInfo);
             }
             else
             {
-                config.DatabaseVersion = ProductVersion;
-                config.UpdateDate = DateTime.Now;
-                await DataProvider.ConfigRepository.UpdateAsync(config);
+                configInfo.DatabaseVersion = ProductVersion;
+                configInfo.IsInitialized = true;
+                configInfo.UpdateDate = DateTime.Now;
+                DataProvider.ConfigDao.Update(configInfo);
             }
         }
 
-        public static async Task SyncDatabaseAsync()
+        public static void SyncDatabase()
         {
-            //CacheUtils.ClearAll();
+            CacheUtils.ClearAll();
 
-            //await CreateSiteServerTablesAsync();
+            CreateSiteServerTables();
 
-            //await SyncContentTablesAsync();
+            SyncContentTables();
 
-            //await UpdateConfigVersionAsync();
-
-            await RepositoryManager.SyncDatabaseAsync();
+            UpdateConfigVersion();
         }
 
-        public static async Task<bool> IsNeedInstallAsync()
+
+        public static bool IsNeedUpdate()
         {
-            var isNeedInstall = !await DataProvider.ConfigRepository.IsInitializedAsync();
+            return !StringUtils.EqualsIgnoreCase(ProductVersion, DataProvider.ConfigDao.GetDatabaseVersion());
+        }
+
+        public static bool IsNeedInstall()
+        {
+            var isNeedInstall = !DataProvider.ConfigDao.IsInitialized();
             if (isNeedInstall)
             {
-                isNeedInstall = !await DataProvider.ConfigRepository.IsInitializedAsync();
+                isNeedInstall = !DataProvider.ConfigDao.IsInitialized();
             }
             return isNeedInstall;
         }
+
+        //public static bool DetermineRedirectToInstaller()
+        //{
+        //    if (!IsNeedInstall()) return false;
+        //    PageUtils.Redirect(PageUtils.GetAdminDirectoryUrl("Installer"));
+        //    return true;
+        //}
     }
 }

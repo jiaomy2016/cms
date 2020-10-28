@@ -1,20 +1,13 @@
-﻿using System.Threading.Tasks;
-using Newtonsoft.Json;
-using SiteServer.Abstractions;
+﻿using Newtonsoft.Json;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.Packaging;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin
 {
     public class PluginInstance
     {
-        private PluginInstance()
-        {
-
-        }
-
         public PluginInstance(string directoryName, PackageMetadata metadata, string errorMessage)
         {
             if (metadata != null)
@@ -30,41 +23,38 @@ namespace SiteServer.CMS.Plugin
             ErrorMessage = errorMessage;
         }
 
-        public static async Task<PluginInstance> GetAsync(PackageMetadata metadata, ServiceImpl service, PluginBase plugin, long initTime)
+        public PluginInstance(PackageMetadata metadata, ServiceImpl service, PluginBase plugin, long initTime)
         {
-            var instance = new PluginInstance
-            {
-                Id = plugin.Id,
-                Metadata = metadata,
-                Plugin = plugin,
-                Service = service,
-                InitTime = initTime
-            };
+            Id = plugin.Id;
+            Metadata = metadata;
+            Plugin = plugin;
+            Service = service;
+            InitTime = initTime;
 
-            var (isDisabled, taxis) = await DataProvider.PluginRepository.SetIsDisabledAndTaxisAsync(instance.Id);
+            bool isDisabled;
+            int taxis;
+            DataProvider.PluginDao.SetIsDisabledAndTaxis(Id, out isDisabled, out taxis);
 
-            instance.IsRunnable = plugin != null;
-            instance.IsDisabled = isDisabled;
-            instance.Taxis = taxis;
-
-            return instance;
+            IsRunnable = plugin != null;
+            IsDisabled = isDisabled;
+            Taxis = taxis;
         }
 
-        public string Id { get; private set; }
+        public string Id { get; }
 
-        public PackageMetadata Metadata { get; private set; }
-
-        [JsonIgnore]
-        public PluginBase Plugin { get; private set; }
+        public PackageMetadata Metadata { get; }
 
         [JsonIgnore]
-        public ServiceImpl Service { get; private set; }
+        public PluginBase Plugin { get; }
 
-        public long InitTime { get; private set; }
+        [JsonIgnore]
+        public ServiceImpl Service { get; }
 
-        public string ErrorMessage { get; private set; }
+        public long InitTime { get; }
 
-        public bool IsRunnable { get; private set; }
+        public string ErrorMessage { get; }
+
+        public bool IsRunnable { get; set; }
 
         public bool IsDisabled { get; set; }
 

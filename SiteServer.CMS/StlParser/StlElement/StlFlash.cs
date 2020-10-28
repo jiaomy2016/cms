@@ -1,12 +1,12 @@
-﻿using System.Threading.Tasks;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+﻿using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Stl;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
@@ -46,14 +46,14 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "高度")]
         private const string Height = nameof(Height);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
             var isGetPicUrlFromAttribute = false;
             var channelIndex = string.Empty;
             var channelName = string.Empty;
             var upLevel = 0;
             var topLevel = -1;
-            var type = ContentAttribute.ImageUrl;
+            var type = BackgroundContentAttribute.ImageUrl;
             var src = string.Empty;
             var altSrc = string.Empty;
             var width = "100%";
@@ -65,7 +65,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 
                 if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
                 {
-                    channelIndex = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelIndex = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelIndex))
                     {
                         isGetPicUrlFromAttribute = true;
@@ -73,7 +73,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ChannelName))
                 {
-                    channelName = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelName = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                     if (!string.IsNullOrEmpty(channelName))
                     {
                         isGetPicUrlFromAttribute = true;
@@ -125,12 +125,12 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, type, src, altSrc, width, height);
+            return ParseImpl(pageInfo, contextInfo, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, type, src, altSrc, width, height);
         }
 
-        private static async Task<object> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel, string type, string src, string altSrc, string width, string height)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel, string type, string src, string altSrc, string width, string height)
         {
-            object parsedContent = null;
+            var parsedContent = string.Empty;
 
             var contentId = 0;
             //判断是否图片地址由标签属性获得
@@ -138,7 +138,7 @@ namespace SiteServer.CMS.StlParser.StlElement
             {
                 contentId = contextInfo.ContentId;
             }
-            var contentInfo = await contextInfo.GetContentAsync();
+            var contentInfo = contextInfo.ContentInfo;
 
             string flashUrl;
             if (!string.IsNullOrEmpty(src))
@@ -151,22 +151,23 @@ namespace SiteServer.CMS.StlParser.StlElement
                 {
                     if (contentInfo == null)
                     {
-                        var nodeInfo = await ChannelManager.GetChannelAsync(contextInfo.Site.Id, contextInfo.ChannelId);
-                        var tableName = await ChannelManager.GetTableNameAsync(contextInfo.Site, nodeInfo);
+                        var nodeInfo = ChannelManager.GetChannelInfo(contextInfo.SiteInfo.Id, contextInfo.ChannelId);
+                        var tableName = ChannelManager.GetTableName(contextInfo.SiteInfo, nodeInfo);
 
-                        flashUrl = await DataProvider.ContentRepository.GetValueAsync(tableName, contentId, type);
+                        //picUrl = DataProvider.ContentDao.GetValue(tableName, contentId, type);
+                        flashUrl = StlContentCache.GetValue(tableName, contentId, type);
                     }
                     else
                     {
-                        flashUrl = contentInfo.Get<string>(type);
+                        flashUrl = contextInfo.ContentInfo.GetString(type);
                     }
                 }
                 else//获取栏目Flash
                 {
-                    var channelId = await StlDataUtility.GetChannelIdByLevelAsync(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
+                    var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
 
-                    channelId = await StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelNameAsync(pageInfo.SiteId, channelId, channelIndex, channelName);
-                    var channel = await ChannelManager.GetChannelAsync(pageInfo.SiteId, channelId);
+                    channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, channelIndex, channelName);
+                    var channel = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
 
                     flashUrl = channel.ImageUrl;
                 }
@@ -188,15 +189,15 @@ namespace SiteServer.CMS.StlParser.StlElement
                 var extension = PathUtils.GetExtension(flashUrl);
                 if (EFileSystemTypeUtils.IsImage(extension))
                 {
-                    parsedContent = await StlImage.ParseAsync(pageInfo, contextInfo);
+                    parsedContent = StlImage.Parse(pageInfo, contextInfo);
                 }
                 else if (EFileSystemTypeUtils.IsPlayer(extension))
                 {
-                    parsedContent = await StlPlayer.ParseAsync(pageInfo, contextInfo);
+                    parsedContent = StlPlayer.Parse(pageInfo, contextInfo);
                 }
                 else
                 {                    
-                    flashUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, flashUrl, pageInfo.IsLocal);
+                    flashUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, flashUrl, pageInfo.IsLocal);
 
                     parsedContent = $@"
 <embed src=""{flashUrl}"" allowfullscreen=""true"" width=""{width}"" height=""{height}"" align=""middle"" allowscriptaccess=""always"" type=""application/x-shockwave-flash"" />
@@ -211,9 +212,9 @@ namespace SiteServer.CMS.StlParser.StlElement
 
 
 //using System.Text;
-//using SiteServer.Abstractions;
+//using SiteServer.Utils;
 //using SiteServer.CMS.Core;
-//using SiteServer.Abstractions.Attributes;
+//using SiteServer.CMS.Model.Attributes;
 //using SiteServer.CMS.StlParser.Cache;
 //using SiteServer.CMS.StlParser.Model;
 //using SiteServer.CMS.StlParser.Parsers;
@@ -246,7 +247,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 //            var channelName = string.Empty;
 //            var upLevel = 0;
 //            var topLevel = -1;
-//            var type = ContentAttribute.ImageUrl;
+//            var type = BackgroundContentAttribute.ImageUrl;
 //            var src = string.Empty;
 //            var altSrc = string.Empty;
 //            var width = "100%";
@@ -331,7 +332,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 //            {
 //                contentId = contextInfo.ContentId;
 //            }
-//            var contentInfo = contextInfo.Body;
+//            var contentInfo = contextInfo.ContentInfo;
 
 //            string picUrl;
 //            if (!string.IsNullOrEmpty(src))
@@ -344,15 +345,15 @@ namespace SiteServer.CMS.StlParser.StlElement
 //                {
 //                    if (contentInfo == null)
 //                    {
-//                        var node = await ChannelManager.GetChannelAsync(contextInfo.Site.Id, contextInfo.ChannelId);
-//                        var tableName = ChannelManager.GetTableName(contextInfo.Site, node);
+//                        var nodeInfo = ChannelManager.GetChannelInfo(contextInfo.SiteInfo.Id, contextInfo.ChannelId);
+//                        var tableName = ChannelManager.GetTableName(contextInfo.SiteInfo, nodeInfo);
 
-//                        //picUrl = DataProvider.ContentRepository.GetValue(tableName, contentId, type);
-//                        picUrl = Body.GetValue(tableName, contentId, type);
+//                        //picUrl = DataProvider.ContentDao.GetValue(tableName, contentId, type);
+//                        picUrl = Content.GetValue(tableName, contentId, type);
 //                    }
 //                    else
 //                    {
-//                        picUrl = contextInfo.Body.GetString(type);
+//                        picUrl = contextInfo.ContentInfo.GetString(type);
 //                    }
 //                }
 //                else//获取栏目Flash
@@ -360,7 +361,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 //                    var channelId = StlDataUtility.GetChannelIdByLevel(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
 
 //                    channelId = StlDataUtility.GetChannelIdByChannelIdOrChannelIndexOrChannelName(pageInfo.SiteId, channelId, channelIndex, channelName);
-//                    var channel = await ChannelManager.GetChannelAsync(pageInfo.SiteId, channelId);
+//                    var channel = ChannelManager.GetChannelInfo(pageInfo.SiteId, channelId);
 
 //                    picUrl = channel.ImageUrl;
 //                }
@@ -392,7 +393,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 //                {
 //                    pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.JsAcSwfObject);
 
-//                    picUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, picUrl, pageInfo.IsLocal);
+//                    picUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, picUrl, pageInfo.IsLocal);
 
 //                    if (string.IsNullOrEmpty(contextInfo.Attributes["quality"]))
 //                    {

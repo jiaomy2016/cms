@@ -1,7 +1,6 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web.UI;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -21,7 +20,7 @@ namespace SiteServer.CMS.StlParser.StlEntity
 	        {StlParserUtility.ItemIndex, "排序"}
 	    };
 
-        internal static async Task<string> ParseAsync(string stlEntity, PageInfo pageInfo, ContextInfo contextInfo)
+        internal static string Parse(string stlEntity, PageInfo pageInfo, ContextInfo contextInfo)
         {
             var parsedContent = string.Empty;
 

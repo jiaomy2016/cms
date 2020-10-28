@@ -112,7 +112,7 @@ var methods = {
       });
     }
 
-    parent.utils.loading(true);
+    parent.pageUtils.loading(true);
     $api.post({
         siteId: $this.siteId,
         channelId: $this.channelId,
@@ -122,7 +122,7 @@ var methods = {
         isOverride: $this.isOverride
       },
       function (err, res) {
-        parent.utils.loading(false);
+        parent.pageUtils.loading(false);
 
         if (err) {
           return $this.pageAlert = {

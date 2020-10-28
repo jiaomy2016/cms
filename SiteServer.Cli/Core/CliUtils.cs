@@ -2,10 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
-using Datory;
 using NDesk.Options;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
 
 namespace SiteServer.Cli.Core
 {

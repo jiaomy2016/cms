@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Stl;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
@@ -16,6 +15,8 @@ namespace SiteServer.CMS.StlParser.StlElement
 	{
         private StlPlayer() { }
 		public const string ElementName = "stl:player";
+
+        public const string EditorPlaceHolder = @"src=""../assets/editor-images/player.png""";
 
         [StlAttribute(Title = "指定存储媒体的字段")]
         public const string Type = nameof(Type);
@@ -49,10 +50,10 @@ namespace SiteServer.CMS.StlParser.StlElement
             PlayByJwPlayer
         };
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
-            var type = ContentAttribute.VideoUrl;
-            var playUrl = string.Empty;
+            var type = BackgroundContentAttribute.VideoUrl;
+            var playUrl = PlayByFlowPlayer;
             var imageUrl = string.Empty;
             var playBy = string.Empty;
             var width = 450;
@@ -93,34 +94,33 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, playUrl, imageUrl, playBy, width, height, type, isAutoPlay);
+            return ParseImpl(pageInfo, contextInfo, playUrl, imageUrl, playBy, width, height, type, isAutoPlay);
 		}
 
-        private static async Task<object> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, string playUrl, string imageUrl, string playBy, int width, int height, string type, bool isAutoPlay)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string playUrl, string imageUrl, string playBy, int width, int height, string type, bool isAutoPlay)
         {
             if (string.IsNullOrEmpty(playUrl))
             {
                 var contentId = contextInfo.ContentId;
                 if (contentId != 0)//获取内容视频
                 {
-                    var contentInfo = await contextInfo.GetContentAsync();
-                    if (contentInfo == null)
+                    if (contextInfo.ContentInfo == null)
                     {
-                        playUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, type);
+                        playUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, type);
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            if (!StringUtils.EqualsIgnoreCase(type, ContentAttribute.VideoUrl))
+                            if (!StringUtils.EqualsIgnoreCase(type, BackgroundContentAttribute.VideoUrl))
                             {
-                                playUrl = await DataProvider.ContentRepository.GetValueAsync(pageInfo.Site.TableName, contentId, ContentAttribute.VideoUrl);
+                                playUrl = StlContentCache.GetValue(pageInfo.SiteInfo.TableName, contentId, BackgroundContentAttribute.VideoUrl);
                             }
                         }
                     }
                     else
                     {
-                        playUrl = contentInfo.Get<string>(type);
+                        playUrl = contextInfo.ContentInfo.GetString(type);
                         if (string.IsNullOrEmpty(playUrl))
                         {
-                            playUrl = contentInfo.Get<string>(ContentAttribute.VideoUrl);
+                            playUrl = contextInfo.ContentInfo.GetString(BackgroundContentAttribute.VideoUrl);
                         }
                     }
                 }
@@ -128,8 +128,8 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (string.IsNullOrEmpty(playUrl)) return string.Empty;
 
-            playUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, playUrl, pageInfo.IsLocal);
-            imageUrl = PageUtility.ParseNavigationUrl(pageInfo.Site, imageUrl, pageInfo.IsLocal);
+            playUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, playUrl, pageInfo.IsLocal);
+            imageUrl = PageUtility.ParseNavigationUrl(pageInfo.SiteInfo, imageUrl, pageInfo.IsLocal);
 
             var extension = PathUtils.GetExtension(playUrl);
             var uniqueId = pageInfo.UniqueId;
@@ -138,12 +138,12 @@ namespace SiteServer.CMS.StlParser.StlElement
 
             if (EFileSystemTypeUtils.IsFlash(extension))
             {
-                return await StlFlash.ParseAsync(pageInfo, contextInfo);
+                return StlFlash.Parse(pageInfo, contextInfo);
             }
 
             if (EFileSystemTypeUtils.IsImage(extension))
             {
-                return await StlImage.ParseAsync(pageInfo, contextInfo);
+                return StlImage.Parse(pageInfo, contextInfo);
             }
 
             if (fileType == EFileSystemType.Avi)
@@ -213,7 +213,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 ";
             }
 
-            return await StlVideo.ParseAsync(pageInfo, contextInfo);
+            return StlVideo.Parse(pageInfo, contextInfo);
         }
 
         private static string ParseAvi(int uniqueId, int width, int height, bool isAutoPlay, string playUrl)

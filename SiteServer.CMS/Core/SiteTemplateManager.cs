@@ -1,9 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.ImportExport;
+using SiteServer.CMS.Model;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
@@ -40,32 +40,46 @@ namespace SiteServer.CMS.Core
             return DirectoryUtils.IsDirectoryExists(siteTemplatePath);
         }
 
+        public bool IsSiteTemplateExists
+        {
+            get
+            {
+                var directoryPaths = DirectoryUtils.GetDirectoryPaths(_rootPath);
+                foreach (var siteTemplatePath in directoryPaths)
+                {
+                    var metadataXmlFilePath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.FileMetadata);
+                    if (FileUtils.IsFileExists(metadataXmlFilePath))
+                    {
+                        var siteTemplateInfo = Serializer.ConvertFileToObject(metadataXmlFilePath, typeof(SiteTemplateInfo)) as SiteTemplateInfo;
+                        if (siteTemplateInfo != null)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+
         public SortedList GetSiteTemplateSortedList()
         {
-            var sortedList = new SortedList();
+            var sortedlist = new SortedList();
             var directoryPaths = DirectoryUtils.GetDirectoryPaths(_rootPath);
             foreach (var siteTemplatePath in directoryPaths)
             {
-                var directoryName = PathUtils.GetDirectoryName(siteTemplatePath, false);
-                SiteTemplateInfo siteTemplateInfo = null;
                 var metadataXmlFilePath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.FileMetadata);
                 if (FileUtils.IsFileExists(metadataXmlFilePath))
                 {
-                    siteTemplateInfo = Serializer.ConvertFileToObject<SiteTemplateInfo>(metadataXmlFilePath);
-                }
-
-                if (siteTemplateInfo == null)
-                {
-                    siteTemplateInfo = new SiteTemplateInfo
+                    var siteTemplateInfo = Serializer.ConvertFileToObject(metadataXmlFilePath, typeof(SiteTemplateInfo)) as SiteTemplateInfo;
+                    if (siteTemplateInfo != null)
                     {
-                        SiteTemplateName = directoryName
-                    };
+                        var directoryName = PathUtils.GetDirectoryName(siteTemplatePath, false);
+                        siteTemplateInfo.DirectoryName = directoryName;
+                        sortedlist.Add(directoryName, siteTemplateInfo);
+                    }
                 }
-
-                siteTemplateInfo.DirectoryName = directoryName;
-                sortedList.Add(directoryName, siteTemplateInfo);
             }
-            return sortedList;
+            return sortedlist;
         }
 
         public List<string> GetZipSiteTemplateList()
@@ -81,7 +95,7 @@ namespace SiteServer.CMS.Core
             return list;
         }
 
-        public async Task ImportSiteTemplateToEmptySiteAsync(int siteId, string siteTemplateDir, bool isImportContents, bool isImportTableStyles, string administratorName)
+        public void ImportSiteTemplateToEmptySite(int siteId, string siteTemplateDir, bool isImportContents, bool isImportTableStyles, string administratorName)
         {
             var siteTemplatePath = PathUtility.GetSiteTemplatesPath(siteTemplateDir);
             if (DirectoryUtils.IsDirectoryExists(siteTemplatePath))
@@ -93,46 +107,46 @@ namespace SiteServer.CMS.Core
 
                 var importObject = new ImportObject(siteId, administratorName);
 
-                await importObject.ImportFilesAsync(siteTemplatePath, true);
+                importObject.ImportFiles(siteTemplatePath, true);
 
-                await importObject.ImportTemplatesAsync(templateFilePath, true, administratorName);
+                importObject.ImportTemplates(templateFilePath, true, administratorName);
 
-                await importObject.ImportConfigurationAsync(configurationFilePath);
+                importObject.ImportConfiguration(configurationFilePath);
 
                 var filePathList = ImportObject.GetSiteContentFilePathList(siteContentDirectoryPath);
 
                 foreach (var filePath in filePathList)
                 {
-                    await importObject.ImportSiteContentAsync(siteContentDirectoryPath, filePath, isImportContents);
+                    importObject.ImportSiteContent(siteContentDirectoryPath, filePath, isImportContents);
                 }
 
                 if (isImportTableStyles)
                 {
-                    await importObject.ImportTableStylesAsync(tableDirectoryPath);
+                    importObject.ImportTableStyles(tableDirectoryPath);
                 }
 
-                await importObject.RemoveDbCacheAsync();
+                importObject.RemoveDbCache();
             }
         }
 
-        public static async Task ExportSiteToSiteTemplateAsync(Site site, string siteTemplateDir, string adminName)
+        public static void ExportSiteToSiteTemplate(SiteInfo siteInfo, string siteTemplateDir, string adminName)
         {
-            var exportObject = new ExportObject(site.Id, adminName);
+            var exportObject = new ExportObject(siteInfo.Id, adminName);
 
             var siteTemplatePath = PathUtility.GetSiteTemplatesPath(siteTemplateDir);
 
             //导出模板
             var templateFilePath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.FileTemplate);
-            await exportObject.ExportTemplatesAsync(templateFilePath);
+            exportObject.ExportTemplates(templateFilePath);
             //导出辅助表及样式
             var tableDirectoryPath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.Table);
-            await exportObject.ExportTablesAndStylesAsync(tableDirectoryPath);
+            exportObject.ExportTablesAndStyles(tableDirectoryPath);
             //导出站点属性以及站点属性表单
             var configurationFilePath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.FileConfiguration);
-            await exportObject.ExportConfigurationAsync(configurationFilePath);
+            exportObject.ExportConfiguration(configurationFilePath);
             //导出关联字段
             var relatedFieldDirectoryPath = PathUtility.GetSiteTemplateMetadataPath(siteTemplatePath, DirectoryUtils.SiteTemplates.RelatedField);
-            await exportObject.ExportRelatedFieldAsync(relatedFieldDirectoryPath);
+            exportObject.ExportRelatedField(relatedFieldDirectoryPath);
         }
     }
 }

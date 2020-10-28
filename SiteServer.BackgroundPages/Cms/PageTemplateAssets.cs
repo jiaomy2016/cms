@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -51,7 +52,7 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 _name = NameInclude;
                 _ext = ExtInclude;
-                _assetsDir = Site.TemplatesAssetsIncludeDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsIncludeDir.Trim('/');
                 
                 tips = $@"包含文件存放在 <code>{_assetsDir}</code> 目录中，模板中使用 &lt;stl:include file=""/{_assetsDir}/包含文件.html""&gt;&lt;/stl:include&gt; 引用。";
             }
@@ -59,7 +60,7 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 _name = NameJs;
                 _ext = ExtJs;
-                _assetsDir = Site.TemplatesAssetsJsDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsJsDir.Trim('/');
                 tips =
                     $@"脚本文件存放在 <code>{_assetsDir}</code> 目录中，模板中使用 &lt;script type=""text/javascript"" src=""{{stl.siteUrl}}/{_assetsDir}/脚本文件.js""&gt;&lt;/script&gt; 引用。";
             }
@@ -67,13 +68,13 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 _name = NameCss;
                 _ext = ExtCss;
-                _assetsDir = Site.TemplatesAssetsCssDir.Trim('/');
+                _assetsDir = SiteInfo.Additional.TemplatesAssetsCssDir.Trim('/');
                 tips = $@"样式文件存放在 <code>{_assetsDir}</code> 目录中，模板中使用 &lt;link rel=""stylesheet"" type=""text/css"" href=""{{stl.siteUrl}}/{_assetsDir}/样式文件.css"" /&gt; 引用。";
             }
 
             if (string.IsNullOrEmpty(_assetsDir)) return;
 
-            _directoryPath = PathUtility.MapPath(Site, "@/" + _assetsDir);
+            _directoryPath = PathUtility.MapPath(SiteInfo, "@/" + _assetsDir);
 
             if (AuthRequest.IsQueryExists("delete"))
             {
@@ -82,7 +83,7 @@ namespace SiteServer.BackgroundPages.Cms
                 try
                 {
                     FileUtils.DeleteFileIfExists(PathUtils.Combine(_directoryPath, fileName));
-                    AuthRequest.AddSiteLogAsync(SiteId, $"删除{_name}", $"{_name}:{fileName}").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, $"删除{_name}", $"{_name}:{fileName}");
                     SuccessDeleteMessage();
                 }
                 catch (Exception ex)
@@ -93,7 +94,7 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (IsPostBack) return;
 
-            VerifySitePermissions(Constants.WebSitePermissions.Template);
+            VerifySitePermissions(ConfigManager.SitePermissions.TemplatesIncludes);
 
             LtlPageTitle.Text = $"{_name}管理";
             InfoMessage(tips);
@@ -113,8 +114,8 @@ namespace SiteServer.BackgroundPages.Cms
             RptContents.ItemDataBound += RptContents_ItemDataBound;
             RptContents.DataBind();
 
-            BtnConfig.Attributes.Add("onClick", ModalTemplateAssetsConfig.GetOpenWindowString(SiteId, _type));
-            BtnAdd.Attributes.Add("onClick", $"location.href='{PageTemplateAssetsAdd.GetRedirectUrlToAdd(SiteId, _type)}';return false");
+            BtnConfig.Attributes.Add("onclick", ModalTemplateAssetsConfig.GetOpenWindowString(SiteId, _type));
+            BtnAdd.Attributes.Add("onclick", $"location.href='{PageTemplateAssetsAdd.GetRedirectUrlToAdd(SiteId, _type)}';return false");
         }
 
         private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
@@ -124,17 +125,21 @@ namespace SiteServer.BackgroundPages.Cms
             var fileName = (string)e.Item.DataItem;
 
             var ltlFileName = (Literal)e.Item.FindControl("ltlFileName");
+            var ltlCharset = (Literal)e.Item.FindControl("ltlCharset");
             var ltlView = (Literal)e.Item.FindControl("ltlView");
             var ltlEdit = (Literal)e.Item.FindControl("ltlEdit");
             var ltlDelete = (Literal)e.Item.FindControl("ltlDelete");
 
             ltlFileName.Text = fileName;
 
-            ltlView.Text = $@"<a href=""{PageUtility.GetSiteUrl(Site, $"{_assetsDir}/{fileName}", true)}"" target=""_blank"">查看</a>";
+            var charset = FileUtils.GetFileCharset(PathUtils.Combine(_directoryPath, fileName));
+            ltlCharset.Text = ECharsetUtils.GetText(charset);
+
+            ltlView.Text = $@"<a href=""{PageUtility.GetSiteUrl(SiteInfo, $"{_assetsDir}/{fileName}", true)}"" target=""_blank"">查看</a>";
             ltlEdit.Text =
                 $@"<a href=""{PageTemplateAssetsAdd.GetRedirectUrlToEdit(SiteId, _type, fileName)}"">编辑</a>";
             ltlDelete.Text =
-                $@"<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmDelete($"删除{_name}", $"此操作将删除{_name}，确认吗", $"{GetRedirectUrl(SiteId, _type)}&delete={true}&fileName={fileName}")}"">删除</a>";
+                $@"<a href=""javascript:;"" onclick=""{AlertUtils.ConfirmDelete($"删除{_name}", $"此操作将删除{_name}，确认吗", $"{GetRedirectUrl(SiteId, _type)}&delete={true}&fileName={fileName}")}"">删除</a>";
         }
 	}
 }

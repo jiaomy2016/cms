@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Attributes;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -39,7 +39,7 @@ namespace SiteServer.BackgroundPages.Cms
             {
                 TbTags.Text = _tagName;
 
-                var count = DataProvider.ContentTagRepository.GetTagCountAsync(_tagName, SiteId).GetAwaiter().GetResult();
+                var count = DataProvider.TagDao.GetTagCount(_tagName, SiteId);
 
                 InfoMessage($@"标签“<strong>{_tagName}</strong>”被使用 {count} 次，编辑此标签将更新所有使用此标签的内容。");
             }
@@ -55,30 +55,32 @@ namespace SiteServer.BackgroundPages.Cms
 				{
                     if (!string.Equals(_tagName, TbTags.Text))
                     {
-                        var tagCollection = ContentTagUtils.ParseTagsString(TbTags.Text);
-                        var contentIdList = DataProvider.ContentTagRepository.GetContentIdListByTagAsync(_tagName, SiteId).GetAwaiter().GetResult();
+                        var tagCollection = TagUtils.ParseTagsString(TbTags.Text);
+                        var contentIdList = DataProvider.TagDao.GetContentIdListByTag(_tagName, SiteId);
                         if (contentIdList.Count > 0)
                         {
                             foreach (var contentId in contentIdList)
                             {
                                 if (!tagCollection.Contains(_tagName))//删除
                                 {
-                                    var tagInfo = DataProvider.ContentTagRepository.GetTagAsync(SiteId, _tagName).GetAwaiter().GetResult();
+                                    var tagInfo = DataProvider.TagDao.GetTagInfo(SiteId, _tagName);
                                     if (tagInfo != null)
                                     {
-                                        tagInfo.ContentIds.Remove(contentId);
-                                        tagInfo.UseNum = tagInfo.ContentIds.Count;
-                                        DataProvider.ContentTagRepository.UpdateAsync(tagInfo).GetAwaiter().GetResult();
+                                        var idArrayList = TranslateUtils.StringCollectionToIntList(tagInfo.ContentIdCollection);
+                                        idArrayList.Remove(contentId);
+                                        tagInfo.ContentIdCollection = TranslateUtils.ObjectCollectionToString(idArrayList);
+                                        tagInfo.UseNum = idArrayList.Count;
+                                        DataProvider.TagDao.Update(tagInfo);
                                     }
                                 }
 
-                                ContentTagUtils.UpdateTagsAsync(string.Empty, TbTags.Text, SiteId, contentId).GetAwaiter().GetResult();
+                                TagUtils.UpdateTags(string.Empty, TbTags.Text, SiteId, contentId);
 
-                                var tags = DataProvider.ContentRepository.GetValueAsync(Site.TableName, contentId, ContentAttribute.Tags).GetAwaiter().GetResult();
+                                var tuple = DataProvider.ContentDao.GetValue(SiteInfo.TableName, contentId, ContentAttribute.Tags);
 
-                                if (!string.IsNullOrEmpty(tags))
+                                if (tuple != null)
                                 {
-                                    var contentTagList = StringUtils.GetStringList(tags);
+                                    var contentTagList = TranslateUtils.StringCollectionToStringList(tuple.Item2);
                                     contentTagList.Remove(_tagName);
                                     foreach (var theTag in tagCollection)
                                     {
@@ -87,17 +89,17 @@ namespace SiteServer.BackgroundPages.Cms
                                             contentTagList.Add(theTag);
                                         }
                                     }
-                                    DataProvider.ContentRepository.UpdateAsync(Site.TableName, contentId, ContentAttribute.Tags, TranslateUtils.ObjectCollectionToString(contentTagList)).GetAwaiter().GetResult();
+                                    DataProvider.ContentDao.Update(SiteInfo.TableName, tuple.Item1, contentId, ContentAttribute.Tags, TranslateUtils.ObjectCollectionToString(contentTagList));
                                 }
                             }
                         }
                         else
                         {
-                            DataProvider.ContentTagRepository.DeleteTagAsync(_tagName, SiteId).GetAwaiter().GetResult();
+                            DataProvider.TagDao.DeleteTag(_tagName, SiteId);
                         }
                     }
 
-                    AuthRequest.AddSiteLogAsync(SiteId, "修改内容标签", $"内容标签:{TbTags.Text}").GetAwaiter().GetResult();
+                    AuthRequest.AddSiteLog(SiteId, "修改内容标签", $"内容标签:{TbTags.Text}");
 
 					isChanged = true;
 				}
@@ -110,8 +112,9 @@ namespace SiteServer.BackgroundPages.Cms
 			{
                 try
                 {
-                    ContentTagUtils.UpdateTagsAsync(string.Empty, TbTags.Text, SiteId, 0).GetAwaiter().GetResult();
-                    AuthRequest.AddSiteLogAsync(SiteId, "添加内容标签", $"内容标签:{TbTags.Text}").GetAwaiter().GetResult();
+                    TagUtils.UpdateTags(string.Empty, TbTags.Text, SiteId, 0);
+                    AuthRequest.AddSiteLog(SiteId, "添加内容标签", $"内容标签:{TbTags.Text}");
+                    isChanged = true;
                 }
                 catch(Exception ex)
                 {

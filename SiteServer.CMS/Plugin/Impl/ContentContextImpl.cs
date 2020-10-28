@@ -1,10 +1,8 @@
-﻿
-
-using SiteServer.Abstractions;
+﻿using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Impl
 {
-    public class ContentContextImpl : IContentContext
+    public class ContentContextImpl: IContentContext
     {
         public int SiteId  { get; set; }
 

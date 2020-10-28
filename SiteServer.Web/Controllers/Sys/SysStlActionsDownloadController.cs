@@ -1,31 +1,31 @@
-﻿using System.Threading.Tasks;
-using System.Web;
+﻿using System.Web;
 using System.Web.Http;
-using SiteServer.Abstractions;
+using NSwag.Annotations;
 using SiteServer.CMS.Api.Sys.Stl;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.API.Controllers.Sys
 {
-    
+    [OpenApiIgnore]
     public class SysStlActionsDownloadController : ApiController
     {
         [HttpGet]
         [Route(ApiRouteActionsDownload.Route)]
-        public async Task Main()
+        public void Main()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 if (!string.IsNullOrEmpty(request.GetQueryString("siteId")) && !string.IsNullOrEmpty(request.GetQueryString("fileUrl")) && string.IsNullOrEmpty(request.GetQueryString("contentId")))
                 {
                     var siteId = request.GetQueryInt("siteId");
-                    var fileUrl = WebConfigUtils.DecryptStringBySecretKey(request.GetQueryString("fileUrl"));
+                    var fileUrl = TranslateUtils.DecryptStringBySecretKey(request.GetQueryString("fileUrl"));
 
                     if (PageUtils.IsProtocolUrl(fileUrl))
                     {
@@ -33,8 +33,8 @@ namespace SiteServer.API.Controllers.Sys
                         return;
                     }
 
-                    var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                    var filePath = PathUtility.MapPath(site, fileUrl);
+                    var siteInfo = SiteManager.GetSiteInfo(siteId);
+                    var filePath = PathUtility.MapPath(siteInfo, fileUrl);
                     var fileType = EFileSystemTypeUtils.GetEnumType(PathUtils.GetExtension(filePath));
                     if (EFileSystemTypeUtils.IsDownload(fileType))
                     {
@@ -46,13 +46,13 @@ namespace SiteServer.API.Controllers.Sys
                     }
                     else
                     {
-                        PageUtils.Redirect(PageUtility.ParseNavigationUrl(site, fileUrl, false));
+                        PageUtils.Redirect(PageUtility.ParseNavigationUrl(siteInfo, fileUrl, false));
                         return;
                     }
                 }
                 else if (!string.IsNullOrEmpty(request.GetQueryString("filePath")))
                 {
-                    var filePath = WebConfigUtils.DecryptStringBySecretKey(request.GetQueryString("filePath"));
+                    var filePath = TranslateUtils.DecryptStringBySecretKey(request.GetQueryString("filePath"));
                     var fileType = EFileSystemTypeUtils.GetEnumType(PathUtils.GetExtension(filePath));
                     if (EFileSystemTypeUtils.IsDownload(fileType))
                     {
@@ -74,14 +74,14 @@ namespace SiteServer.API.Controllers.Sys
                     var siteId = request.GetQueryInt("siteId");
                     var channelId = request.GetQueryInt("channelId");
                     var contentId = request.GetQueryInt("contentId");
-                    var fileUrl = WebConfigUtils.DecryptStringBySecretKey(request.GetQueryString("fileUrl"));
-                    var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                    var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
-                    var contentInfo = await DataProvider.ContentRepository.GetAsync(site, channelInfo, contentId);
+                    var fileUrl = TranslateUtils.DecryptStringBySecretKey(request.GetQueryString("fileUrl"));
+                    var siteInfo = SiteManager.GetSiteInfo(siteId);
+                    var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+                    var contentInfo = ContentManager.GetContentInfo(siteInfo, channelInfo, contentId);
 
-                    await DataProvider.ContentRepository.AddDownloadsAsync(await ChannelManager.GetTableNameAsync(site, channelInfo), channelId, contentId);
+                    DataProvider.ContentDao.AddDownloads( siteId, ChannelManager.GetTableName(siteInfo, channelInfo), channelId, contentId);
 
-                    if (!string.IsNullOrEmpty(contentInfo?.Get<string>(ContentAttribute.FileUrl)))
+                    if (!string.IsNullOrEmpty(contentInfo?.GetString(BackgroundContentAttribute.FileUrl)))
                     {
                         if (PageUtils.IsProtocolUrl(fileUrl))
                         {
@@ -89,7 +89,7 @@ namespace SiteServer.API.Controllers.Sys
                             return;
                         }
 
-                        var filePath = PathUtility.MapPath(site, fileUrl, true);
+                        var filePath = PathUtility.MapPath(siteInfo, fileUrl, true);
                         var fileType = EFileSystemTypeUtils.GetEnumType(PathUtils.GetExtension(filePath));
                         if (EFileSystemTypeUtils.IsDownload(fileType))
                         {
@@ -101,7 +101,7 @@ namespace SiteServer.API.Controllers.Sys
                         }
                         else
                         {
-                            PageUtils.Redirect(PageUtility.ParseNavigationUrl(site, fileUrl, false));
+                            PageUtils.Redirect(PageUtility.ParseNavigationUrl(siteInfo, fileUrl, false));
                             return;
                         }
                     }

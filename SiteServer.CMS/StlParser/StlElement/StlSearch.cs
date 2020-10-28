@@ -1,11 +1,9 @@
 ﻿using System.Text;
-using System.Threading.Tasks;
 using SiteServer.CMS.Api.Sys.Stl;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model.Attributes;
 using SiteServer.CMS.StlParser.Model;
-using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
@@ -62,7 +60,10 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "是否关键字高亮")]
         public const string IsHighlight = nameof(IsHighlight);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        [StlAttribute(Title = "是否默认显示全部内容")]
+        public const string IsDefaultDisplay = nameof(IsDefaultDisplay);
+
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
             var isAllSites = false;
             var siteName = string.Empty;
@@ -79,6 +80,7 @@ namespace SiteServer.CMS.StlParser.StlElement
             var since = string.Empty;
             var pageNum = 0;
             var isHighlight = false;
+            var isDefaultDisplay = false;
 
             foreach (var name in contextInfo.Attributes.AllKeys)
             {
@@ -90,51 +92,51 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, SiteName))
                 {
-                    siteName = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    siteName = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, SiteDir))
                 {
-                    siteDir = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    siteDir = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, SiteIds))
                 {
-                    siteIds = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    siteIds = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
                 {
-                    channelIndex = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelIndex = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ChannelName))
                 {
-                    channelName = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelName = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ChannelIds))
                 {
-                    channelIds = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    channelIds = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Type))
                 {
-                    type = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    type = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Word))
                 {
-                    word = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    word = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, DateAttribute))
                 {
-                    dateAttribute = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    dateAttribute = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, DateFrom))
                 {
-                    dateFrom = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    dateFrom = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, DateTo))
                 {
-                    dateTo = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    dateTo = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Since))
                 {
-                    since = await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(value, pageInfo, contextInfo);
+                    since = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, PageNum))
                 {
@@ -143,6 +145,10 @@ namespace SiteServer.CMS.StlParser.StlElement
                 else if (StringUtils.EqualsIgnoreCase(name, IsHighlight))
                 {
                     isHighlight = TranslateUtils.ToBool(value);
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, IsDefaultDisplay))
+                {
+                    isDefaultDisplay = TranslateUtils.ToBool(value);
                 }
             }
 
@@ -166,7 +172,7 @@ namespace SiteServer.CMS.StlParser.StlElement
             var ajaxDivId = StlParserUtility.GetAjaxDivId(pageInfo.UniqueId);
 
             var apiUrl = ApiRouteActionsSearch.GetUrl(pageInfo.ApiUrl);
-            var apiParameters = ApiRouteActionsSearch.GetParameters(isAllSites, siteName, siteDir, siteIds, channelIndex, channelName, channelIds, type, word, dateAttribute, dateFrom, dateTo, since, pageNum, isHighlight, pageInfo.SiteId, ajaxDivId, yes);
+            var apiParameters = ApiRouteActionsSearch.GetParameters(isAllSites, siteName, siteDir, siteIds, channelIndex, channelName, channelIds, type, word, dateAttribute, dateFrom, dateTo, since, pageNum, isHighlight, isDefaultDisplay, pageInfo.SiteId, ajaxDivId, yes);
 
             var builder = new StringBuilder();
             builder.Append($@"
@@ -184,18 +190,20 @@ jQuery(document).ready(function(){{
     var parameters = {apiParameters};
 
     var queryString = document.location.search;
-    if (queryString && queryString.length > 1) {{
-        queryString = queryString.substring(1);
-        var arr = queryString.split('&');
-        for(var i=0; i < arr.length; i++) {{
-            var item = arr[i];
-            var arr2 = item.split('=');
-            if (arr2 && arr2.length == 2) {{
-                var key = (arr2[0] || '').toLowerCase();
-                if (key) {{
-                    var value = decodeURIComponent(arr2[1]) || '';
-                    value = value.replace(/\+/g, ' ');
-                    parameters[key] = value;
+    if ((queryString && queryString.length > 1) || {isDefaultDisplay.ToString().ToLower()}) {{
+        if (queryString && queryString.length > 1) {{
+            queryString = queryString.substring(1);
+            var arr = queryString.split('&');
+            for(var i=0; i < arr.length; i++) {{
+                var item = arr[i];
+                var arr2 = item.split('=');
+                if (arr2 && arr2.length == 2) {{
+                    var key = (arr2[0] || '').toLowerCase();
+                    if (key) {{
+                        var value = decodeURIComponent(arr2[1]) || '';
+                        value = value.replace(/\+/g, ' ');
+                        parameters[key] = value;
+                    }}
                 }}
             }}
         }}
@@ -232,19 +240,22 @@ jQuery(document).ready(function(){{
 function stlRedirect{ajaxDivId}(page)
 {{
     var queryString = document.location.search;
-    if (queryString && queryString.length > 1) {{
-        queryString = queryString.substring(1);
+    if ((queryString && queryString.length > 1) || {isDefaultDisplay.ToString().ToLower()}) {{
         var parameters = '';
-        var arr = queryString.split('&');
-        for(var i=0; i < arr.length; i++) {{
-            var item = arr[i];
-            var arr2 = item.split('=');
-            if (arr2 && arr2.length == 2) {{
-                if (arr2[0] !== 'page') {{
-                    parameters += item + '&';
+        if (queryString && queryString.length > 1) {{
+            queryString = queryString.substring(1);
+            var arr = queryString.split('&');
+            for(var i=0; i < arr.length; i++) {{
+                var item = arr[i];
+                var arr2 = item.split('=');
+                if (arr2 && arr2.length == 2) {{
+                    if (arr2[0] !== 'page') {{
+                        parameters += item + '&';
+                    }}
                 }}
             }}
         }}
+        
         parameters += 'page=' + page;
         location.href = location.protocol + '//' + location.host + location.pathname + location.hash + '?' + parameters;
     }}

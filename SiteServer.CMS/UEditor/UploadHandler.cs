@@ -1,11 +1,11 @@
-﻿using SiteServer.Abstractions;
+﻿using SiteServer.Utils;
 using SiteServer.CMS.Core;
 using System;
 using System.IO;
 using System.Linq;
 using System.Web;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.UEditor
 {
@@ -75,7 +75,7 @@ namespace SiteServer.CMS.UEditor
             //var localPath = Server.MapPath(savePath);
 
             var currentType = PathUtils.GetExtension(Result.OriginFileName);
-            var siteInfo = DataProvider.SiteRepository.GetAsync(SiteId).GetAwaiter().GetResult();
+            var siteInfo = SiteManager.GetSiteInfo(SiteId);
             var localDirectoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, UploadType);
             var localFileName = PathUtility.GetUploadFileName(siteInfo, uploadFileName);
             var localFilePath = PathUtils.Combine(localDirectoryPath, localFileName);
@@ -83,7 +83,7 @@ namespace SiteServer.CMS.UEditor
             try
             {
                 //格式验证
-                if (!PathUtility.IsUploadExtensionAllowed(UploadType, siteInfo, currentType))
+                if (!PathUtility.IsUploadExtenstionAllowed(UploadType, siteInfo, currentType))
                 {
                     Result.State = UploadState.FileAccessError;
                     Result.ErrorMessage = "不允许的文件类型";
@@ -100,7 +100,7 @@ namespace SiteServer.CMS.UEditor
                         //添加水印
                         FileUtility.AddWaterMark(siteInfo, localFilePath);
                     }
-                    Result.Url = PageUtility.GetSiteUrlByPhysicalPathAsync(siteInfo, localFilePath, true).GetAwaiter().GetResult();
+                    Result.Url = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, localFilePath, true);
                     Result.State = UploadState.Success;
                 }
             }

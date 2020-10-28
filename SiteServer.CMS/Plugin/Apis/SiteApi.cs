@@ -1,103 +1,101 @@
 ﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
-
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class SiteApi
+    public class SiteApi : ISiteApi
     {
         private SiteApi() { }
 
         private static SiteApi _instance;
-        public static SiteApi Instance => _instance ??= new SiteApi();
+        public static SiteApi Instance => _instance ?? (_instance = new SiteApi());
 
-        public async Task<int> GetSiteIdByFilePathAsync(string path)
+        public int GetSiteIdByFilePath(string path)
         {
-            var site = await PathUtility.GetSiteAsync(path);
-            return site?.Id ?? 0;
+            var siteInfo = PathUtility.GetSiteInfo(path);
+            return siteInfo?.Id ?? 0;
         }
 
-        public async Task<string> GetSitePathAsync(int siteId)
+        public string GetSitePath(int siteId)
         {
             if (siteId <= 0) return null;
 
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return site == null ? null : PathUtility.GetSitePath(site);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            return siteInfo == null ? null : PathUtility.GetSitePath(siteInfo);
         }
 
-        public async Task<List<int>> GetSiteIdListAsync()
+        public List<int> GetSiteIdList()
         {
-            return await DataProvider.SiteRepository.GetSiteIdListAsync();
+            return SiteManager.GetSiteIdList();
         }
 
-        public async Task<Site> GetSiteAsync(int siteId)
+        public ISiteInfo GetSiteInfo(int siteId)
         {
-            return await DataProvider.SiteRepository.GetAsync(siteId);
+            return SiteManager.GetSiteInfo(siteId);
         }
 
         //public List<int> GetSiteIdListByAdminName(string adminName)
         //{
         //    var permissionManager = PermissionManager.GetInstance(adminName);
-        //    return DataProvider.SiteRepository.GetWritingSiteIdList(permissionManager);
+        //    return SiteManager.GetWritingSiteIdList(permissionManager);
         //}
 
-        public async Task<string> GetSitePathAsync(int siteId, string virtualPath)
+        public string GetSitePath(int siteId, string virtualPath)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return PathUtility.MapPath(site, virtualPath);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            return PathUtility.MapPath(siteInfo, virtualPath);
         }
 
-        public async Task<string> GetSiteUrlAsync(int siteId)
+        public string GetSiteUrl(int siteId)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return PageUtility.GetSiteUrl(site, false);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            return PageUtility.GetSiteUrl(siteInfo, false);
         }
 
-        public async Task<string> GetSiteUrlAsync(int siteId, string virtualPath)
+        public string GetSiteUrl(int siteId, string virtualPath)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return PageUtility.ParseNavigationUrl(site, virtualPath, false);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            return PageUtility.ParseNavigationUrl(siteInfo, virtualPath, false);
         }
 
-        public async Task<string> GetSiteUrlByFilePathAsync(string filePath)
+        public string GetSiteUrlByFilePath(string filePath)
         {
-            var siteId = await Instance.GetSiteIdByFilePathAsync(filePath);
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            return await PageUtility.GetSiteUrlByPhysicalPathAsync(site, filePath, false);
+            var siteId = Instance.GetSiteIdByFilePath(filePath);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            return PageUtility.GetSiteUrlByPhysicalPath(siteInfo, filePath, false);
         }
 
-        public async Task MoveFilesAsync(int sourceSiteId, int targetSiteId, List<string> relatedUrls)
+        public void MoveFiles(int sourceSiteId, int targetSiteId, List<string> relatedUrls)
         {
             if (sourceSiteId == targetSiteId) return;
 
-            var site = await DataProvider.SiteRepository.GetAsync(sourceSiteId);
-            var targetSite = await DataProvider.SiteRepository.GetAsync(targetSiteId);
-            if (site == null || targetSite == null) return;
+            var siteInfo = SiteManager.GetSiteInfo(sourceSiteId);
+            var targetSiteInfo = SiteManager.GetSiteInfo(targetSiteId);
+            if (siteInfo == null || targetSiteInfo == null) return;
 
             foreach (var relatedUrl in relatedUrls)
             {
                 if (!string.IsNullOrEmpty(relatedUrl) && !PageUtils.IsProtocolUrl(relatedUrl))
                 {
-                    FileUtility.MoveFile(site, targetSite, relatedUrl);
+                    FileUtility.MoveFile(siteInfo, targetSiteInfo, relatedUrl);
                 }
             }
         }
 
-        public async Task AddWaterMarkAsync(int siteId, string filePath)
+        public void AddWaterMark(int siteId, string filePath)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            FileUtility.AddWaterMark(site, filePath);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            FileUtility.AddWaterMark(siteInfo, filePath);
         }
 
-        public async Task<string> GetUploadFilePathAsync(int siteId, string fileName)
+        public string GetUploadFilePath(int siteId, string fileName)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(siteId);
-            var localDirectoryPath = PathUtility.GetUploadDirectoryPath(site, PathUtils.GetExtension(fileName));
-            var localFileName = PathUtility.GetUploadFileName(site, fileName);
+            var siteInfo = SiteManager.GetSiteInfo(siteId);
+            var localDirectoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, PathUtils.GetExtension(fileName));
+            var localFileName = PathUtility.GetUploadFileName(siteInfo, fileName);
             return PathUtils.Combine(localDirectoryPath, localFileName);
         }
     }

@@ -2,12 +2,12 @@
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Threading.Tasks;
 using System.Web;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.Repositories;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.UEditor
 {
@@ -37,9 +37,9 @@ namespace SiteServer.CMS.UEditor
                 });
                 return;
             }
-            var site = DataProvider.SiteRepository.GetAsync(SiteId).GetAwaiter().GetResult();
+            var siteInfo = SiteManager.GetSiteInfo(SiteId);
 
-            Crawlers = Sources.Select(x => new Crawler(x, site, Server)).ToArray();
+            Crawlers = Sources.Select(x => new Crawler(x, siteInfo,Server).Fetch()).ToArray();
             WriteJson(new
             {
                 state = "SUCCESS",
@@ -58,19 +58,19 @@ namespace SiteServer.CMS.UEditor
         public string SourceUrl { get; set; }
         public string ServerUrl { get; set; }
         public string State { get; set; }
-        public Site PubSystemInfo { get; private set; }
+        public SiteInfo PubSystemInfo { get; private set; }
 
         private HttpServerUtility Server { get; set; }
 
 
-        public Crawler(string sourceUrl, Site pubSystemInfo, HttpServerUtility server)
+        public Crawler(string sourceUrl, SiteInfo pubSystemInfo, HttpServerUtility server)
         {
             SourceUrl = sourceUrl;
             PubSystemInfo = pubSystemInfo;
             Server = server;
         }
 
-        public async Task<Crawler> FetchAsync()
+        public Crawler Fetch()
         {
             if (!IsExternalIPAddress(SourceUrl))
             {
@@ -81,7 +81,7 @@ namespace SiteServer.CMS.UEditor
             //格式验证
             string uploadFileName = Path.GetFileName(SourceUrl);
             var currentType = PathUtils.GetExtension(uploadFileName);
-            if (!PathUtility.IsUploadExtensionAllowed(EUploadType.Image, PubSystemInfo, currentType))
+            if (!PathUtility.IsUploadExtenstionAllowed(EUploadType.Image, PubSystemInfo, currentType))
             {
                 State = "不允许的文件类型";
                 return this;
@@ -128,7 +128,7 @@ namespace SiteServer.CMS.UEditor
                     File.WriteAllBytes(savePath, bytes);
                     State = "SUCCESS";
 
-                    ServerUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(PubSystemInfo, savePath, true);
+                    ServerUrl = PageUtility.GetSiteUrlByPhysicalPath(PubSystemInfo, savePath, true);
 
                 }
                 catch (Exception e)

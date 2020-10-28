@@ -1,10 +1,9 @@
 ﻿using System.Text;
-using System.Threading.Tasks;
 using System.Web.UI.HtmlControls;
-using SiteServer.CMS.Context;
-using SiteServer.Abstractions;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.StlParser.StlElement
 {
@@ -26,7 +25,7 @@ namespace SiteServer.CMS.StlParser.StlElement
         [StlAttribute(Title = "页面当前位置的 Id 属性")]
         private const string LocationId = nameof(LocationId);
 
-        public static async Task<object> ParseAsync(PageInfo pageInfo, ContextInfo contextInfo)
+        public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
 		{
 		    var titleId = string.Empty;
             var bodyId = string.Empty;
@@ -60,12 +59,12 @@ namespace SiteServer.CMS.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(pageInfo, contextInfo, stlAnchor, titleId, bodyId, logoId, locationId);
+            return ParseImpl(pageInfo, contextInfo, stlAnchor, titleId, bodyId, logoId, locationId);
 		}
 
-        private static async Task<string> ParseImplAsync(PageInfo pageInfo, ContextInfo contextInfo, HtmlAnchor stlAnchor, string titleId, string bodyId, string logoId, string locationId)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, HtmlAnchor stlAnchor, string titleId, string bodyId, string logoId, string locationId)
         {
-            var jsUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, pageInfo.Template.CharsetType == ECharset.gb2312 ? SiteFilesAssets.Print.JsGb2312 : SiteFilesAssets.Print.JsUtf8);
+            var jsUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, pageInfo.TemplateInfo.Charset == ECharset.gb2312 ? SiteFilesAssets.Print.JsGb2312 : SiteFilesAssets.Print.JsUtf8);
 
             var iconUrl = SiteFilesAssets.GetUrl(pageInfo.ApiUrl, SiteFilesAssets.Print.IconUrl);
             if (!pageInfo.BodyCodes.ContainsKey(PageInfo.Const.JsAfStlPrinter))
@@ -144,7 +143,7 @@ function stlLoadPrintJs()
             else
             {
                 var innerBuilder = new StringBuilder(contextInfo.InnerHtml);
-                await StlParserManager.ParseInnerContentAsync(innerBuilder, pageInfo, contextInfo);
+                StlParserManager.ParseInnerContent(innerBuilder, pageInfo, contextInfo);
                 stlAnchor.InnerHtml = innerBuilder.ToString();
             }
             stlAnchor.Attributes["href"] = "javascript:stlLoadPrintJs();";

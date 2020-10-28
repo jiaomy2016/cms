@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SiteServer.CMS.StlParser.Model
 {
@@ -18,7 +19,7 @@ namespace SiteServer.CMS.StlParser.Model
 		{
 		    if (type == EContextType.Content)
             {
-                return "Body";
+                return "Content";
             }
 		    if (type == EContextType.Channel)
 		    {

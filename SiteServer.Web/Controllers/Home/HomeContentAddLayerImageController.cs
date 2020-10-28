@@ -1,17 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Web.Http;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Context.Images;
+using NSwag.Annotations;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
+using SiteServer.Utils.Images;
 
 namespace SiteServer.API.Controllers.Home
 {
-    
+    [OpenApiIgnore]
     [RoutePrefix("home/contentAddLayerImage")]
     public class HomeContentAddLayerImageController : ApiController
     {
@@ -19,59 +18,59 @@ namespace SiteServer.API.Controllers.Home
         private const string RouteUpload = "actions/upload";
 
         [HttpGet, Route(Route)]
-        public async Task<IHttpActionResult> GetConfig()
+        public IHttpActionResult GetConfig()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
                 return Ok(new
                 {
-                    Value = site.ToDictionary()
+                    Value = siteInfo.Additional
                 });
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(RouteUpload)]
-        public async Task<IHttpActionResult> Upload()
+        public IHttpActionResult Upload()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetQueryInt("siteId");
                 var channelId = request.GetQueryInt("channelId");
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
                 var path = string.Empty;
                 var url = string.Empty;
@@ -83,24 +82,24 @@ namespace SiteServer.API.Controllers.Home
 
                     var filePath = file.FileName;
                     var fileExtName = PathUtils.GetExtension(filePath).ToLower();
-                    var localDirectoryPath = PathUtility.GetUploadDirectoryPath(site, fileExtName);
-                    var localFileName = PathUtility.GetUploadFileName(site, filePath);
+                    var localDirectoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, fileExtName);
+                    var localFileName = PathUtility.GetUploadFileName(siteInfo, filePath);
                     path = PathUtils.Combine(localDirectoryPath, localFileName);
                     contentLength = file.ContentLength;
 
-                    if (!PathUtility.IsImageExtensionAllowed(site, fileExtName))
+                    if (!PathUtility.IsImageExtenstionAllowed(siteInfo, fileExtName))
                     {
                         return BadRequest("上传失败，上传图片格式不正确！");
                     }
-                    if (!PathUtility.IsImageSizeAllowed(site, contentLength))
+                    if (!PathUtility.IsImageSizeAllowed(siteInfo, contentLength))
                     {
                         return BadRequest("上传失败，上传图片超出规定文件大小！");
                     }
 
                     file.SaveAs(path);
-                    FileUtility.AddWaterMark(site, path);
+                    FileUtility.AddWaterMark(siteInfo, path);
 
-                    url = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, path, true);
+                    url = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, path, true);
                 }
 
                 return Ok(new
@@ -112,17 +111,17 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }
 
         [HttpPost, Route(Route)]
-        public async Task<IHttpActionResult> Submit()
+        public IHttpActionResult Submit()
         {
             try
             {
-                var request = await AuthenticatedRequest.GetAuthAsync();
+                var request = new AuthenticatedRequest();
 
                 var siteId = request.GetPostInt("siteId");
                 var channelId = request.GetPostInt("channelId");
@@ -134,19 +133,19 @@ namespace SiteServer.API.Controllers.Home
                 var editorFixWidth = request.GetPostString("editorFixWidth");
                 var editorFixHeight = request.GetPostString("editorFixHeight");
                 var editorIsLinkToOriginal = request.GetPostBool("editorIsLinkToOriginal");
-                var filePaths = StringUtils.GetStringList(request.GetPostString("filePaths"));
+                var filePaths = TranslateUtils.StringCollectionToStringList(request.GetPostString("filePaths"));
 
                 if (!request.IsUserLoggin ||
-                    !await request.UserPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-                        Constants.ChannelPermissions.ContentAdd))
+                    !request.UserPermissionsImpl.HasChannelPermissions(siteId, channelId,
+                        ConfigManager.ChannelPermissions.ContentAdd))
                 {
                     return Unauthorized();
                 }
 
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                if (site == null) return BadRequest("无法确定内容对应的站点");
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo == null) return BadRequest("无法确定内容对应的站点");
 
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 if (channelInfo == null) return BadRequest("无法确定内容对应的栏目");
 
                 var retVal = new List<string>();
@@ -157,9 +156,9 @@ namespace SiteServer.API.Controllers.Home
                     if (string.IsNullOrEmpty(filePath)) continue;
 
                     var fileExtName = PathUtils.GetExtension(filePath).ToLower();
-                    var fileName = PathUtility.GetUploadFileName(site, filePath);
+                    var fileName = PathUtility.GetUploadFileName(siteInfo, filePath);
 
-                    var directoryPath = PathUtility.GetUploadDirectoryPath(site, fileExtName);
+                    var directoryPath = PathUtility.GetUploadDirectoryPath(siteInfo, fileExtName);
                     var fixFilePath = PathUtils.Combine(directoryPath, Constants.TitleImageAppendix + fileName);
                     var editorFixFilePath = PathUtils.Combine(directoryPath, Constants.SmallImageAppendix + fileName);
 
@@ -185,9 +184,9 @@ namespace SiteServer.API.Controllers.Home
                         }
                     }
 
-                    var imageUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, filePath, true);
-                    var fixImageUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, fixFilePath, true);
-                    var editorFixImageUrl = await PageUtility.GetSiteUrlByPhysicalPathAsync(site, editorFixFilePath, true);
+                    var imageUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, filePath, true);
+                    var fixImageUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, fixFilePath, true);
+                    var editorFixImageUrl = PageUtility.GetSiteUrlByPhysicalPath(siteInfo, editorFixFilePath, true);
 
                     retVal.Add(isFix ? fixImageUrl : imageUrl);
 
@@ -199,50 +198,50 @@ namespace SiteServer.API.Controllers.Home
                 }
 
                 var changed = false;
-                if (site.ConfigImageIsFix != isFix)
+                if (siteInfo.Additional.ConfigImageIsFix != isFix)
                 {
                     changed = true;
-                    site.ConfigImageIsFix = isFix;
+                    siteInfo.Additional.ConfigImageIsFix = isFix;
                 }
-                if (site.ConfigImageFixWidth != fixWidth)
+                if (siteInfo.Additional.ConfigImageFixWidth != fixWidth)
                 {
                     changed = true;
-                    site.ConfigImageFixWidth = fixWidth;
+                    siteInfo.Additional.ConfigImageFixWidth = fixWidth;
                 }
-                if (site.ConfigImageFixHeight != fixHeight)
+                if (siteInfo.Additional.ConfigImageFixHeight != fixHeight)
                 {
                     changed = true;
-                    site.ConfigImageFixHeight = fixHeight;
+                    siteInfo.Additional.ConfigImageFixHeight = fixHeight;
                 }
-                if (site.ConfigImageIsEditor != isEditor)
+                if (siteInfo.Additional.ConfigImageIsEditor != isEditor)
                 {
                     changed = true;
-                    site.ConfigImageIsEditor = isEditor;
+                    siteInfo.Additional.ConfigImageIsEditor = isEditor;
                 }
-                if (site.ConfigImageEditorIsFix != editorIsFix)
+                if (siteInfo.Additional.ConfigImageEditorIsFix != editorIsFix)
                 {
                     changed = true;
-                    site.ConfigImageEditorIsFix = editorIsFix;
+                    siteInfo.Additional.ConfigImageEditorIsFix = editorIsFix;
                 }
-                if (site.ConfigImageEditorFixWidth != editorFixWidth)
+                if (siteInfo.Additional.ConfigImageEditorFixWidth != editorFixWidth)
                 {
                     changed = true;
-                    site.ConfigImageEditorFixWidth = editorFixWidth;
+                    siteInfo.Additional.ConfigImageEditorFixWidth = editorFixWidth;
                 }
-                if (site.ConfigImageEditorFixHeight != editorFixHeight)
+                if (siteInfo.Additional.ConfigImageEditorFixHeight != editorFixHeight)
                 {
                     changed = true;
-                    site.ConfigImageEditorFixHeight = editorFixHeight;
+                    siteInfo.Additional.ConfigImageEditorFixHeight = editorFixHeight;
                 }
-                if (site.ConfigImageEditorIsLinkToOriginal != editorIsLinkToOriginal)
+                if (siteInfo.Additional.ConfigImageEditorIsLinkToOriginal != editorIsLinkToOriginal)
                 {
                     changed = true;
-                    site.ConfigImageEditorIsLinkToOriginal = editorIsLinkToOriginal;
+                    siteInfo.Additional.ConfigImageEditorIsLinkToOriginal = editorIsLinkToOriginal;
                 }
 
                 if (changed)
                 {
-                    await DataProvider.SiteRepository.UpdateAsync(site);
+                    DataProvider.SiteDao.Update(siteInfo);
                 }
 
                 return Ok(new
@@ -253,7 +252,7 @@ namespace SiteServer.API.Controllers.Home
             }
             catch (Exception ex)
             {
-                await LogUtils.AddErrorLogAsync(ex);
+                LogUtils.AddErrorLog(ex);
                 return InternalServerError(ex);
             }
         }

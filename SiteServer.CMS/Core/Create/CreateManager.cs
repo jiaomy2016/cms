@@ -1,35 +1,35 @@
-﻿using System.Threading.Tasks;
-using SiteServer.CMS.DataCache;
-using SiteServer.Abstractions;
-using SiteServer.CMS.Repositories;
-
+﻿using SiteServer.CMS.DataCache;
+using SiteServer.CMS.DataCache.Content;
+using SiteServer.Utils;
+using SiteServer.CMS.Model.Attributes;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Core.Create
 {
     public static class CreateManager
     {
-        private static async Task<(string Name, int PageCount)> GetTaskNameAsync(CreateType createType, int siteId, int channelId, int contentId,
-            int fileTemplateId, int specialId)
+        private static string GetTaskName(ECreateType createType, int siteId, int channelId, int contentId,
+            int fileTemplateId, int specialId, out int pageCount)
         {
+            pageCount = 0;
             var name = string.Empty;
-            var pageCount = 0;
-
-            if (createType == CreateType.Channel)
+            if (createType == ECreateType.Channel)
             {
-                name = channelId == siteId ? "首页" : ChannelManager.GetChannelNameAsync(siteId, channelId).GetAwaiter().GetResult();
+                name = channelId == siteId ? "首页" : ChannelManager.GetChannelName(siteId, channelId);
                 if (!string.IsNullOrEmpty(name))
                 {
                     pageCount = 1;
                 }
             }
-            else if (createType == CreateType.AllContent)
+            else if (createType == ECreateType.AllContent)
             {
-                var site = await DataProvider.SiteRepository.GetAsync(siteId);
-                var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
                 
                 if (channelInfo != null)
                 {
-                    var count = await DataProvider.ContentRepository.GetCountAsync(site, channelInfo);
+                    var count = ContentManager.GetCount(siteInfo, channelInfo, true);
                     if (count > 0)
                     {
                         pageCount = count;
@@ -37,159 +37,164 @@ namespace SiteServer.CMS.Core.Create
                     }
                 }
             }
-            else if (createType == CreateType.Content)
+            else if (createType == ECreateType.Content)
             {
-                var title = await DataProvider.ContentRepository.GetValueAsync(await ChannelManager.GetTableNameAsync(await 
-                    DataProvider.SiteRepository.GetAsync(siteId), channelId), contentId, ContentAttribute.Title);
-                if (!string.IsNullOrEmpty(title))
+                var tuple = DataProvider.ContentDao.GetValue(ChannelManager.GetTableName(
+                    SiteManager.GetSiteInfo(siteId), channelId), contentId, ContentAttribute.Title);
+                if (tuple != null)
                 {
-                    name = title;
+                    name = tuple.Item2;
                     pageCount = 1;
                 }
             }
-            else if (createType == CreateType.File)
+            else if (createType == ECreateType.File)
             {
-                name = await TemplateManager.GetTemplateNameAsync(siteId, fileTemplateId);
+                name = TemplateManager.GetTemplateName(siteId, fileTemplateId);
                 if (!string.IsNullOrEmpty(name))
                 {
                     pageCount = 1;
                 }
             }
-            else if (createType == CreateType.Special)
+            else if (createType == ECreateType.Special)
             {
-                name = await SpecialManager.GetTitleAsync(siteId, specialId);
+                name = SpecialManager.GetTitle(siteId, specialId);
                 if (!string.IsNullOrEmpty(name))
                 {
                     pageCount = 1;
                 }
             }
-            return (name, pageCount);
+            return name;
         }
 
-        public static async Task CreateByAllAsync(int siteId)
+        public static void CreateByAll(int siteId)
         {
             CreateTaskManager.ClearAllTask(siteId);
 
-            var channelIdList = await ChannelManager.GetChannelIdListAsync(siteId);
+            var channelIdList = ChannelManager.GetChannelIdList(siteId);
             foreach (var channelId in channelIdList)
             {
-                await CreateChannelAsync(siteId, channelId);
+                CreateChannel(siteId, channelId);
             }
 
             foreach (var channelId in channelIdList)
             {
-                await CreateAllContentAsync(siteId, channelId);
+                CreateAllContent(siteId, channelId);
             }
 
-            foreach (var specialId in await SpecialManager.GetAllSpecialIdListAsync(siteId))
+            foreach (var specialId in SpecialManager.GetAllSpecialIdList(siteId))
             {
-                await CreateSpecialAsync(siteId, specialId);
+                CreateSpecial(siteId, specialId);
             }
 
-            foreach (var fileTemplateId in await TemplateManager.GetAllFileTemplateIdListAsync(siteId))
+            foreach (var fileTemplateId in TemplateManager.GetAllFileTemplateIdList(siteId))
             {
-                await CreateFileAsync(siteId, fileTemplateId);
+                CreateFile(siteId, fileTemplateId);
             }
         }
 
-        public static async Task CreateByTemplateAsync(int siteId, int templateId)
+        public static void CreateByTemplate(int siteId, int templateId)
         {
-            var templateInfo = await TemplateManager.GetTemplateAsync(siteId, templateId);
+            var templateInfo = TemplateManager.GetTemplateInfo(siteId, templateId);
 
-            if (templateInfo.Type == TemplateType.IndexPageTemplate)
+            if (templateInfo.TemplateType == TemplateType.IndexPageTemplate)
             {
-                await CreateChannelAsync(siteId, siteId);
+                CreateChannel(siteId, siteId);
             }
-            else if (templateInfo.Type == TemplateType.ChannelTemplate)
+            else if (templateInfo.TemplateType == TemplateType.ChannelTemplate)
             {
-                var channelIdList = await DataProvider.ChannelRepository.GetChannelIdListAsync(templateInfo);
+                var channelIdList = DataProvider.ChannelDao.GetChannelIdList(templateInfo);
                 foreach (var channelId in channelIdList)
                 {
-                    await CreateChannelAsync(siteId, channelId);
+                    CreateChannel(siteId, channelId);
                 }
             }
-            else if (templateInfo.Type == TemplateType.ContentTemplate)
+            else if (templateInfo.TemplateType == TemplateType.ContentTemplate)
             {
-                var channelIdList = await DataProvider.ChannelRepository.GetChannelIdListAsync(templateInfo);
+                var channelIdList = DataProvider.ChannelDao.GetChannelIdList(templateInfo);
                 foreach (var channelId in channelIdList)
                 {
-                    await CreateAllContentAsync(siteId, channelId);
+                    CreateAllContent(siteId, channelId);
                 }
             }
-            else if (templateInfo.Type == TemplateType.FileTemplate)
+            else if (templateInfo.TemplateType == TemplateType.FileTemplate)
             {
-                await CreateFileAsync(siteId, templateId);
+                CreateFile(siteId, templateId);
             }
         }
 
-        public static async Task CreateChannelAsync(int siteId, int channelId)
+        public static void CreateChannel(int siteId, int channelId)
         {
             if (siteId <= 0 || channelId <= 0) return;
 
-            var (taskName, pageCount) = await GetTaskNameAsync(CreateType.Channel, siteId, channelId, 0, 0, 0);
+            int pageCount;
+            var taskName = GetTaskName(ECreateType.Channel, siteId, channelId, 0, 0, 0, out pageCount);
             if (pageCount == 0) return;
 
-            var taskInfo = new CreateTaskInfo(0, taskName, CreateType.Channel, siteId, channelId, 0, 0, 0, pageCount);
+            var taskInfo = new CreateTaskInfo(0, taskName, ECreateType.Channel, siteId, channelId, 0, 0, 0, pageCount);
             CreateTaskManager.AddPendingTask(taskInfo);
         }
 
-        public static async Task CreateContentAsync(int siteId, int channelId, int contentId)
+        public static void CreateContent(int siteId, int channelId, int contentId)
         {
             if (siteId <= 0 || channelId <= 0 || contentId <= 0) return;
 
-            var (taskName, pageCount) = await GetTaskNameAsync(CreateType.Content, siteId, channelId, contentId, 0, 0);
+            int pageCount;
+            var taskName = GetTaskName(ECreateType.Content, siteId, channelId, contentId, 0, 0, out pageCount);
             if (pageCount == 0) return;
 
-            var taskInfo = new CreateTaskInfo(0, taskName, CreateType.Content, siteId, channelId, contentId, 0, 0, pageCount);
+            var taskInfo = new CreateTaskInfo(0, taskName, ECreateType.Content, siteId, channelId, contentId, 0, 0, pageCount);
             CreateTaskManager.AddPendingTask(taskInfo);
         }
 
-        public static async Task CreateAllContentAsync(int siteId, int channelId)
+        public static void CreateAllContent(int siteId, int channelId)
         {
             if (siteId <= 0 || channelId <= 0) return;
 
-            var (taskName, pageCount) = await GetTaskNameAsync(CreateType.AllContent, siteId, channelId, 0, 0, 0);
+            int pageCount;
+            var taskName = GetTaskName(ECreateType.AllContent, siteId, channelId, 0, 0, 0, out pageCount);
             if (pageCount == 0) return;
 
-            var taskInfo = new CreateTaskInfo(0, taskName, CreateType.AllContent, siteId, channelId, 0, 0, 0, pageCount);
+            var taskInfo = new CreateTaskInfo(0, taskName, ECreateType.AllContent, siteId, channelId, 0, 0, 0, pageCount);
             CreateTaskManager.AddPendingTask(taskInfo);
         }
 
-        public static async Task CreateFileAsync(int siteId, int fileTemplateId)
+        public static void CreateFile(int siteId, int fileTemplateId)
         {
             if (siteId <= 0 || fileTemplateId <= 0) return;
 
-            var (taskName, pageCount) = await GetTaskNameAsync(CreateType.File, siteId, 0, 0, fileTemplateId, 0);
+            int pageCount;
+            var taskName = GetTaskName(ECreateType.File, siteId, 0, 0, fileTemplateId, 0, out pageCount);
             if (pageCount == 0) return;
 
-            var taskInfo = new CreateTaskInfo(0, taskName, CreateType.File, siteId, 0, 0, fileTemplateId, 0, pageCount);
+            var taskInfo = new CreateTaskInfo(0, taskName, ECreateType.File, siteId, 0, 0, fileTemplateId, 0, pageCount);
             CreateTaskManager.AddPendingTask(taskInfo);
         }
 
-        public static async Task CreateSpecialAsync(int siteId, int specialId)
+        public static void CreateSpecial(int siteId, int specialId)
         {
             if (siteId <= 0 || specialId <= 0) return;
 
-            var (taskName, pageCount) = await GetTaskNameAsync(CreateType.Special, siteId, 0, 0, 0, specialId);
+            int pageCount;
+            var taskName = GetTaskName(ECreateType.Special, siteId, 0, 0, 0, specialId, out pageCount);
             if (pageCount == 0) return;
 
-            var taskInfo = new CreateTaskInfo(0, taskName, CreateType.Special, siteId, 0, 0, 0, specialId, pageCount);
+            var taskInfo = new CreateTaskInfo(0, taskName, ECreateType.Special, siteId, 0, 0, 0, specialId, pageCount);
             CreateTaskManager.AddPendingTask(taskInfo);
         }
 
-        public static async Task TriggerContentChangedEventAsync(int siteId, int channelId)
+        public static void TriggerContentChangedEvent(int siteId, int channelId)
         {
             if (siteId <= 0 || channelId <= 0) return;
 
-            var channelInfo = await ChannelManager.GetChannelAsync(siteId, channelId);
-            var channelIdList = StringUtils.GetIntList(channelInfo.CreateChannelIdsIfContentChanged);
-            if (channelInfo.IsCreateChannelIfContentChanged && !channelIdList.Contains(channelId))
+            var channelInfo = ChannelManager.GetChannelInfo(siteId, channelId);
+            var channelIdList = TranslateUtils.StringCollectionToIntList(channelInfo.Additional.CreateChannelIdsIfContentChanged);
+            if (channelInfo.Additional.IsCreateChannelIfContentChanged && !channelIdList.Contains(channelId))
             {
                 channelIdList.Add(channelId);
             }
             foreach (var theChannelId in channelIdList)
             {
-                await CreateChannelAsync(siteId, theChannelId);
+                CreateChannel(siteId, theChannelId);
             }
         }
     }

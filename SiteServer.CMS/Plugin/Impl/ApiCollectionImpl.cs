@@ -1,27 +1,25 @@
-﻿
-
-using SiteServer.CMS.Plugin.Apis;
+﻿using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Impl
 {
-    public class ApiCollectionImpl
+    public class ApiCollectionImpl: IApiCollection
     {
-        public AdminApi AdminApi { get; set; }
+        public IAdminApi AdminApi { get; set; }
 
-        public ConfigApi ConfigApi { get; set; }
+        public IConfigApi ConfigApi { get; set; }
 
-        public ContentApi ContentApi { get; set; }
+        public IContentApi ContentApi { get; set; }
 
-        public ChannelApi ChannelApi { get; set; }
+        public IChannelApi ChannelApi { get; set; }
 
-        public ParseApi ParseApi { get; set; }
+        public IParseApi ParseApi { get; set; }
 
-        public PluginApi PluginApi { get; set; }
+        public IPluginApi PluginApi { get; set; }
 
-        public SiteApi SiteApi { get; set; }
+        public ISiteApi SiteApi { get; set; }
 
-        public UserApi UserApi { get; set; }
+        public IUserApi UserApi { get; set; }
 
-        public UtilsApi UtilsApi { get; set; }
+        public IUtilsApi UtilsApi { get; set; }
     }
 }

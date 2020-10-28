@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web.UI.WebControls;
-using SiteServer.CMS.Context;
+using SiteServer.Utils;
+using SiteServer.CMS.Core;
 using SiteServer.CMS.DataCache;
-using SiteServer.CMS.Context.Enumerations;
-using SiteServer.CMS.Repositories;
-using SiteServer.Abstractions;
+using SiteServer.CMS.Model;
+using SiteServer.CMS.Model.Enumerations;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Cms
 {
@@ -22,7 +23,7 @@ namespace SiteServer.BackgroundPages.Cms
         public DropDownList DdlIsAutomatic;
         public DropDownList DdlTranslateDoneType;
 
-        private Channel _channel;
+        private ChannelInfo _channelInfo;
 
         public static string GetOpenWindowString(int siteId, int channelId)
         {
@@ -38,27 +39,27 @@ namespace SiteServer.BackgroundPages.Cms
 
             PageUtils.CheckRequestParameter("siteId", "channelId");
             var channelId = int.Parse(AuthRequest.GetQueryString("channelId"));
-            _channel = ChannelManager.GetChannelAsync(SiteId, channelId).GetAwaiter().GetResult();
+            _channelInfo = ChannelManager.GetChannelInfo(SiteId, channelId);
 
             if (IsPostBack) return;
 
-            ECrossSiteTransTypeUtilsExtensions.AddAllListItems(DdlTransType, Site.ParentId > 0);
+            ECrossSiteTransTypeUtils.AddAllListItems(DdlTransType, SiteInfo.ParentId > 0);
 
-            ControlUtils.SelectSingleItem(DdlTransType, ECrossSiteTransTypeUtils.GetValue(_channel.TransType));
+            ControlUtils.SelectSingleItem(DdlTransType, ECrossSiteTransTypeUtils.GetValue(_channelInfo.Additional.TransType));
 
             DdlTransType_OnSelectedIndexChanged(null, EventArgs.Empty);
-            ControlUtils.SelectSingleItem(DdlSiteId, _channel.TransSiteId.ToString());
+            ControlUtils.SelectSingleItem(DdlSiteId, _channelInfo.Additional.TransSiteId.ToString());
 
 
             DdlSiteId_OnSelectedIndexChanged(null, EventArgs.Empty);
-            ControlUtils.SelectMultiItems(LbChannelId, StringUtils.GetStringList(_channel.TransChannelIds));
-            TbNodeNames.Text = _channel.TransChannelNames;
+            ControlUtils.SelectMultiItems(LbChannelId, TranslateUtils.StringCollectionToStringList(_channelInfo.Additional.TransChannelIds));
+            TbNodeNames.Text = _channelInfo.Additional.TransChannelNames;
 
             EBooleanUtils.AddListItems(DdlIsAutomatic, "系统自动转发", "需手动操作");
-            ControlUtils.SelectSingleItemIgnoreCase(DdlIsAutomatic, _channel.TransIsAutomatic.ToString());
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsAutomatic, _channelInfo.Additional.TransIsAutomatic.ToString());
 
-            ETranslateContentTypeUtilsExtensions.AddListItems(DdlTranslateDoneType, false);
-            ControlUtils.SelectSingleItem(DdlTranslateDoneType, ETranslateContentTypeUtils.GetValue(_channel.TransDoneType));
+            ETranslateContentTypeUtils.AddListItems(DdlTranslateDoneType, false);
+            ControlUtils.SelectSingleItem(DdlTranslateDoneType, ETranslateContentTypeUtils.GetValue(_channelInfo.Additional.TransDoneType));
         }
 
         protected void DdlTransType_OnSelectedIndexChanged(object sender, EventArgs e)
@@ -96,12 +97,12 @@ namespace SiteServer.BackgroundPages.Cms
 
             if (PhSite.Visible)
             {
-                var siteIdList = DataProvider.SiteRepository.GetSiteIdListAsync().GetAwaiter().GetResult();
+                var siteIdList = SiteManager.GetSiteIdList();
 
                 var allParentSiteIdList = new List<int>();
                 if (contributeType == ECrossSiteTransType.AllParentSite)
                 {
-                    DataProvider.SiteRepository.GetAllParentSiteIdListAsync(allParentSiteIdList, siteIdList, SiteId).GetAwaiter().GetResult();
+                    SiteManager.GetAllParentSiteIdList(allParentSiteIdList, siteIdList, SiteId);
                 }
                 else if (contributeType == ECrossSiteTransType.SelfSite)
                 {
@@ -113,7 +114,9 @@ namespace SiteServer.BackgroundPages.Cms
 
                 foreach (var psId in siteIdList)
                 {
-                    var psInfo = DataProvider.SiteRepository.GetAsync(psId).GetAwaiter().GetResult();
+                    var psInfo = SiteManager.GetSiteInfo(psId);
+                    if(psInfo == null) continue;
+
                     var show = false;
                     if (contributeType == ECrossSiteTransType.SpecifiedSite)
                     {
@@ -128,7 +131,7 @@ namespace SiteServer.BackgroundPages.Cms
                     }
                     else if (contributeType == ECrossSiteTransType.ParentSite)
                     {
-                        if (psInfo.Id == Site.ParentId || (Site.ParentId == 0 && psInfo.Root))
+                        if (psInfo.Id == SiteInfo.ParentId || (SiteInfo.ParentId == 0 && psInfo.IsRoot))
                         {
                             show = true;
                         }
@@ -136,7 +139,7 @@ namespace SiteServer.BackgroundPages.Cms
                     if (!show) continue;
 
                     var listitem = new ListItem(psInfo.SiteName, psId.ToString());
-                    if (psInfo.Root) listitem.Selected = true;
+                    if (psInfo.IsRoot) listitem.Selected = true;
                     DdlSiteId.Items.Add(listitem);
                 }
             }
@@ -148,7 +151,7 @@ namespace SiteServer.BackgroundPages.Cms
             LbChannelId.Items.Clear();
             if (PhSite.Visible && DdlSiteId.Items.Count > 0)
             {
-                ChannelManager.AddListItemsForAddContentAsync(LbChannelId.Items, DataProvider.SiteRepository.GetAsync(int.Parse(DdlSiteId.SelectedValue)).GetAwaiter().GetResult(), false, AuthRequest.AdminPermissionsImpl).GetAwaiter().GetResult();
+                ChannelManager.AddListItemsForAddContent(LbChannelId.Items, SiteManager.GetSiteInfo(int.Parse(DdlSiteId.SelectedValue)), false, AuthRequest.AdminPermissionsImpl);
             }
         }
 
@@ -158,19 +161,19 @@ namespace SiteServer.BackgroundPages.Cms
 
             try
             {
-                _channel.TransType = ECrossSiteTransTypeUtils.GetEnumType(DdlTransType.SelectedValue);
-                _channel.TransSiteId = _channel.TransType == ECrossSiteTransType.SpecifiedSite ? TranslateUtils.ToInt(DdlSiteId.SelectedValue) : 0;
-                _channel.TransChannelIds = ControlUtils.GetSelectedListControlValueCollection(LbChannelId);
-                _channel.TransChannelNames = TbNodeNames.Text;
+                _channelInfo.Additional.TransType = ECrossSiteTransTypeUtils.GetEnumType(DdlTransType.SelectedValue);
+                _channelInfo.Additional.TransSiteId = _channelInfo.Additional.TransType == ECrossSiteTransType.SpecifiedSite ? TranslateUtils.ToInt(DdlSiteId.SelectedValue) : 0;
+                _channelInfo.Additional.TransChannelIds = ControlUtils.GetSelectedListControlValueCollection(LbChannelId);
+                _channelInfo.Additional.TransChannelNames = TbNodeNames.Text;
 
-                _channel.TransIsAutomatic = TranslateUtils.ToBool(DdlIsAutomatic.SelectedValue);
+                _channelInfo.Additional.TransIsAutomatic = TranslateUtils.ToBool(DdlIsAutomatic.SelectedValue);
 
                 var translateDoneType = ETranslateContentTypeUtils.GetEnumType(DdlTranslateDoneType.SelectedValue);
-                _channel.TransDoneType = translateDoneType;
+                _channelInfo.Additional.TransDoneType = translateDoneType;
 
-                DataProvider.ChannelRepository.UpdateAsync(_channel).GetAwaiter().GetResult();
+                DataProvider.ChannelDao.Update(_channelInfo);
 
-                AuthRequest.AddSiteLogAsync(SiteId, "修改跨站转发设置").GetAwaiter().GetResult();
+                AuthRequest.AddSiteLog(SiteId, "修改跨站转发设置");
 
                 isSuccess = true;
             }

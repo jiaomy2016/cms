@@ -1,50 +1,49 @@
 ﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.Abstractions;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
-
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class ParseApi
+    public class ParseApi : IParseApi
     {
         private ParseApi() { }
 
         private static ParseApi _instance;
-        public static ParseApi Instance => _instance ??= new ParseApi();
+        public static ParseApi Instance => _instance ?? (_instance = new ParseApi());
 
         public Dictionary<string, string> GetStlElements(string html, List<string> stlElementNames)
         {
             return StlParserUtility.GetStlElements(html, stlElementNames);
         }
 
-        public async Task<string> ParseAsync(string html, IParseContext context)
+        public string Parse(string html, IParseContext context)
         {
-            return await StlParserManager.ParseInnerContentAsync(html, (ParseContextImpl)context);
+            return StlParserManager.ParseInnerContent(html, (ParseContextImpl)context);
         }
 
-        public async Task<string> ParseAttributeValueAsync(string attributeValue, IParseContext context)
+        public string ParseAttributeValue(string attributeValue, IParseContext context)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(context.SiteId);
-            var templateInfo = new Template
+            var siteInfo = SiteManager.GetSiteInfo(context.SiteId);
+            var templateInfo = new TemplateInfo
             {
                 Id = context.TemplateId,
-                Type = context.TemplateType
+                TemplateType = context.TemplateType
             };
-            var pageInfo = await PageInfo.GetPageInfoAsync(context.ChannelId, context.ContentId, site, templateInfo, new Dictionary<string, object>());
+            var pageInfo = new PageInfo(context.ChannelId, context.ContentId, siteInfo, templateInfo, new Dictionary<string, object>());
             var contextInfo = new ContextInfo(pageInfo);
-            return await StlEntityParser.ReplaceStlEntitiesForAttributeValueAsync(attributeValue, pageInfo, contextInfo);
+            return StlEntityParser.ReplaceStlEntitiesForAttributeValue(attributeValue, pageInfo, contextInfo);
         }
 
-        public async Task<string> GetCurrentUrlAsync(IParseContext context)
+        public string GetCurrentUrl(IParseContext context)
         {
-            var site = await DataProvider.SiteRepository.GetAsync(context.SiteId);
-            return await StlParserUtility.GetStlCurrentUrlAsync(site, context.ChannelId, context.ContentId,
-                (Content)context.ContentInfo, context.TemplateType, context.TemplateId, false);
+            var siteInfo = SiteManager.GetSiteInfo(context.SiteId);
+            return StlParserUtility.GetStlCurrentUrl(siteInfo, context.ChannelId, context.ContentId,
+                (ContentInfo)context.ContentInfo, context.TemplateType, context.TemplateId, false);
         }
     }
 }

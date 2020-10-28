@@ -1,5 +1,5 @@
 ﻿var $api = new apiUtils.Api(apiUrl + '/pages/settings/adminRoleAdd');
-var $roleId = utils.getQueryInt('roleId');
+var $roleId = pageUtils.getQueryInt('roleId');
 
 var data = {
   pageLoad: false,
@@ -151,13 +151,13 @@ var methods = {
       return;
     }
 
-    utils.loading(true);
+    pageUtils.loading(true);
     var $this = this;
 
     $api.getAt(this.siteInfo.id, {
       roleId: $roleId
     }, function (err, res) {
-      utils.loading(false);
+      pageUtils.loading(false);
       if (err || !res || !res.value) return;
 
       $this.siteInfo.permissionInfo = $this.getPermissionInfo(res);
@@ -247,7 +247,7 @@ var methods = {
 
   apiSubmit: function () {
     var $this = this;
-    utils.loading(true);
+    pageUtils.loading(true);
 
     var sitePermissions = [];
     for (var i = 0; i < this.siteInfoList.length; i++){
@@ -269,7 +269,7 @@ var methods = {
         generalPermissions: this.checkedPermissions,
         sitePermissions: sitePermissions
       }, function (err, res) {
-        utils.loading(false);
+        pageUtils.loading(false);
         if (err) {
           $this.pageAlert = {
             type: 'danger',
@@ -293,7 +293,7 @@ var methods = {
         generalPermissions: this.checkedPermissions,
         sitePermissions: sitePermissions
       }, function (err, res) {
-        utils.loading(false);
+        pageUtils.loading(false);
         if (err) {
           $this.pageAlert = {
             type: 'danger',

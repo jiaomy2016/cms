@@ -1,103 +1,101 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using SiteServer.CMS.Context;
 using SiteServer.CMS.Core;
-using SiteServer.Abstractions;
+using SiteServer.CMS.DataCache;
+using SiteServer.CMS.Model;
 using SiteServer.CMS.Plugin.Impl;
-using SiteServer.CMS.Repositories;
-
+using SiteServer.Utils;
+using SiteServer.Plugin;
 
 namespace SiteServer.CMS.Plugin.Apis
 {
-    public class UserApi
+    public class UserApi : IUserApi
     {
         private UserApi() { }
 
         private static UserApi _instance;
-        public static UserApi Instance => _instance ??= new UserApi();
+        public static UserApi Instance => _instance ?? (_instance = new UserApi());
 
-        public User NewInstance()
+        public IUserInfo NewInstance()
         {
-            return new User();
+            return new UserInfo();
         }
 
-        public async Task<User> GetByUserIdAsync(int userId)
+        public IUserInfo GetUserInfoByUserId(int userId)
         {
-            return await DataProvider.UserRepository.GetByUserIdAsync(userId);
+            return UserManager.GetUserInfoByUserId(userId);
         }
 
-        public async Task<User> GetByUserNameAsync(string userName)
+        public IUserInfo GetUserInfoByUserName(string userName)
         {
-            return await DataProvider.UserRepository.GetByUserNameAsync(userName);
+            return UserManager.GetUserInfoByUserName(userName);
         }
 
-        public async Task<User> GetByEmailAsync(string email)
+        public IUserInfo GetUserInfoByEmail(string email)
         {
-            return await DataProvider.UserRepository.GetByEmailAsync(email);
+            return UserManager.GetUserInfoByEmail(email);
         }
 
-        public async Task<User> GetByMobileAsync(string mobile)
+        public IUserInfo GetUserInfoByMobile(string mobile)
         {
-            return await DataProvider.UserRepository.GetByMobileAsync(mobile);
+            return UserManager.GetUserInfoByMobile(mobile);
         }
 
-        public async Task<User> GetByAccountAsync(string account)
+        public IUserInfo GetUserInfoByAccount(string account)
         {
-            return await DataProvider.UserRepository.GetByAccountAsync(account);
+            return UserManager.GetUserInfoByAccount(account);
         }
 
-        public async Task<bool> IsUserNameExistsAsync(string userName)
+        public bool IsUserNameExists(string userName)
         {
-            return await DataProvider.UserRepository.IsUserNameExistsAsync(userName);
+            return DataProvider.UserDao.IsUserNameExists(userName);
         }
 
-        public async Task<bool> IsEmailExistsAsync(string email)
+        public bool IsEmailExists(string email)
         {
-            return await DataProvider.UserRepository.IsEmailExistsAsync(email);
+            return DataProvider.UserDao.IsEmailExists(email);
         }
 
-        public async Task<bool> IsMobileExistsAsync(string mobile)
+        public bool IsMobileExists(string mobile)
         {
-            return await DataProvider.UserRepository.IsMobileExistsAsync(mobile);
+            return DataProvider.UserDao.IsMobileExists(mobile);
         }
 
-        public async Task<(bool Valid, string ErrorMessage)> InsertAsync(User user, string password)
+        public bool Insert(IUserInfo userInfo, string password, out string errorMessage)
         {
-            var valid = await DataProvider.UserRepository.InsertAsync(user as User, password, PageUtils.GetIpAddress());
-            return (valid.UserId > 0, valid.ErrorMessage);
+            var userId = DataProvider.UserDao.Insert(userInfo as UserInfo, password, PageUtils.GetIpAddress(), out errorMessage);
+            return userId > 0;
         }
 
-        public async Task<(bool Valid, string UserName, string ErrorMessage)> ValidateAsync(string account, string password)
+        public bool Validate(string account, string password, out string userName, out string errorMessage)
         {
-            var valid = await DataProvider.UserRepository.ValidateAsync(account, password, false);
-            return (valid.User != null, valid.UserName, valid.ErrorMessage);
+            var userInfo = DataProvider.UserDao.Validate(account, password, false, out userName, out errorMessage);
+            return userInfo != null;
         }
 
-        public async Task<(bool Success, string ErrorMessage)> ChangePasswordAsync(string userName, string password)
+        public bool ChangePassword(string userName, string password, out string errorMessage)
         {
-            var valid = await DataProvider.UserRepository.ChangePasswordAsync(userName, password);
-            return (valid.IsValid, valid.ErrorMessage);
+            return DataProvider.UserDao.ChangePassword(userName, password, out errorMessage);
         }
 
-        public async Task UpdateAsync(User userInfo)
+        public void Update(IUserInfo userInfo)
         {
-            await DataProvider.UserRepository.UpdateAsync(userInfo as User);
+            DataProvider.UserDao.Update(userInfo as UserInfo);
         }
 
-        public async Task<(bool Valid, string ErrorMessage)> IsPasswordCorrectAsync(string password)
+        public bool IsPasswordCorrect(string password, out string errorMessage)
         {
-            return await UserRepository.IsPasswordCorrectAsync(password);
+            return DataProvider.UserDao.IsPasswordCorrect(password, out errorMessage);
         }
 
-        public async Task AddLogAsync(string userName, string action, string summary)
+        public void AddLog(string userName, string action, string summary)
         {
-            await LogUtils.AddUserLogAsync(userName, action, summary);
+            LogUtils.AddUserLog(userName, action, summary);
         }
 
-        public async Task<IEnumerable<UserLog>> GetLogsAsync(string userName, int totalNum, string action = "")
+        public List<ILogInfo> GetLogs(string userName, int totalNum, string action = "")
         {
-            return await DataProvider.UserLogRepository.ListAsync(userName, totalNum, action);
+            return DataProvider.UserLogDao.List(userName, totalNum, action);
         }
 
         public string GetAccessToken(int userId, string userName, TimeSpan expiresAt)
@@ -110,7 +108,7 @@ namespace SiteServer.CMS.Plugin.Apis
             return AuthenticatedRequest.GetAccessToken(userId, userName, expiresAt);
         }
 
-        public AccessTokenImpl ParseAccessToken(string accessToken)
+        public IAccessToken ParseAccessToken(string accessToken)
         {
             return AuthenticatedRequest.ParseAccessToken(accessToken);
         }
