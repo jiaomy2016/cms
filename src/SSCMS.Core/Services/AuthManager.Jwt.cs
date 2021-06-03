@@ -24,6 +24,16 @@ namespace SSCMS.Core.Services
             });
         }
 
+        private static string GetTokenCacheKey(Administrator admin)
+        {
+            return $"admin:{admin.Id}:token";
+        }
+
+        private static string GetTokenCacheKey(User user)
+        {
+            return $"user:{user.Id}:token";
+        }
+
         public string AuthenticateAdministrator(Administrator administrator, bool isPersistent)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
@@ -56,7 +66,11 @@ namespace SSCMS.Core.Services
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
-            return tokenHandler.WriteToken(token);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            _cacheManager.AddOrUpdate(GetTokenCacheKey(administrator), tokenString);
+
+            return tokenString;
         }
 
         public async Task<string> RefreshAdministratorTokenAsync(string accessToken)
@@ -126,7 +140,11 @@ namespace SSCMS.Core.Services
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
-            return tokenHandler.WriteToken(token);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            _cacheManager.AddOrUpdate(GetTokenCacheKey(user), tokenString);
+
+            return tokenString;
         }
 
         public async Task<string> RefreshUserTokenAsync(string accessToken)

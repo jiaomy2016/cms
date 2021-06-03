@@ -3,20 +3,22 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Sites
 {
     public partial class SitesTemplatesController
     {
+        [RequestSizeLimit(long.MaxValue)]
         [HttpPost, Route(RouteUpload)]
         public async Task<ActionResult<ListResult>> Upload([FromForm] IFormFile file)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsSitesTemplates))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsSitesTemplates))
             {
                 return Unauthorized();
             }
 
-            if (file == null) return this.Error("请选择有效的文件上传");
+            if (file == null) return this.Error(Constants.ErrorUpload);
             var extension = PathUtils.GetExtension(file.FileName);
             if (!FileUtils.IsZip(extension))
             {

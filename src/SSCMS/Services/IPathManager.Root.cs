@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System.Threading.Tasks;
 using SSCMS.Models;
 
 namespace SSCMS.Services
@@ -22,6 +22,8 @@ namespace SSCMS.Services
         string GetSiteFilesPath(params string[] paths);
 
         string GetSiteFilesUrl(params string[] paths);
+
+        string GetSiteFilesUrl(Site site, params string[] paths);
 
         string GetAdministratorUploadPath(int userId, params string[] paths);
 
@@ -47,19 +49,17 @@ namespace SSCMS.Services
 
         string GetUserAvatarUrl(User user);
 
-        string GetApiUrl(params string[] paths);
+        string GetDownloadApiUrl(Site site, int channelId, int contentId, string fileUrl);
 
-        string GetDownloadApiUrl(int siteId, int channelId, int contentId, string fileUrl);
+        string GetDownloadApiUrl(Site site, string fileUrl);
 
-        string GetDownloadApiUrl(int siteId, string fileUrl);
+        string GetDownloadApiUrl(string filePath);
 
-        string GetDownloadApiUrl(bool isInner, string filePath);
+        string GetDynamicApiUrl(Site site);
 
-        string GetDynamicApiUrl();
+        string GetIfApiUrl(Site site);
 
-        string GetIfApiUrl();
-
-        string GetPageContentsApiUrl();
+        string GetPageContentsApiUrl(Site site);
 
         string GetPageContentsApiParameters(int siteId, int pageChannelId, int templateId, int totalNum, int pageCount,
             int currentPageIndex, string stlPageContentsElement);

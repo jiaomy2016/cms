@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using SSCMS.Configuration;
 using SSCMS.Dto;
 using SSCMS.Enums;
 using SSCMS.Models;
@@ -74,6 +73,8 @@ namespace SSCMS.Repositories
         Task<string> GetChannelNameNavigationAsync(int siteId, int channelId);
 
         Task<string> GetChannelNameNavigationAsync(int siteId, int currentChannelId, int channelId);
+
+        Task<List<int>> GetChannelIdNavigationAsync(int siteId, int channelId);
 
         Task<bool> IsAncestorOrSelfAsync(int siteId, int parentId, int childId);
 

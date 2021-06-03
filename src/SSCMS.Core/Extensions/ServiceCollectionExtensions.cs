@@ -27,7 +27,7 @@ namespace SSCMS.Core.Extensions
         {
             services.AddCacheManagerConfiguration(async settings =>
             {
-                var isBackPlane = false;
+                var isRedis = false;
                 if (!string.IsNullOrEmpty(redisConnectionString))
                 {
                     var redis = new Redis(redisConnectionString);
@@ -35,9 +35,6 @@ namespace SSCMS.Core.Extensions
                     if (isConnectionWorks)
                     {
                         settings
-                            .WithMicrosoftMemoryCacheHandle()
-                            .WithExpiration(ExpirationMode.None, TimeSpan.Zero)
-                            .And
                             .WithRedisConfiguration("redis", config =>
                             {
                                 if (!string.IsNullOrEmpty(redis.Password))
@@ -59,11 +56,11 @@ namespace SSCMS.Core.Extensions
                             .WithRedisBackplane("redis")
                             .WithRedisCacheHandle("redis");
 
-                        isBackPlane = true;
+                        isRedis = true;
                     }
                 }
 
-                if (!isBackPlane)
+                if (!isRedis)
                 {
                     settings
                         .WithMicrosoftMemoryCacheHandle()
@@ -103,12 +100,19 @@ namespace SSCMS.Core.Extensions
 
         public static void AddServices(this IServiceCollection services)
         {
-            services.AddScoped(typeof(SSCMS.Services.ICacheManager<>), typeof(CacheManager<>));
+            services.AddScoped<ICacheManager, Services.CacheManager>();
             services.AddScoped<IAuthManager, AuthManager>();
             services.AddScoped<IPathManager, PathManager>();
             services.AddScoped<ICreateManager, CreateManager>();
             services.AddScoped<IDatabaseManager, DatabaseManager>();
             services.AddScoped<IParseManager, ParseManager>();
+        }
+
+        public static void AddPseudoServices(this IServiceCollection services)
+        {
+            services.AddScoped<ICensorManager, CensorManager>();
+            services.AddScoped<IMailManager, MailManager>();
+            services.AddScoped<ISmsManager, SmsManager>();
         }
 
         public static void AddWxManager(this IServiceCollection services, IConfiguration configuration)

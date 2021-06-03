@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using Datory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -83,8 +82,6 @@ namespace SSCMS.Core.Services
         public IDatabase Database => new Database(DatabaseType, DatabaseConnectionString);
 
         public IRedis Redis => new Redis(RedisConnectionString);
-
-        public string ApiHost => _config.GetValue(nameof(ApiHost), "/");
 
         public bool IsDisablePlugins => _config.GetValue(nameof(IsDisablePlugins), false);
 

@@ -2,8 +2,8 @@
 using System.Text;
 using System.Threading.Tasks;
 using SSCMS.Configuration;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Services;
@@ -12,11 +12,11 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "播放视频", Description = "通过 stl:player 标签在模板中播放视频")]
-    public class StlPlayer
+    public static class StlPlayer
 	{
-        private StlPlayer() { }
-		public const string ElementName = "stl:player";
-        public const string EditorPlaceHolder = @"src=""../assets/editor-images/player.png""";
+        public const string ElementName = "stl:player";
+        public const string EditorPlaceHolder1 = @"src=""/sitefiles/assets/images/video-clip.png""";
+        public const string EditorPlaceHolder2 = @"src=""@sitefiles/assets/images/video-clip.png""";
 
         [StlAttribute(Title = "指定存储媒体的字段")]
         public const string Type = nameof(Type);
@@ -94,10 +94,10 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, playUrl, imageUrl, playBy, width, height, type, isAutoPlay);
+            return await ParseAsync(parseManager, playUrl, imageUrl, playBy, width, height, type, isAutoPlay);
 		}
 
-        private static async Task<object> ParseImplAsync(IParseManager parseManager, string playUrl, string imageUrl, string playBy, int width, int height, string type, bool isAutoPlay)
+        private static async Task<object> ParseAsync(IParseManager parseManager, string playUrl, string imageUrl, string playBy, int width, int height, string type, bool isAutoPlay)
         {
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
@@ -191,7 +191,7 @@ namespace SSCMS.Core.StlParser.StlElement
                     imageHtml = $@"<img src=""{imageUrl}"" style=""{(width > 0 ? $"width:{width}px;" : string.Empty)}{(height > 0 ? $"height:{height}px;" : string.Empty)}"" />";
                 }
 
-                var swfUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.FlowPlayer.Swf);
+                var swfUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.FlowPlayer.Swf);
                 return $@"
 <a href=""{playUrl}"" style=""display:block;{(width > 0 ? $"width:{width}px;" : string.Empty)}{(height > 0 ? $"height:{height}px;" : string.Empty)}"" id=""{elementId}"">{imageHtml}</a>
 <script language=""javascript"">

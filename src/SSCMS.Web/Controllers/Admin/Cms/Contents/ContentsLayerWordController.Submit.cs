@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils.Office;
 using SSCMS.Dto;
 using SSCMS.Models;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Contents
 {
@@ -16,8 +16,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         public async Task<ActionResult<ObjectResult<List<int>>>> Submit([FromBody] SubmitRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, MenuUtils.ContentPermissions.Add))
             {
                 return Unauthorized();
             }
@@ -36,27 +36,34 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
             {
                 if (string.IsNullOrEmpty(file.FileName) || string.IsNullOrEmpty(file.Title)) continue;
 
-                var filePath = _pathManager.GetTemporaryFilesPath(file.FileName);
-                var (title, imageUrl, body) = await WordManager.GetWordAsync(_pathManager, site, request.IsFirstLineTitle, request.IsClearFormat, request.IsFirstLineIndent, request.IsClearFontSize, request.IsClearFontFamily, request.IsClearImages, filePath, file.Title);
-
-                if (string.IsNullOrEmpty(title)) continue;
-
-                var contentInfo = new Content
+                try
                 {
-                    ChannelId = channel.Id,
-                    SiteId = request.SiteId,
-                    AdminId = adminId,
-                    LastEditAdminId = adminId,
-                    AddDate = DateTime.Now,
-                    Checked = isChecked,
-                    CheckedLevel = request.CheckedLevel,
-                    Title = title,
-                    ImageUrl = imageUrl,
-                    Body = body
-                };
+                    var filePath = _pathManager.GetTemporaryFilesPath(file.FileName);
+                    var (title, imageUrl, body) = await WordManager.GetWordAsync(_pathManager, site, request.IsFirstLineTitle, request.IsClearFormat, request.IsFirstLineIndent, request.IsClearFontSize, request.IsClearFontFamily, request.IsClearImages, filePath, file.Title);
 
-                await _contentRepository.InsertAsync(site, channel, contentInfo);
-                contentIdList.Add(contentInfo.Id);
+                    if (string.IsNullOrEmpty(title)) continue;
+
+                    var contentInfo = new Content
+                    {
+                        ChannelId = channel.Id,
+                        SiteId = request.SiteId,
+                        AdminId = adminId,
+                        LastEditAdminId = adminId,
+                        AddDate = DateTime.Now,
+                        Checked = isChecked,
+                        CheckedLevel = request.CheckedLevel,
+                        Title = title,
+                        ImageUrl = imageUrl,
+                        Body = body
+                    };
+
+                    await _contentRepository.InsertAsync(site, channel, contentInfo);
+                    contentIdList.Add(contentInfo.Id);
+                }
+                catch (Exception ex)
+                {
+                    await _errorLogRepository.AddErrorLogAsync(ex);
+                }
             }
 
             if (isChecked)

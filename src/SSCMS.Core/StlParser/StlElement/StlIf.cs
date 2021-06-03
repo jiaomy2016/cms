@@ -4,20 +4,21 @@ using System.Text;
 using System.Threading.Tasks;
 using Datory;
 using SSCMS.Configuration;
+using SSCMS.Core.StlParser.Attributes;
+using SSCMS.Core.StlParser.Models;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
 using SSCMS.Models;
 using SSCMS.Services;
 using SSCMS.Utils;
+using Dynamic = SSCMS.Parse.Dynamic;
 
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "条件判断", Description = "通过 stl:if 标签在模板中根据条件判断显示内容")]
-    public class StlIf
+    public static class StlIf
     {
-        private StlIf() { }
         public const string ElementName = "stl:if";
 
         [StlAttribute(Title = "测试类型")]
@@ -28,6 +29,12 @@ namespace SSCMS.Core.StlParser.StlElement
 
         [StlAttribute(Title = "测试值")]
         private const string Value = nameof(Value);
+
+        [StlAttribute(Title = "判断成功输出值")]
+        private const string Yes = nameof(Yes);
+
+        [StlAttribute(Title = "判断失败输出值")]
+        private const string No = nameof(No);
 
         [StlAttribute(Title = "所处上下文")]
         private const string Context = nameof(Context);
@@ -51,8 +58,11 @@ namespace SSCMS.Core.StlParser.StlElement
         private const string TypTemplateType = "TemplateType";			                            //模板类型
         private const string TypeTopLevel = "TopLevel";			                                    //栏目级别
         private const string TypeUpChannel = "UpChannel";			                                //上级栏目
+        private const string TypeSelf = "Self";			                                            //当前栏目
         private const string TypeUpChannelOrSelf = "UpChannelOrSelf";			                    //当前栏目或上级栏目
-        private const string TypeSelfChannel = "SelfChannel";			                            //当前栏目
+        private const string TypeCurrent = "Current";			                                    //当前栏目或上级栏目
+        private const string TypeIndex = "Index";			                                        //当前页面为首页
+        private const string TypeHasChildren = "HasChildren";			                            //是否下级栏目
         private const string TypeGroupChannel = "GroupChannel";			                            //栏目组名称
         private const string TypeGroupContent = "GroupContent";			                            //内容组名称
         private const string TypeAddDate = "AddDate";			                                    //添加时间
@@ -60,52 +70,22 @@ namespace SSCMS.Core.StlParser.StlElement
         private const string TypeItemIndex = "ItemIndex";			                                //当前项序号
         private const string TypeOddItem = "OddItem";			                                    //奇数项
 
-        public static SortedList<string, string> TypeList => new SortedList<string, string>
-        {
-            {TypeIsUserLoggin, "用户是否已登录"},
-            {TypeChannelName, "栏目名称"},
-            {TypeChannelIndex, "栏目索引"},
-            {TypeTemplateName, "模板名称"},
-            {TypTemplateType, "模板类型"},
-            {TypeTopLevel, "栏目级别"},
-            {TypeUpChannel, "上级栏目"},
-            {TypeUpChannelOrSelf, "当前栏目或上级栏目"},
-            {TypeSelfChannel, "当前栏目"},
-            {TypeGroupChannel, "栏目组名称"},
-            {TypeGroupContent, "内容组名称"},
-            {TypeAddDate, "添加时间"},
-            {TypeLastModifiedDate, "最后编辑时间（仅用于判断内容）"},
-            {TypeItemIndex, "当前项序号"},
-            {TypeOddItem, "奇数项"}
-        };
-
-        public const string OperateEmpty = "Empty";
-        public const string OperateNotEmpty = "NotEmpty";			                                //值不为空
-        public const string OperateEquals = "Equals";			                                    //值等于
-        public const string OperateNotEquals = "NotEquals";			                                //值不等于
-        public const string OperateGreatThan = "GreatThan";			                                //值大于
-        public const string OperateLessThan = "LessThan";			                                //值小于
-        public const string OperateIn = "In";			                                            //值属于
-        public const string OperateNotIn = "NotIn";                                                 //值不属于
-
-        public static SortedList<string, string> OperateList => new SortedList<string, string>
-        {
-            {OperateEmpty, "值为空"},
-            {OperateNotEmpty, "值不为空"},
-            {OperateEquals, "值等于"},
-            {OperateNotEquals, "值不等于"},
-            {OperateGreatThan, "值大于"},
-            {OperateLessThan, "值小于"},
-            {OperateIn, "值属于"},
-            {OperateNotIn, "值不属于"}
-        };
-
+        private const string OperateEmpty = "Empty";
+        private const string OperateNotEmpty = "NotEmpty";			                                //值不为空
+        private const string OperateEquals = "Equals";			                                    //值等于
+        private const string OperateNotEquals = "NotEquals";			                                //值不等于
+        private const string OperateGreatThan = "GreatThan";			                                //值大于
+        private const string OperateLessThan = "LessThan";			                                //值小于
+        private const string OperateIn = "In";			                                            //值属于
+        private const string OperateNotIn = "NotIn";                                                 //值不属于
 
         internal static async Task<object> ParseAsync(IParseManager parseManager)
         {
             var testTypeStr = string.Empty;
             var testOperate = string.Empty;
             var testValue = string.Empty;
+            var yes = string.Empty;
+            var no = string.Empty;
             var onBeforeSend = string.Empty;
             var onSuccess = string.Empty;
             var onComplete = string.Empty;
@@ -130,6 +110,14 @@ namespace SSCMS.Core.StlParser.StlElement
                     {
                         testOperate = OperateEquals;
                     }
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, Yes))
+                {
+                    yes = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, No))
+                {
+                    no = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Context))
                 {
@@ -158,16 +146,26 @@ namespace SSCMS.Core.StlParser.StlElement
                 testOperate = OperateNotEmpty;
             }
 
-            return await ParseImplAsync(parseManager, testTypeStr, testOperate, testValue, onBeforeSend, onSuccess, onComplete, onError);
+            return await ParseAsync(parseManager, testTypeStr, testOperate, testValue, yes, no, onBeforeSend, onSuccess, onComplete, onError);
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, string testType, string testOperate, string testValue, string onBeforeSend, string onSuccess, string onComplete, string onError)
+        private static async Task<string> ParseAsync(IParseManager parseManager, string testType, string testOperate, string testValue, string attributeYes, string attributeNo, string onBeforeSend, string onSuccess, string onComplete, string onError)
         {
             var databaseManager = parseManager.DatabaseManager;
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
 
-            StlParserUtility.GetLoadingYesNo(contextInfo.InnerHtml, out var loading, out var yes, out var no);
+            var innerHtml = contextInfo.InnerHtml; 
+
+            StlParserUtility.GetLoadingYesNo(innerHtml, out var loading, out var yes, out var no);
+            if (string.IsNullOrEmpty(yes) && !string.IsNullOrEmpty(attributeYes))
+            {
+                yes = attributeYes;
+            }
+            if (string.IsNullOrEmpty(no) && !string.IsNullOrEmpty(attributeNo))
+            {
+                no = attributeNo;
+            }
 
             if (StringUtils.EqualsIgnoreCase(testType, TypeIsUserLoggin))
             {
@@ -203,13 +201,22 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 isSuccess = await TestTypeUpChannelAsync(parseManager, testOperate, testValue);
             }
-            else if (StringUtils.EqualsIgnoreCase(testType, TypeUpChannelOrSelf))
+            else if (StringUtils.EqualsIgnoreCase(testType, TypeSelf))
+            {
+                isSuccess = IsBool(pageInfo.PageChannelId == contextInfo.ChannelId, testOperate, testValue);
+            }
+            else if (StringUtils.EqualsIgnoreCase(testType, TypeUpChannelOrSelf) || StringUtils.EqualsIgnoreCase(testType, TypeCurrent))
             {
                 isSuccess = await TestTypeUpChannelOrSelfAsync(parseManager, testOperate, testValue);
             }
-            else if (StringUtils.EqualsIgnoreCase(testType, TypeSelfChannel))
+            else if (StringUtils.EqualsIgnoreCase(testType, TypeIndex))
             {
-                isSuccess = pageInfo.PageChannelId == contextInfo.ChannelId;
+                isSuccess = IsBool(contextInfo.ChannelId == pageInfo.SiteId, testOperate, testValue);
+            }
+            else if (StringUtils.EqualsIgnoreCase(testType, TypeHasChildren))
+            {
+                var channel = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
+                isSuccess = IsBool(channel.ChildrenCount > 0, testOperate, testValue);
             }
             else if (StringUtils.EqualsIgnoreCase(testType, TypeGroupChannel))
             {
@@ -256,6 +263,11 @@ namespace SSCMS.Core.StlParser.StlElement
             var parsedContent = isSuccess ? yes : no;
 
             if (string.IsNullOrEmpty(parsedContent)) return string.Empty;
+
+            if (parseManager.ContextInfo.IsStlEntity)
+            {
+                return parsedContent;
+            }
 
             var innerBuilder = new StringBuilder(parsedContent);
             await parseManager.ParseInnerContentAsync(innerBuilder);
@@ -422,42 +434,32 @@ namespace SSCMS.Core.StlParser.StlElement
             await pageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.StlClient);
             var elementId = StringUtils.GetElementId();
 
-            //运行解析以便为页面生成所需JS引用
-            if (!string.IsNullOrEmpty(yes))
+            var dynamicInfo = new Dynamic
             {
-                await parseManager.ParseInnerContentAsync(new StringBuilder(yes));
-            }
-            if (!string.IsNullOrEmpty(no))
-            {
-                await parseManager.ParseInnerContentAsync(new StringBuilder(no));
-            }
-
-            var dynamicInfo = new DynamicInfo(parseManager.SettingsManager)
-            {
-                ElementName = ElementName,
                 SiteId = pageInfo.SiteId,
                 ChannelId = contextInfo.ChannelId,
                 ContentId = contextInfo.ContentId,
                 TemplateId = pageInfo.Template.Id,
                 ElementId = elementId,
                 LoadingTemplate = loading,
-                SuccessTemplate = yes,
-                FailureTemplate = no,
+                YesTemplate = yes,
+                NoTemplate = no,
+                IsInline = true,
                 OnBeforeSend = onBeforeSend,
                 OnSuccess = onSuccess,
                 OnComplete = onComplete,
                 OnError = onError
             };
-            var ifInfo = new DynamicInfo.IfInfo
+            var ifInfo = new DynamicIfInfo
             {
                 Type = testType,
                 Op = testOperate,
                 Value = testValue
             };
-            dynamicInfo.ElementValues = TranslateUtils.JsonSerialize(ifInfo);
+            dynamicInfo.Settings = TranslateUtils.JsonSerialize(ifInfo);
 
-            var dynamicUrl = parseManager.PathManager.GetIfApiUrl();
-            return dynamicInfo.GetScript(dynamicUrl, true);
+            var dynamicUrl = parseManager.PathManager.GetIfApiUrl(contextInfo.Site);
+            return await StlDynamic.GetScriptAsync(parseManager, dynamicUrl, dynamicInfo);
         }
 
         private static bool TestTypeValues(string testOperate, string testValue, List<string> actualValues)
@@ -830,7 +832,26 @@ namespace SSCMS.Core.StlParser.StlElement
 
             if (contentInfo != null)
             {
-                theValue = contentInfo.Get<string>(testTypeStr);
+                if (StringUtils.EqualsIgnoreCase(testTypeStr, "IsTop"))
+                {
+                    theValue = contentInfo.Get<string>(nameof(Content.Top));
+                }
+                else if (StringUtils.EqualsIgnoreCase(testTypeStr, "IsRecommend"))
+                {
+                    theValue = contentInfo.Get<string>(nameof(Content.Recommend));
+                }
+                else if (StringUtils.EqualsIgnoreCase(testTypeStr, "IsColor"))
+                {
+                    theValue = contentInfo.Get<string>(nameof(Content.Color));
+                }
+                else if (StringUtils.EqualsIgnoreCase(testTypeStr, "IsHot"))
+                {
+                    theValue = contentInfo.Get<string>(nameof(Content.Hot));
+                }
+                else
+                {
+                    theValue = contentInfo.Get<string>(testTypeStr);
+                }
             }
 
             return theValue;
@@ -975,6 +996,36 @@ namespace SSCMS.Core.StlParser.StlElement
                     }
                 }
                 if (!isIn)
+                {
+                    isSuccess = true;
+                }
+            }
+            return isSuccess;
+        }
+
+        private static bool IsBool(bool boolValue, string testOperate, string testValue)
+        {
+            var isSuccess = false;
+
+            if (string.IsNullOrEmpty(testValue))
+            {
+                testValue = true.ToString();
+            }
+            if (string.IsNullOrEmpty(testOperate) || StringUtils.EqualsIgnoreCase(testOperate, OperateNotEmpty))
+            {
+                testOperate = OperateEquals;
+            }
+
+            if (StringUtils.EqualsIgnoreCase(testOperate, OperateEquals))
+            {
+                if (boolValue == TranslateUtils.ToBool(testValue))
+                {
+                    isSuccess = true;
+                }
+            }
+            else if (StringUtils.EqualsIgnoreCase(testOperate, OperateNotEquals))
+            {
+                if (boolValue != TranslateUtils.ToBool(testValue))
                 {
                     isSuccess = true;
                 }

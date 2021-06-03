@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
 using SSCMS.Core.Utils;
+using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Utils;
 
@@ -15,9 +17,9 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
         public async Task<ActionResult<GetResult>> Get([FromQuery]GetRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Edit))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId,
+                    MenuUtils.ContentPermissions.Add, MenuUtils.ContentPermissions.Edit))
             {
                 return Unauthorized();
             }
@@ -36,9 +38,11 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
                 .Where(style =>
                     !string.IsNullOrEmpty(style.DisplayName) &&
                     !ListUtils.ContainsIgnoreCase(ColumnsManager.MetadataAttributes.Value, style.AttributeName))
-                .Select(x => new InputStyle(x));
+                .Select(x => new InputStyle(x)).ToList();
+            var templates =
+                await _templateRepository.GetTemplatesByTypeAsync(request.SiteId, TemplateType.ContentTemplate);
 
-            var (userIsChecked, userCheckedLevel) = await CheckManager.GetUserCheckLevelAsync(_authManager, site, site.Id);
+            var (userIsChecked, userCheckedLevel) = await CheckManager.GetUserCheckLevelAsync(_authManager, site, request.ChannelId);
             var checkedLevels = CheckManager.GetCheckedLevelOptions(site, userIsChecked, userCheckedLevel, true);
 
             Content content;
@@ -58,7 +62,41 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
                 };
             }
 
+            foreach (var style in styles)
+            {
+                if (style.InputType == InputType.CheckBox || style.InputType == InputType.SelectMultiple)
+                {
+                    if (request.ContentId == 0)
+                    {
+                        var value = style.Items != null
+                            ? style.Items.Where(x => x.Selected).Select(x => x.Value).ToList()
+                            : new List<string>();
+                        content.Set(style.AttributeName, value);
+                    }
+                    else
+                    {
+                        var value = content.Get(style.AttributeName);
+                        content.Set(style.AttributeName, ListUtils.ToList(value));
+                    }
+                }
+                else if (style.InputType == InputType.Radio || style.InputType == InputType.SelectOne)
+                {
+                    if (request.ContentId == 0)
+                    {
+                        var item = style.Items?.FirstOrDefault(x => x.Selected);
+                        var value = item != null ? item.Value : string.Empty;
+                        content.Set(style.AttributeName, value);
+                    }
+                    else
+                    {
+                        var value = content.Get(style.AttributeName);
+                        content.Set(style.AttributeName, StringUtils.ToString(value));
+                    }
+                }
+            }
+
             var siteUrl = await _pathManager.GetSiteUrlAsync(site, true);
+            var isCensorTextEnabled = await _censorManager.IsTextEnabledAsync();
 
             return new GetResult
             {
@@ -69,8 +107,10 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
                 GroupNames = groupNames,
                 TagNames = tagNames,
                 Styles = styles,
+                Templates = templates,
                 CheckedLevels = checkedLevels,
-                CheckedLevel = userCheckedLevel
+                CheckedLevel = userCheckedLevel,
+                IsCensorTextEnabled = isCensorTextEnabled
             };
         }
     }

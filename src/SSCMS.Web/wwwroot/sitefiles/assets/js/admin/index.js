@@ -10,7 +10,7 @@ var $collapseWidth = 60;
 var data = utils.init({
   siteId: utils.getQueryInt('siteId'),
   sessionId: localStorage.getItem('sessionId'),
-  version: null,
+  cmsVersion: null,
   adminLogoUrl: null,
   adminTitle: null,
   isSuperAdmin: null,
@@ -57,7 +57,7 @@ var methods = {
       if (res.value) {
         utils.addTab('首页', utils.getRootUrl('dashboard'));
 
-        $this.version = res.version;
+        $this.cmsVersion = res.cmsVersion;
         $this.adminLogoUrl = res.adminLogoUrl || utils.getAssetsUrl('images/logo.png');
         $this.adminTitle = res.adminTitle || 'SS CMS';
         $this.isSuperAdmin = res.isSuperAdmin;
@@ -68,7 +68,7 @@ var methods = {
         $this.siteUrl = res.siteUrl;
         $this.previewUrl = res.previewUrl;
         $this.local = res.local;
-        
+
         var sideMenuIds = [];
         if (location.hash) {
           var ids = location.hash.substr(1).split('/');
@@ -96,13 +96,7 @@ var methods = {
         location.href = res.redirectUrl;
       }
     }).catch(function (error) {
-      if (error.response && error.response.status === 400) {
-        utils.error(error, {redirect: true});
-      } else if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-        location.href = utils.getRootUrl('login');
-      } else if (error.response && error.response.status === 500) {
-        utils.error(error);
-      }
+      utils.error(error, {redirect: true});
     });
   },
 
@@ -112,7 +106,7 @@ var methods = {
       siteId: this.siteId
     }).then(function (response) {
       var res = response.data;
-      
+
     }).catch(function (error) {
       utils.error(error);
     });
@@ -135,48 +129,48 @@ var methods = {
     var $this = this;
 
     var pluginIds = this.plugins.map(function (x){ return x.pluginId});
-    cloud.getUpdates($this.version, pluginIds).then(function (response) {
+    cloud.getUpdates($this.cmsVersion, pluginIds).then(function (response) {
       var res = response.data;
 
       var cms = res.cms;
-      var plugins = res.plugins;
+      var releases = res.releases;
 
       if (cms) {
-        if (cloud.compareVersion($this.version, cms.version) === -1) {
+        if (cloud.compareVersion($this.cmsVersion, cms.version) === -1) {
           $this.newCms = {
-            current: $this.version,
+            current: $this.cmsVersion,
             version: cms.version,
-            published: cms.published
+            createdDate: cms.createdDate
           };
         }
       }
 
-      for (var i = 0; i < plugins.length; i++) {
-        var plugin = plugins[i];
-        if (!plugin || !plugin.version) continue;
-        
+      for (var i = 0; i < releases.length; i++) {
+        var release = releases[i];
+        if (!release || !release.version) continue;
+
         var installedPlugins = $.grep($this.plugins, function (e) {
-          return e.pluginId == plugin.pluginId;
+          return e.pluginId == release.userName + '.' + release.name;
         });
         if (installedPlugins.length == 1) {
           var installed = installedPlugins[0];
           if (installed.version) {
-            if (cloud.compareVersion(installed.version, plugin.version) == -1) {
+            if (cloud.compareVersion(installed.version, release.version) == -1) {
               $this.newPlugins.push({
-                pluginId: plugin.pluginId,
+                pluginId: release.userName + '.' + release.name,
                 displayName: installed.displayName,
                 current: installed.version,
-                version: plugin.version,
-                published: plugin.published
+                version: release.version,
+                createdDate: release.createdDate
               });
             }
           } else {
             $this.newPlugins.push({
-              pluginId: plugin.pluginId,
+              pluginId: release.userName + '.' + release.name,
               displayName: installed.displayName,
               current: '0.0',
-              version: plugin.version,
-              published: plugin.published
+              version: release.version,
+              createdDate: release.createdDate
             });
           }
         }
@@ -248,6 +242,10 @@ var methods = {
     return '';
   },
 
+  getHostUrl: function() {
+    return cloud.host;
+  },
+
   btnSearchClick: function() {
     if (!this.keyword) return;
 
@@ -286,7 +284,7 @@ var methods = {
       }
     }
     this.defaultOpeneds = defaultOpeneds;
-    
+
     if (menu) {
       this.btnMenuClick(menu);
     }
@@ -330,14 +328,15 @@ var methods = {
     } else if (command === 'profile') {
       utils.openLayer({
         title: '修改资料',
-        url: utils.getSettingsUrl('administratorsLayerProfile', {pageType: 'user', userId: this.local.userId}),
+        url: utils.getSettingsUrl('administratorsLayerProfile', {userName: this.local.userName}),
         full: true
       });
     } else if (command === 'password') {
       utils.openLayer({
         title: '更改密码',
-        url: utils.getSettingsUrl('administratorsLayerPassword', {pageType: 'user', userId: this.local.userId}),
-        full: true
+        url: utils.getSettingsUrl('administratorsLayerPassword', {userName: this.local.userName}),
+        width: 550,
+        height: 300
       });
     } else if (command === 'logout') {
       location.href = utils.getRootUrl('logout')

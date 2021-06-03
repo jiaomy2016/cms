@@ -19,7 +19,12 @@ namespace SSCMS.Cli.Updater
             return $"{key}${oldValue}";
         }
 
-        public static List<Dictionary<string, object>> UpdateRows(List<JObject> oldRows, Dictionary<string, string> convertKeyDict, Dictionary<string, string> convertValueDict, Func<Dictionary<string, object>, Dictionary<string, object>> process)
+        public static string GetSplitContentTableName(int siteId)
+        {
+            return $"siteserver_Content_{siteId}";
+        }
+
+        public static List<Dictionary<string, object>> UpdateRows(List<JObject> oldRows, Dictionary<string, string[]> convertKeyDict, Dictionary<string, string> convertValueDict, Func<Dictionary<string, object>, Dictionary<string, object>> process)
         {
             var newRows = new List<Dictionary<string, object>>();
 
@@ -28,17 +33,20 @@ namespace SSCMS.Cli.Updater
                 var newRow = TranslateUtils.ToDictionaryIgnoreCase(oldRow);
                 foreach (var key in convertKeyDict.Keys)
                 {
-                    var convertKey = convertKeyDict[key];
-                    object value;
-                    if (newRow.TryGetValue(convertKey, out value))
+                    var convertKeys = convertKeyDict[key];
+                    foreach (var convertKey in convertKeys)
                     {
-                        var valueDictKey = GetConvertValueDictKey(key, value);
-                        if (convertValueDict != null && convertValueDict.ContainsKey(valueDictKey))
+                        object value;
+                        if (newRow.TryGetValue(convertKey, out value))
                         {
-                            value = convertValueDict[valueDictKey];
-                        }
+                            var valueDictKey = GetConvertValueDictKey(key, value);
+                            if (convertValueDict != null && convertValueDict.ContainsKey(valueDictKey))
+                            {
+                                value = convertValueDict[valueDictKey];
+                            }
 
-                        newRow[key] = value;
+                            newRow[key] = value;
+                        }
                     }
                     //var value = newRow [convertKeyDict[key]];
 
@@ -51,20 +59,23 @@ namespace SSCMS.Cli.Updater
                     //newRow[key] = value;
                 }
 
-                if (process != null)
+                if (process != null && newRow != null)
                 {
                     newRow = process(newRow);
                 }
 
-                newRows.Add(newRow);
+                if (newRow != null)
+                {
+                    newRows.Add(newRow);
+                }
             }
 
             return newRows;
         }
 
-        public static void LoadSites(TreeInfo oldTreeInfo, List<int> siteIdList, List<string> tableNameListForContent, List<string> tableNameListForGovPublic, List<string> tableNameListForGovInteract, List<string> tableNameListForJob)
+        public static void LoadSites(ISettingsManager settingsManager, TreeInfo oldTreeInfo, List<int> siteIdList, List<string> tableNames)
         {
-            foreach(string oldSiteTableName in TableSite.OldTableNames)
+            foreach(var oldSiteTableName in TableSite.OldTableNames)
             {
                 var siteMetadataFilePath = oldTreeInfo.GetTableMetadataFilePath(oldSiteTableName);
                 if (FileUtils.IsFileExists(siteMetadataFilePath))
@@ -88,34 +99,42 @@ namespace SSCMS.Cli.Updater
                             if (dict.ContainsKey(nameof(TableSite.AuxiliaryTableForContent)))
                             {
                                 var value = Convert.ToString(dict[nameof(TableSite.AuxiliaryTableForContent)]);
-                                if (!string.IsNullOrEmpty(value) && !tableNameListForContent.Contains(value))
+                                if (!string.IsNullOrEmpty(value) && !tableNames.Contains(value))
                                 {
-                                    tableNameListForContent.Add(value);
+                                    tableNames.Add(value);
                                 }
                             }
-                            if (dict.ContainsKey(nameof(TableSite.AuxiliaryTableForGovInteract)))
+                        }
+                    }
+                }
+            }
+
+            var siteTableName = settingsManager.Database.GetTableName<Site>();
+            var metadataFilePath = oldTreeInfo.GetTableMetadataFilePath(siteTableName);
+            if (FileUtils.IsFileExists(metadataFilePath))
+            {
+                var siteTableInfo = TranslateUtils.JsonDeserialize<TableInfo>(FileUtils.ReadText(metadataFilePath, Encoding.UTF8));
+                foreach (var fileName in siteTableInfo.RowFiles)
+                {
+                    var filePath = oldTreeInfo.GetTableContentFilePath(siteTableName, fileName);
+                    var rows = TranslateUtils.JsonDeserialize<List<JObject>>(FileUtils.ReadText(filePath, Encoding.UTF8));
+                    foreach (var row in rows)
+                    {
+                        var dict = TranslateUtils.ToDictionaryIgnoreCase(row);
+                        if (dict.ContainsKey(nameof(Site.Id)))
+                        {
+                            var value = Convert.ToInt32(dict[nameof(Site.Id)]);
+                            if (value > 0 && !siteIdList.Contains(value))
                             {
-                                var value = Convert.ToString(dict[nameof(TableSite.AuxiliaryTableForGovInteract)]);
-                                if (!string.IsNullOrEmpty(value) && !tableNameListForGovInteract.Contains(value))
-                                {
-                                    tableNameListForGovInteract.Add(value);
-                                }
+                                siteIdList.Add(value);
                             }
-                            if (dict.ContainsKey(nameof(TableSite.AuxiliaryTableForGovPublic)))
+                        }
+                        if (dict.ContainsKey(nameof(Site.TableName)))
+                        {
+                            var value = Convert.ToString(dict[nameof(Site.TableName)]);
+                            if (!string.IsNullOrEmpty(value) && !tableNames.Contains(value))
                             {
-                                var value = Convert.ToString(dict[nameof(TableSite.AuxiliaryTableForGovPublic)]);
-                                if (!string.IsNullOrEmpty(value) && !tableNameListForGovPublic.Contains(value))
-                                {
-                                    tableNameListForGovPublic.Add(value);
-                                }
-                            }
-                            if (dict.ContainsKey(nameof(TableSite.AuxiliaryTableForJob)))
-                            {
-                                var value = Convert.ToString(dict[nameof(TableSite.AuxiliaryTableForJob)]);
-                                if (!string.IsNullOrEmpty(value) && !tableNameListForJob.Contains(value))
-                                {
-                                    tableNameListForJob.Add(value);
-                                }
+                                tableNames.Add(value);
                             }
                         }
                     }
@@ -139,8 +158,8 @@ namespace SSCMS.Cli.Updater
                         var dict = TranslateUtils.ToDictionaryIgnoreCase(row);
                         if (dict.ContainsKey(nameof(Site.Id)))
                         {
-                            //var siteId = Convert.ToInt32(dict[nameof(Site.Id)]);
-                            dict[nameof(Site.TableName)] = await databaseManager.ContentRepository.GetNewContentTableNameAsync();
+                            var siteId = Convert.ToInt32(dict[nameof(Site.Id)]);
+                            dict[nameof(Site.TableName)] = UpdateUtils.GetSplitContentTableName(siteId);
                         }
 
                         newRows.Add(dict);

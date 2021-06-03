@@ -12,6 +12,8 @@ namespace SSCMS.Core.Utils.Serialization.Components
 {
 	internal class TableStyleIe
     {
+        private const string DirectoryNameContentTable = "contentTable";
+
         private readonly IDatabaseManager _databaseManager;
         private readonly CacheUtils _caching;
         private readonly string _directoryPath;
@@ -23,7 +25,7 @@ namespace SSCMS.Core.Utils.Serialization.Components
             _directoryPath = directoryPath;
         }
 
-		public async Task ExportTableStylesAsync(int siteId, string tableName)
+        public async Task ExportTableStylesAsync(int siteId, bool isContentTable, string tableName)
 		{
             var relatedIdentities = await _databaseManager.ChannelRepository.GetChannelIdsAsync(siteId);
             relatedIdentities.Insert(0, 0);
@@ -37,6 +39,10 @@ namespace SSCMS.Core.Utils.Serialization.Components
 		    if (tableStyleWithItemsDict == null || tableStyleWithItemsDict.Count <= 0) return;
 
 		    var styleDirectoryPath = PathUtils.Combine(_directoryPath, tableName);
+            if (isContentTable)
+            {
+                styleDirectoryPath = PathUtils.Combine(_directoryPath, DirectoryNameContentTable);
+            }
 		    DirectoryUtils.CreateDirectoryIfNotExists(styleDirectoryPath);
 
 		    foreach (var attributeName in tableStyleWithItemsDict.Keys)
@@ -137,15 +143,30 @@ namespace SSCMS.Core.Utils.Serialization.Components
                 var feed = AtomFeed.Load(FileUtils.GetFileStreamReadOnly(filePath));
 
                 var attributeName = AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.AttributeName));
+                if (string.IsNullOrEmpty(attributeName))
+                {
+                    attributeName = AtomUtility.GetDcElementContent(feed.AdditionalElements, "Title");
+                }
+
+                if (string.IsNullOrEmpty(attributeName)) continue;
                 var taxis = TranslateUtils.ToInt(AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.Taxis)));
                 var displayName = AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.DisplayName));
+                if (string.IsNullOrEmpty(displayName))
+                {
+                    displayName = attributeName;
+                }
                 var helpText = AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.HelpText));
                 var list = TranslateUtils.ToBool(AtomUtility.GetDcElementContent(feed.AdditionalElements, new List<string>
                 {
                     nameof(TableStyle.List),
                     "VisibleInList"
                 }));
-                var inputType = TranslateUtils.ToEnum(AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.InputType)), InputType.Text);
+                var inputTypeString = AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.InputType));
+                if (string.IsNullOrEmpty(inputTypeString))
+                {
+                    inputTypeString = AtomUtility.GetDcElementContent(feed.AdditionalElements, "FieldType");
+                }
+                var inputType = TranslateUtils.ToEnum(inputTypeString, InputType.Text);
                 var defaultValue = AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.DefaultValue));
                 var isHorizontal = TranslateUtils.ToBool(AtomUtility.GetDcElementContent(feed.AdditionalElements, nameof(TableStyle.Horizontal)));
 
@@ -193,7 +214,11 @@ namespace SSCMS.Core.Utils.Serialization.Components
             foreach (var styleDirectoryPath in styleDirectoryPaths)
             {
                 var tableName = PathUtils.GetDirectoryName(styleDirectoryPath, false);
-                if (tableName == "siteserver_PublishmentSystem")
+                if (StringUtils.EqualsIgnoreCase(tableName, DirectoryNameContentTable))
+                {
+                    tableName = site.TableName;
+                }
+                else if (tableName == "siteserver_PublishmentSystem")
                 {
                     tableName = _databaseManager.SiteRepository.TableName;
                 }

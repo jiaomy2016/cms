@@ -39,6 +39,29 @@ namespace SSCMS.Core.Services
             {
                 await ExecuteSpecialAsync(siteId, specialId);
             }
+            else if (createType == CreateType.All)
+            {
+                var channelIdList = await _channelRepository.GetChannelIdsAsync(siteId);
+                foreach (var theChannelId in channelIdList)
+                {
+                    await ExecuteChannelAsync(siteId, theChannelId);
+                }
+
+                foreach (var theChannelId in channelIdList)
+                {
+                    await ExecuteContentsAsync(siteId, theChannelId);
+                }
+
+                foreach (var theSpecialId in await _specialRepository.GetAllSpecialIdsAsync(siteId))
+                {
+                    await ExecuteSpecialAsync(siteId, theSpecialId);
+                }
+
+                foreach (var theFileTemplateId in await _templateRepository.GetAllFileTemplateIdsAsync(siteId))
+                {
+                    await ExecuteFileAsync(siteId, theFileTemplateId);
+                }
+            }
         }
 
         private async Task ExecuteContentsAsync(int siteId, int channelId)
@@ -62,17 +85,22 @@ namespace SSCMS.Core.Services
             var count = await _contentRepository.GetCountAsync(site, channelInfo);
             if (!_channelRepository.IsCreatable(site, channelInfo, count)) return;
 
-            var templateInfo = channelId == siteId
+            var template = channelId == siteId
                 ? await _templateRepository.GetIndexPageTemplateAsync(siteId)
                 : await _templateRepository.GetChannelTemplateAsync(siteId, channelInfo);
-            var filePath = await _pathManager.GetChannelPageFilePathAsync(site, channelId, 0);
+            var filePath = await _pathManager.GetChannelPageFilePathAsync(site, channelId);
 
-            await _parseManager.InitAsync(site, channelId, 0, templateInfo);
+            await _parseManager.InitAsync(EditMode.Default, site, channelId, 0, template);
             _parseManager.ContextInfo.ContextType = ParseType.Channel;
 
-            var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, templateInfo));
+            await ExecuteAsync(site, template, filePath);
+        }
 
-            var stlLabelList = StlParserUtility.GetStlLabelList(contentBuilder.ToString());
+        private async Task ExecuteAsync(Site site, Template template, string filePathWithoutPage)
+        {
+            var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, template));
+
+            var stlLabelList = ParseUtils.GetStlLabels(contentBuilder.ToString());
 
             //如果标签中存在<stl:channel type="PageContent"></stl:channel>
             if (StlParserUtility.IsStlChannelElementWithTypePageContent(stlLabelList)) //内容存在
@@ -86,7 +114,7 @@ namespace SSCMS.Core.Services
                 var pageContentHtml = innerBuilder.ToString();
                 var pageCount = StringUtils.GetCount(Constants.PagePlaceHolder, pageContentHtml) + 1; //一共需要的页数
 
-                await _parseManager.ParseAsync(contentBuilder, filePath, false);
+                await _parseManager.ParseAsync(contentBuilder, filePathWithoutPage, false);
 
                 for (var currentPageIndex = 0; currentPageIndex < pageCount; currentPageIndex++)
                 {
@@ -101,7 +129,7 @@ namespace SSCMS.Core.Services
                         new StringBuilder(contentBuilder.ToString().Replace(stlElementTranslated, pageHtml));
                     await _parseManager.ReplacePageElementsInChannelPageAsync(pagedBuilder, stlLabelList, currentPageIndex, pageCount, 0);
 
-                    filePath = await _pathManager.GetChannelPageFilePathAsync(site, page.PageChannelId, currentPageIndex);
+                    var filePath = _pathManager.GetPageFilePathAsync(filePathWithoutPage, currentPageIndex);
                     await GenerateFileAsync(filePath, pagedBuilder);
 
                     if (index != -1)
@@ -113,16 +141,16 @@ namespace SSCMS.Core.Services
                 }
             }
             //如果标签中存在<stl:pageContents>
-            else if (StlParserUtility.IsStlElementExists(StlPageContents.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageContents.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageContents.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageContents.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageContentsElementParser = await StlPageContents.GetAsync(stlElement, _parseManager);
                 var (pageCount, totalNum) = pageContentsElementParser.GetPageCount();
 
                 await _parseManager.PageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.Jquery);
-                await _parseManager.ParseAsync(contentBuilder, filePath, false);
+                await _parseManager.ParseAsync(contentBuilder, filePathWithoutPage, false);
 
                 for (var currentPageIndex = 0; currentPageIndex < pageCount; currentPageIndex++)
                 {
@@ -135,7 +163,7 @@ namespace SSCMS.Core.Services
 
                     await _parseManager.ReplacePageElementsInChannelPageAsync(pagedBuilder, stlLabelList, currentPageIndex, pageCount, totalNum);
 
-                    filePath = await _pathManager.GetChannelPageFilePathAsync(site, page.PageChannelId, currentPageIndex);
+                    var filePath = _pathManager.GetPageFilePathAsync(filePathWithoutPage, currentPageIndex);
 
                     await GenerateFileAsync(filePath, pagedBuilder);
 
@@ -143,16 +171,16 @@ namespace SSCMS.Core.Services
                 }
             }
             //如果标签中存在<stl:pageChannels>
-            else if (StlParserUtility.IsStlElementExists(StlPageChannels.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageChannels.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageChannels.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageChannels.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageChannelsElementParser = await StlPageChannels.GetAsync(stlElement, _parseManager);
                 var pageCount = pageChannelsElementParser.GetPageCount(out var totalNum);
 
                 await _parseManager.PageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.Jquery);
-                await _parseManager.ParseAsync(contentBuilder, filePath, false);
+                await _parseManager.ParseAsync(contentBuilder, filePathWithoutPage, false);
 
                 for (var currentPageIndex = 0; currentPageIndex < pageCount; currentPageIndex++)
                 {
@@ -165,23 +193,23 @@ namespace SSCMS.Core.Services
 
                     await _parseManager.ReplacePageElementsInChannelPageAsync(pagedBuilder, stlLabelList, currentPageIndex, pageCount, totalNum);
 
-                    filePath = await _pathManager.GetChannelPageFilePathAsync(site, page.PageChannelId, currentPageIndex);
+                    var filePath = _pathManager.GetPageFilePathAsync(filePathWithoutPage, currentPageIndex);
                     await GenerateFileAsync(filePath, pagedBuilder);
 
                     _parseManager.PageInfo = page;
                 }
             }
             //如果标签中存在<stl:pageSqlContents>
-            else if (StlParserUtility.IsStlElementExists(StlPageSqlContents.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageSqlContents.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageSqlContents.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageSqlContents.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageSqlContentsElementParser = await StlPageSqlContents.GetAsync(stlElement, _parseManager);
                 var pageCount = pageSqlContentsElementParser.GetPageCount(out var totalNum);
 
                 await _parseManager.PageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.Jquery);
-                await _parseManager.ParseAsync(contentBuilder, filePath, false);
+                await _parseManager.ParseAsync(contentBuilder, filePathWithoutPage, false);
 
                 for (var currentPageIndex = 0; currentPageIndex < pageCount; currentPageIndex++)
                 {
@@ -194,7 +222,7 @@ namespace SSCMS.Core.Services
 
                     await _parseManager.ReplacePageElementsInChannelPageAsync(pagedBuilder, stlLabelList, currentPageIndex, pageCount, totalNum);
 
-                    filePath = await _pathManager.GetChannelPageFilePathAsync(site, page.PageChannelId, currentPageIndex);
+                    var filePath = _pathManager.GetPageFilePathAsync(filePathWithoutPage, currentPageIndex);
                     await GenerateFileAsync(filePath, pagedBuilder);
 
                     _parseManager.PageInfo = page;
@@ -202,8 +230,8 @@ namespace SSCMS.Core.Services
             }
             else
             {
-                await _parseManager.ParseAsync(contentBuilder, filePath, false);
-                await GenerateFileAsync(filePath, contentBuilder);
+                await _parseManager.ParseAsync(contentBuilder, filePathWithoutPage, false);
+                await GenerateFileAsync(filePathWithoutPage, contentBuilder);
             }
         }
 
@@ -230,15 +258,15 @@ namespace SSCMS.Core.Services
                 return;
             }
 
-            var templateInfo = await _templateRepository.GetContentTemplateAsync(site.Id, channel);
-            await _parseManager.InitAsync(site, channel.Id, contentId, templateInfo);
+            var template = await _templateRepository.GetContentTemplateAsync(site.Id, channel, contentInfo.TemplateId);
+            await _parseManager.InitAsync(EditMode.Default, site, channel.Id, contentId, template);
             _parseManager.ContextInfo.ContextType = ParseType.Content;
             _parseManager.ContextInfo.SetContent(contentInfo);
 
             var filePath = await _pathManager.GetContentPageFilePathAsync(site, _parseManager.PageInfo.PageChannelId, contentInfo, 0);
-            var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, templateInfo));
+            var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, template));
 
-            var stlLabelList = StlParserUtility.GetStlLabelList(contentBuilder.ToString());
+            var stlLabelList = ParseUtils.GetStlLabels(contentBuilder.ToString());
 
             //如果标签中存在<stl:content type="PageContent"></stl:content>
             if (StlParserUtility.IsStlContentElementWithTypePageContent(stlLabelList)) //内容存在
@@ -317,9 +345,9 @@ namespace SSCMS.Core.Services
                 }
             }
             //如果标签中存在<stl:pageContents>
-            else if (StlParserUtility.IsStlElementExists(StlPageContents.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageContents.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageContents.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageContents.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageContentsElementParser = await StlPageContents.GetAsync(stlElement, _parseManager);
@@ -345,9 +373,9 @@ namespace SSCMS.Core.Services
                 }
             }
             //如果标签中存在<stl:pageChannels>
-            else if (StlParserUtility.IsStlElementExists(StlPageChannels.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageChannels.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageChannels.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageChannels.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageChannelsElementParser = await StlPageChannels.GetAsync(stlElement, _parseManager);
@@ -373,9 +401,9 @@ namespace SSCMS.Core.Services
                 }
             }
             //如果标签中存在<stl:pageSqlContents>
-            else if (StlParserUtility.IsStlElementExists(StlPageSqlContents.ElementName, stlLabelList))
+            else if (ParseUtils.IsStlElementExists(StlPageSqlContents.ElementName, stlLabelList))
             {
-                var stlElement = StlParserUtility.GetStlElement(StlPageSqlContents.ElementName, stlLabelList);
+                var stlElement = ParseUtils.GetStlElement(StlPageSqlContents.ElementName, stlLabelList);
                 var stlElementTranslated = _parseManager.StlEncrypt(stlElement);
 
                 var pageSqlContentsElementParser = await StlPageSqlContents.GetAsync(stlElement, _parseManager);
@@ -410,33 +438,35 @@ namespace SSCMS.Core.Services
         private async Task ExecuteFileAsync(int siteId, int fileTemplateId)
         {
             var site = await _siteRepository.GetAsync(siteId);
-            var templateInfo = await _templateRepository.GetAsync(fileTemplateId);
-            if (templateInfo == null || templateInfo.TemplateType != TemplateType.FileTemplate)
+            var template = await _templateRepository.GetAsync(fileTemplateId);
+            if (template == null || template.TemplateType != TemplateType.FileTemplate)
             {
                 return;
             }
 
-            await _parseManager.InitAsync(site, siteId, 0, templateInfo);
+            await _parseManager.InitAsync(EditMode.Default, site, siteId, 0, template);
 
-            var filePath = await _pathManager.ParseSitePathAsync(site, templateInfo.CreatedFileFullName);
+            var filePath = await _pathManager.ParseSitePathAsync(site, template.CreatedFileFullName);
 
-            var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, templateInfo));
-            await _parseManager.ParseAsync(contentBuilder, filePath, false);
-            await GenerateFileAsync(filePath, contentBuilder);
+            await ExecuteAsync(site, template, filePath);
+
+            //var contentBuilder = new StringBuilder(await _pathManager.GetTemplateContentAsync(site, template));
+            //await _parseManager.ParseAsync(contentBuilder, filePath, false);
+            //await GenerateFileAsync(filePath, contentBuilder);
         }
 
         private async Task ExecuteSpecialAsync(int siteId, int specialId)
         {
             var site = await _siteRepository.GetAsync(siteId);
-            var templateInfoList = await _pathManager.GetSpecialTemplateListAsync(site, specialId);
+            var templates = await _pathManager.GetSpecialTemplateListAsync(site, specialId);
 
-            foreach (var templateInfo in templateInfoList)
+            foreach (var template in templates)
             {
-                await _parseManager.InitAsync(site, siteId, 0, templateInfo);
+                await _parseManager.InitAsync(EditMode.Default, site, siteId, 0, template);
 
-                var filePath = await _pathManager.ParseSitePathAsync(site, templateInfo.CreatedFileFullName);
+                var filePath = await _pathManager.ParseSitePathAsync(site, template.CreatedFileFullName);
 
-                var contentBuilder = new StringBuilder(templateInfo.Content);
+                var contentBuilder = new StringBuilder(template.Content);
                 await _parseManager.ParseAsync(contentBuilder, filePath, false);
                 await GenerateFileAsync(filePath, contentBuilder);
             }

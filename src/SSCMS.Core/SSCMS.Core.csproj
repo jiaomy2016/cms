@@ -18,29 +18,25 @@
   <ItemGroup>
     <PackageReference Include="CacheManager.Core" Version="1.2.0" />
     <PackageReference Include="CacheManager.Microsoft.Extensions.Configuration" Version="1.2.0" />
-    <PackageReference Include="ExcelDataReader" Version="3.6.0" />
-    <PackageReference Include="ExcelDataReader.DataSet" Version="3.6.0" />
     <PackageReference Include="FluentScheduler" Version="5.5.1" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.11.25" />
-    <PackageReference Include="Markdig" Version="0.22.0" />
+    <PackageReference Include="Markdig" Version="0.22.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="3.1.9" />
     <PackageReference Include="Open-Xml-PowerTools" Version="4.4.0" />
     <PackageReference Include="Semver" Version="2.0.6" />
+    <PackageReference Include="System.Drawing.Common" Version="5.0.0" />
     <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
     <PackageReference Include="SixLabors.Fonts" Version="1.0.0-beta0013" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta0009" />
-    <PackageReference Include="RestSharp" Version="106.11.7" />    
-    <PackageReference Include="HtmlSanitizer" Version="5.0.353" />
-    <PackageReference Include="Senparc.Weixin" Version="6.7.600" />
-    <PackageReference Include="Senparc.Weixin.WxOpen" Version="3.8.601" />
-    <PackageReference Include="Senparc.Weixin.TenPay" Version="1.5.600" />
-    <PackageReference Include="SharpZipLib" Version="1.3.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.1" />
+    <PackageReference Include="RestSharp" Version="106.11.7" />
+    <PackageReference Include="Senparc.Weixin" Version="6.8.101" />
+    <PackageReference Include="Senparc.Weixin.WxOpen" Version="3.9.101" />
+    <PackageReference Include="Senparc.Weixin.TenPay" Version="1.6.101.1" />
+    <PackageReference Include="SharpZipLib" Version="1.3.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SSCMS" Version="7.0.4" />
-    <!--<ProjectReference Include="..\SSCMS\SSCMS.csproj" />-->
+    <ProjectReference Include="..\SSCMS\SSCMS.csproj" />
   </ItemGroup>
 
 </Project>

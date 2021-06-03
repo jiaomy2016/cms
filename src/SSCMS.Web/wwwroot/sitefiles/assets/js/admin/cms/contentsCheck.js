@@ -8,13 +8,13 @@ var data = utils.init({
   groupNames: null,
   tagNames: null,
   checkedLevels: [],
-  
+
   pageContents: null,
   total: null,
   pageSize: null,
   page: 1,
   columns: null,
-  
+
   multipleSelection: [],
 
   checkedColumns: [],
@@ -55,7 +55,7 @@ var methods = {
         displayName: titleColumn.displayName,
         value: ''
       });
-      $this.searchForm.checkedLevels = _.map(res.checkedLevels, function(x) { return x.label; });
+      $this.searchForm.checkedLevels = [0];
 
       $this.apiList($this.siteId, 1);
     }).catch(function(error) {
@@ -77,22 +77,21 @@ var methods = {
         });
       }
     }
-    
+
     var channelId = this.channelIds && this.channelIds.length > 0 ? this.channelIds[this.channelIds.length - 1] : null;
 
     utils.loading(this, true);
     var request = _.assign({
       siteId: this.siteId,
-      isCheckedLevels: this.isCheckedLevels,
       channelId: channelId,
       page: page,
       items: items
     }, this.searchForm);
     $api.post($url + '/actions/list', request).then(function(response) {
       var res = response.data;
-      
+
       $this.pageContents = res.pageContents;
-      
+
       $this.total = res.total;
       $this.pageSize = res.pageSize;
       $this.page = page;
@@ -184,8 +183,7 @@ var methods = {
     utils.openLayer({
       title: "管理员查看",
       url: utils.getCommonUrl('adminLayerView', {adminId: adminId}),
-      width: 550,
-      height: 450
+      full: true
     });
   },
 
@@ -200,7 +198,7 @@ var methods = {
 
   btnLayerClick: function(options) {
     var query = {
-      siteId: this.siteId, 
+      siteId: this.siteId,
       page: this.page
     };
 
@@ -234,13 +232,13 @@ var methods = {
     });
   },
 
-  btnContentStateClick: function(contentId) {
+  btnContentStateClick: function(content) {
     utils.openLayer({
       title: "查看审核状态",
       url: utils.getCmsUrl('contentsLayerState', {
-        siteId: this.siteId,
-        channelId: this.siteId,
-        contentId: contentId
+        siteId: content.siteId,
+        channelId: content.siteId,
+        contentId: content.id
       }),
       full: true
     });
@@ -311,13 +309,7 @@ var $vue = new Vue({
   data: data,
   methods: methods,
   computed: {
-    isCheckedLevels: function() {
-      if (this.checkedLevels.length !== this.searchForm.checkedLevels.length) return true;
-      return false;
-    },
-
     isFiltered: function() {
-      if (this.checkedLevels.length !== this.searchForm.checkedLevels.length) return true;
       if (this.searchForm.isTop || this.searchForm.isRecommend || this.searchForm.isHot || this.searchForm.isColor) return true;
       if (this.searchForm.groupNames.length > 0 || this.searchForm.tagNames.length > 0) return true;
       return false;

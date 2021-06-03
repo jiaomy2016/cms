@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Home.Write
@@ -10,7 +9,7 @@ namespace SSCMS.Web.Controllers.Home.Write
         [HttpGet, Route(Route)]
         public async Task<ActionResult<GetResult>> Get([FromQuery] GetRequest request)
         {
-            if (!await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.View))
+            if (!await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, MenuUtils.ContentPermissions.Add))
             {
                 return Unauthorized();
             }
@@ -22,7 +21,7 @@ namespace SSCMS.Web.Controllers.Home.Write
             if (channel == null) return NotFound();
 
             var content = await _contentRepository.GetAsync(site, channel, request.ContentId);
-            if (content == null) return NotFound();
+            if (content == null || content.UserId != _authManager.UserId) return NotFound();
 
             content.Set(ColumnsManager.CheckState, CheckManager.GetCheckState(site, content));
 

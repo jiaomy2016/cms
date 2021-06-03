@@ -6,6 +6,7 @@ using SSCMS.Configuration;
 using SSCMS.Core.Utils.Serialization;
 using SSCMS.Dto;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Users
 {
@@ -15,14 +16,14 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Users
         [HttpPost, Route(RouteImport)]
         public async Task<ActionResult<BoolResult>> Import([FromForm] IFormFile file)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsUsers))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsUsers))
             {
                 return Unauthorized();
             }
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = Path.GetFileName(file.FileName);

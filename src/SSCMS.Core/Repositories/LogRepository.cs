@@ -33,7 +33,7 @@ namespace SSCMS.Core.Repositories
 
         public List<TableColumn> TableColumns => _repository.TableColumns;
 
-        public async Task AddAdminLogAsync(Administrator admin, string action, string summary = "")
+        public async Task AddAdminLogAsync(Administrator admin, string ipAddress, string action, string summary = "")
         {
             var config = await _configRepository.GetAsync();
             if (!config.IsLogAdmin) return;
@@ -55,7 +55,7 @@ namespace SSCMS.Core.Repositories
                 {
                     Id = 0,
                     AdminId = admin.Id,
-                    IpAddress = string.Empty,
+                    IpAddress = ipAddress,
                     Action = action,
                     Summary = summary
                 };
@@ -70,7 +70,7 @@ namespace SSCMS.Core.Repositories
             }
         }
 
-        public async Task AddUserLogAsync(User user, string action, string summary = "")
+        public async Task AddUserLogAsync(User user, string ipAddress, string action, string summary = "")
         {
             var config = await _configRepository.GetAsync();
             if (!config.IsLogAdmin) return;
@@ -91,8 +91,8 @@ namespace SSCMS.Core.Repositories
                 var log = new Log
                 {
                     Id = 0,
-                    AdminId = user.Id,
-                    IpAddress = string.Empty,
+                    UserId = user.Id,
+                    IpAddress = ipAddress,
                     Action = action,
                     Summary = summary
                 };

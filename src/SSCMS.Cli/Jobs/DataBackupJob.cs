@@ -15,12 +15,11 @@ namespace SSCMS.Cli.Jobs
     {
         public string CommandName => "data backup";
 
-        private string _databaseType;
-        private string _connectionString;
         private string _directory;
         private List<string> _includes;
         private List<string> _excludes;
         private int _maxRows;
+        private int _pageSize = CliConstants.DefaultPageSize;
         private bool _isHelp;
 
         private readonly ISettingsManager _settingsManager;
@@ -34,14 +33,6 @@ namespace SSCMS.Cli.Jobs
             _options = new OptionSet
             {
                 {
-                    "t|database-type=", "Database type",
-                    v => _databaseType = v
-                },
-                {
-                    "c|connection-string=", "Database connection string",
-                    v => _connectionString = v
-                },
-                {
                     "d|directory=", "Backup folder name",
                     v => _directory = v
                 },
@@ -54,8 +45,12 @@ namespace SSCMS.Cli.Jobs
                     v => _excludes = v == null ? null : ListUtils.GetStringList(v)
                 },
                 {
-                    "max-rows=", "Maximum number of rows to backup. All data is backed up by default",
+                    "max-rows=", "Maximum number of rows to backup, all data is backed up by default",
                     v => _maxRows = v == null ? 0 : TranslateUtils.ToInt(v)
+                },
+                {
+                    "page-size=", "The number of rows fetch at a time, 1000 by default",
+                    v => _pageSize = v == null ? CliConstants.DefaultPageSize : TranslateUtils.ToInt(v)
                 },
                 {
                     "h|help", "Display help",
@@ -93,25 +88,14 @@ namespace SSCMS.Cli.Jobs
             DirectoryUtils.CreateDirectoryIfNotExists(treeInfo.DirectoryPath);
 
             var configPath = CliUtils.GetConfigPath(_settingsManager);
-
-            var databaseType = TranslateUtils.ToEnum(_databaseType, DatabaseType.MySql);
-            var connectionString = _connectionString;
-            if (string.IsNullOrEmpty(connectionString))
+            if (!FileUtils.IsFileExists(configPath))
             {
-                if (FileUtils.IsFileExists(configPath))
-                {
-                    databaseType = _settingsManager.Database.DatabaseType;
-                    connectionString = _settingsManager.DatabaseConnectionString;
-                }
-                else
-                {
-                    await WriteUtils.PrintErrorAsync($"The sscms.json file does not exist: {configPath}");
-                    return;
-                }
+                await WriteUtils.PrintErrorAsync($"The sscms.json file does not exist: {configPath}");
+                return;
             }
 
-            await Console.Out.WriteLineAsync($"Database type: {databaseType.GetDisplayName()}");
-            await Console.Out.WriteLineAsync($"Database connection string: {connectionString}");
+            await Console.Out.WriteLineAsync($"Database type: {_settingsManager.DatabaseType.GetDisplayName()}");
+            await Console.Out.WriteLineAsync($"Database connection string: {_settingsManager.DatabaseConnectionString}");
             await Console.Out.WriteLineAsync($"Backup folder: {treeInfo.DirectoryPath}");
 
             //WebConfigUtils.Load(_settingsManager.ContentRootPath, webConfigPath);
@@ -133,8 +117,7 @@ namespace SSCMS.Cli.Jobs
             //    return;
             //}
 
-            var database = new Database(databaseType, connectionString);
-            var (isConnectionWorks, errorMessage) = await database.IsConnectionWorksAsync();
+            var (isConnectionWorks, errorMessage) = await _settingsManager.Database.IsConnectionWorksAsync();
             if (!isConnectionWorks)
             {
                 await WriteUtils.PrintErrorAsync($"Unable to connect to database, error message:{errorMessage}");
@@ -151,17 +134,26 @@ namespace SSCMS.Cli.Jobs
             _excludes.Add("siteserver_Log");
             _excludes.Add("siteserver_Tracking");
 
-            await Backup(database, _databaseManager, _includes, _excludes, _maxRows, treeInfo);
+            var errorLogFilePath = CliUtils.DeleteErrorLogFileIfExists(_settingsManager);
+            var errorTableNames = await Backup(_settingsManager, _databaseManager, _includes, _excludes, _maxRows, _pageSize, treeInfo, errorLogFilePath);
 
             await WriteUtils.PrintRowLineAsync();
-            await WriteUtils.PrintSuccessAsync("backup database to folder successfully!");
+            if (errorTableNames.Count == 0)
+            {
+                await WriteUtils.PrintSuccessAsync("backup database to folder successfully!");
+            }
+            else
+            {
+                await WriteUtils.PrintErrorAsync($"Database backup failed and the following table was not successfully backed up: {ListUtils.ToString(errorTableNames)}");
+            }
         }
 
-        public static async Task Backup(IDatabase database, IDatabaseManager databaseManager, List<string> includes, List<string> excludes, int maxRows, TreeInfo treeInfo)
+        public static async Task<List<string>> Backup(ISettingsManager settingsManager, IDatabaseManager databaseManager, List<string> includes, List<string> excludes, int maxRows, int pageSize, TreeInfo treeInfo, string errorLogFilePath)
         {
-            var allTableNames = await database.GetTableNamesAsync();
+            var allTableNames = await settingsManager.Database.GetTableNamesAsync();
 
             var tableNames = new List<string>();
+            var errorTableNames = new List<string>();
 
             foreach (var tableName in allTableNames)
             {
@@ -179,65 +171,81 @@ namespace SSCMS.Cli.Jobs
 
             foreach (var tableName in tableNames)
             {
-                var columns = await database.GetTableColumnsAsync(tableName);
-                var repository = new Repository(database, tableName, columns);
-
-                var tableInfo = new TableInfo
+                try
                 {
-                    Columns = repository.TableColumns,
-                    TotalCount = await repository.CountAsync(),
-                    RowFiles = new List<string>()
-                };
+                    var columns = await settingsManager.Database.GetTableColumnsAsync(tableName);
+                    var repository = new Repository(settingsManager.Database, tableName, columns);
 
-                if (maxRows > 0 && tableInfo.TotalCount > maxRows)
-                {
-                    tableInfo.TotalCount = maxRows;
-                }
-
-                await WriteUtils.PrintRowAsync(tableName, tableInfo.TotalCount.ToString("#,0"));
-
-                var identityColumnName = await database.AddIdentityColumnIdIfNotExistsAsync(tableName, tableInfo.Columns);
-
-                if (tableInfo.TotalCount > 0)
-                {
-                    var current = 1;
-                    if (tableInfo.TotalCount > CliConstants.PageSize)
+                    var tableInfo = new TableInfo
                     {
-                        var pageCount = (int) Math.Ceiling((double) tableInfo.TotalCount / CliConstants.PageSize);
+                        Columns = repository.TableColumns,
+                        TotalCount = await repository.CountAsync(),
+                        RowFiles = new List<string>()
+                    };
 
-                        using (var progress = new ProgressBar())
+                    if (maxRows > 0 && tableInfo.TotalCount > maxRows)
+                    {
+                        tableInfo.TotalCount = maxRows;
+                    }
+
+                    await WriteUtils.PrintRowAsync(tableName, tableInfo.TotalCount.ToString("#,0"));
+
+                    var identityColumnName =
+                        await settingsManager.Database.AddIdentityColumnIdIfNotExistsAsync(tableName, tableInfo.Columns);
+
+                    if (tableInfo.TotalCount > 0)
+                    {
+                        var current = 1;
+                        if (tableInfo.TotalCount > pageSize)
                         {
+                            var pageCount = (int)Math.Ceiling((double)tableInfo.TotalCount / pageSize);
+
+                            using var progress = new ProgressBar();
                             for (; current <= pageCount; current++)
                             {
-                                progress.Report((double) (current - 1) / pageCount);
+                                progress.Report((double)(current - 1) / pageCount);
 
                                 var fileName = $"{current}.json";
                                 tableInfo.RowFiles.Add(fileName);
-                                var offset = (current - 1) * CliConstants.PageSize;
-                                var limit = tableInfo.TotalCount - offset < CliConstants.PageSize
+                                var offset = (current - 1) * pageSize;
+                                var limit = tableInfo.TotalCount - offset < pageSize
                                     ? tableInfo.TotalCount - offset
-                                    : CliConstants.PageSize;
+                                    : pageSize;
 
-                                var rows = databaseManager.GetPageObjects(tableName, identityColumnName, offset,
-                                    limit);
+                                var rows = await databaseManager.GetPageObjectsAsync(tableName, identityColumnName, offset, limit);
 
-                                await FileUtils.WriteTextAsync(treeInfo.GetTableContentFilePath(tableName, fileName), TranslateUtils.JsonSerialize(rows));
+                                await FileUtils.WriteTextAsync(
+                                    treeInfo.GetTableContentFilePath(tableName, fileName),
+                                    TranslateUtils.JsonSerialize(rows));
                             }
                         }
-                    }
-                    else
-                    {
-                        var fileName = $"{current}.json";
-                        tableInfo.RowFiles.Add(fileName);
-                        var rows = databaseManager.GetObjects(tableName);
+                        else
+                        {
+                            var fileName = $"{current}.json";
+                            tableInfo.RowFiles.Add(fileName);
+                            var rows = await databaseManager.GetObjectsAsync(tableName);
 
-                        await FileUtils.WriteTextAsync(treeInfo.GetTableContentFilePath(tableName, fileName), TranslateUtils.JsonSerialize(rows));
+                            await FileUtils.WriteTextAsync(treeInfo.GetTableContentFilePath(tableName, fileName),
+                                TranslateUtils.JsonSerialize(rows));
+                        }
                     }
+
+                    await FileUtils.WriteTextAsync(treeInfo.GetTableMetadataFilePath(tableName),
+                        TranslateUtils.JsonSerialize(tableInfo));
                 }
-
-                await FileUtils.WriteTextAsync(treeInfo.GetTableMetadataFilePath(tableName),
-                    TranslateUtils.JsonSerialize(tableInfo));
+                catch (Exception ex)
+                {
+                    errorTableNames.Add(tableName);
+                    await CliUtils.AppendErrorLogAsync(errorLogFilePath, new TextLogInfo
+                    {
+                        Exception = ex,
+                        DateTime = DateTime.Now,
+                        Detail = tableName
+                    });
+                }
             }
+
+            return errorTableNames;
         }
     }
 }

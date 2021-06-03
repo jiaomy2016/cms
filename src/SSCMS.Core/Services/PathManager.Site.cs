@@ -166,14 +166,14 @@ namespace SSCMS.Core.Services
 
         public string GetPreviewSiteUrl(int siteId)
         {
-            var apiUrl = PageUtils.Combine(_settingsManager.ApiHost, Constants.RoutePreview);
+            var apiUrl = PageUtils.Combine("/", Constants.RoutePreview);
             apiUrl = apiUrl.Replace("{siteId}", siteId.ToString());
             return apiUrl;
         }
 
         public string GetPreviewChannelUrl(int siteId, int channelId)
         {
-            var apiUrl = PageUtils.Combine(_settingsManager.ApiHost, Constants.RoutePreviewChannel);
+            var apiUrl = PageUtils.Combine("/", Constants.RoutePreviewChannel);
             apiUrl = apiUrl.Replace("{siteId}", siteId.ToString());
             apiUrl = apiUrl.Replace("{channelId}", channelId.ToString());
             return apiUrl;
@@ -181,7 +181,7 @@ namespace SSCMS.Core.Services
 
         public string GetPreviewContentUrl(int siteId, int channelId, int contentId, bool isPreview = false)
         {
-            var apiUrl = PageUtils.Combine(_settingsManager.ApiHost, Constants.RoutePreviewContent);
+            var apiUrl = PageUtils.Combine("/", Constants.RoutePreviewContent);
             apiUrl = apiUrl.Replace("{siteId}", siteId.ToString());
             apiUrl = apiUrl.Replace("{channelId}", channelId.ToString());
             apiUrl = apiUrl.Replace("{contentId}", contentId.ToString());
@@ -194,7 +194,7 @@ namespace SSCMS.Core.Services
 
         public string GetPreviewFileUrl(int siteId, int fileTemplateId)
         {
-            var apiUrl = PageUtils.Combine(_settingsManager.ApiHost, Constants.RoutePreviewFile);
+            var apiUrl = PageUtils.Combine("/", Constants.RoutePreviewFile);
             apiUrl = apiUrl.Replace("{siteId}", siteId.ToString());
             apiUrl = apiUrl.Replace("{fileTemplateId}", fileTemplateId.ToString());
             return apiUrl;
@@ -202,7 +202,7 @@ namespace SSCMS.Core.Services
 
         public string GetPreviewSpecialUrl(int siteId, int specialId)
         {
-            var apiUrl = PageUtils.Combine(_settingsManager.ApiHost, Constants.RoutePreviewSpecial);
+            var apiUrl = PageUtils.Combine("/", Constants.RoutePreviewSpecial);
             apiUrl = apiUrl.Replace("{siteId}", siteId.ToString());
             apiUrl = apiUrl.Replace("{specialId}", specialId.ToString());
             return apiUrl;
@@ -257,7 +257,7 @@ namespace SSCMS.Core.Services
             var referenceId = contentCurrent.ReferenceId;
             var linkUrl = contentCurrent.LinkUrl;
             var channelId = contentCurrent.ChannelId;
-            if (referenceId > 0 && TranslateType.ReferenceContent.GetValue() == contentCurrent.Get<string>(ColumnsManager.TranslateContentType))
+            if (referenceId > 0)
             {
                 if (sourceId > 0 && await _channelRepository.IsExistsAsync(sourceId))
                 {
@@ -311,9 +311,7 @@ namespace SSCMS.Core.Services
                 return GetPreviewContentUrl(site.Id, channelId, contentId);
             }
 
-            var contentInfoCurrent = await _contentRepository.GetAsync(site, channelId, contentId);
-
-            if (referenceId > 0 && TranslateType.ReferenceContent.GetValue() == contentInfoCurrent.Get<string>(ColumnsManager.TranslateContentType))
+            if (referenceId > 0)
             {
                 if (sourceId > 0 && await _channelRepository.IsExistsAsync(sourceId))
                 {
@@ -423,7 +421,7 @@ namespace SSCMS.Core.Services
                         if (count == 1)
                         {
                             var tableName = _channelRepository.GetTableName(site, channel);
-                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, ETaxisTypeUtils.GetContentOrderByString(channel.DefaultTaxisType));
+                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, _databaseManager.GetContentOrderByString(channel.DefaultTaxisType));
                             url = await GetContentUrlAsync(site, channel, contentId, false);
                         }
                         else
@@ -441,7 +439,7 @@ namespace SSCMS.Core.Services
                         else if (count == 1)
                         {
                             var tableName = _channelRepository.GetTableName(site, channel);
-                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, ETaxisTypeUtils.GetContentOrderByString(channel.DefaultTaxisType));
+                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, _databaseManager.GetContentOrderByString(channel.DefaultTaxisType));
                             url = await GetContentUrlAsync(site, channel, contentId, false);
                         }
                         else
@@ -455,7 +453,7 @@ namespace SSCMS.Core.Services
                         if (count >= 1)
                         {
                             var tableName = _channelRepository.GetTableName(site, channel);
-                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, ETaxisTypeUtils.GetContentOrderByString(channel.DefaultTaxisType));
+                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, _databaseManager.GetContentOrderByString(channel.DefaultTaxisType));
                             url = await GetContentUrlAsync(site, channel, contentId, false);
                         }
                         else
@@ -469,7 +467,7 @@ namespace SSCMS.Core.Services
                         if (count >= 1)
                         {
                             var tableName = _channelRepository.GetTableName(site, channel);
-                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, ETaxisTypeUtils.GetContentOrderByString(channel.DefaultTaxisType));
+                            var contentId = _contentRepository.GetContentId(tableName, channel.Id, true, _databaseManager.GetContentOrderByString(channel.DefaultTaxisType));
                             url = await GetContentUrlAsync(site, channel, contentId, false);
                         }
                         else
@@ -505,6 +503,31 @@ namespace SSCMS.Core.Services
             }
 
             return RemoveDefaultFileName(site, url);
+        }
+
+        public async Task<string> GetBaseUrlAsync(Site site, Template template, int channelId, int contentId)
+        {
+            var baseUrl = string.Empty;
+            if (template.TemplateType == TemplateType.IndexPageTemplate)
+            {
+                baseUrl = await GetIndexPageUrlAsync(site, false);
+            }
+            else if (template.TemplateType == TemplateType.ChannelTemplate)
+            {
+                var channel = await _channelRepository.GetAsync(channelId);
+                baseUrl = await GetChannelUrlAsync(site, channel, false);
+            }
+            else if (template.TemplateType == TemplateType.ContentTemplate)
+            {
+                var content = await _contentRepository.GetAsync(site, channelId, contentId);
+                baseUrl = await GetContentUrlByIdAsync(site, content, false);
+            }
+            else if (template.TemplateType == TemplateType.FileTemplate)
+            {
+                baseUrl = await GetFileUrlAsync(site, template.Id, false);
+            }
+
+            return baseUrl;
         }
 
         public string RemoveDefaultFileName(Site site, string url)
@@ -630,7 +653,7 @@ namespace SSCMS.Core.Services
             return await GetSitePathAsync(site, paths);
         }
 
-        public async Task<string> GetIndexPageFilePathAsync(Site site, string createFileFullName, bool root, int currentPageIndex)
+        public async Task<string> GetIndexPageFilePathAsync(Site site, string createFileFullName, bool root)
         {
             if (string.IsNullOrEmpty(createFileFullName))
             {
@@ -655,16 +678,7 @@ namespace SSCMS.Core.Services
                 }
             }
 
-            var filePath = await ParseSitePathAsync(site, createFileFullName);
-
-            if (currentPageIndex != 0)
-            {
-                string appendix = $"_{currentPageIndex + 1}";
-                var fileName = PathUtils.GetFileNameWithoutExtension(filePath) + appendix + PathUtils.GetExtension(filePath);
-                filePath = PathUtils.Combine(DirectoryUtils.GetDirectoryPath(filePath), fileName);
-            }
-
-            return filePath;
+            return await ParseSitePathAsync(site, createFileFullName);
         }
 
         public string GetBackupFilePath(Site site, BackupType backupType)
@@ -1004,13 +1018,13 @@ namespace SSCMS.Core.Services
             return filePathRule;
         }
 
-        public async Task<string> GetChannelPageFilePathAsync(Site site, int channelId, int currentPageIndex)
+        public async Task<string> GetChannelPageFilePathAsync(Site site, int channelId)
         {
             var nodeInfo = await _channelRepository.GetAsync(channelId);
             if (nodeInfo.ParentId == 0)
             {
                 var templateInfo = await _templateRepository.GetDefaultTemplateAsync(site.Id, TemplateType.IndexPageTemplate);
-                return await GetIndexPageFilePathAsync(site, templateInfo.CreatedFileFullName, site.Root, currentPageIndex);
+                return await GetIndexPageFilePathAsync(site, templateInfo.CreatedFileFullName, site.Root);
             }
             var filePath = nodeInfo.FilePath;
 
@@ -1027,6 +1041,11 @@ namespace SSCMS.Core.Services
             }
             DirectoryUtils.CreateDirectoryIfNotExists(filePath);
 
+            return filePath;
+        }
+
+        public string GetPageFilePathAsync(string filePath, int currentPageIndex)
+        {
             if (currentPageIndex != 0)
             {
                 string appendix = $"_{(currentPageIndex + 1)}";
@@ -1079,7 +1098,7 @@ namespace SSCMS.Core.Services
             return PathUtils.IsFileExtensionAllowed(site.VideoUploadExtensions, fileExtension);
         }
 
-        public bool IsVideoSizeAllowed(Site site, int contentLength)
+        public bool IsVideoSizeAllowed(Site site, long contentLength)
         {
             return contentLength <= site.VideoUploadTypeMaxSize * 1024;
         }
@@ -1089,7 +1108,7 @@ namespace SSCMS.Core.Services
             return PathUtils.IsFileExtensionAllowed(site.AudioUploadExtensions, fileExtension);
         }
 
-        public bool IsAudioSizeAllowed(Site site, int contentLength)
+        public bool IsAudioSizeAllowed(Site site, long contentLength)
         {
             return contentLength <= site.AudioUploadTypeMaxSize * 1024;
         }
@@ -1100,57 +1119,9 @@ namespace SSCMS.Core.Services
             return PathUtils.IsFileExtensionAllowed(typeCollection, fileExtension);
         }
 
-        public bool IsFileSizeAllowed(Site site, int contentLength)
+        public bool IsFileSizeAllowed(Site site, long contentLength)
         {
             return contentLength <= site.FileUploadTypeMaxSize * 1024;
-        }
-
-        public bool IsUploadExtensionAllowed(UploadType uploadType, Site site, string fileExtension)
-        {
-            if (uploadType == UploadType.Image)
-            {
-                return IsImageExtensionAllowed(site, fileExtension);
-            }
-
-            if (uploadType == UploadType.Video)
-            {
-                return IsVideoExtensionAllowed(site, fileExtension);
-            }
-
-            if (uploadType == UploadType.Audio)
-            {
-                return IsAudioExtensionAllowed(site, fileExtension);
-            }
-
-            if (uploadType == UploadType.File)
-            {
-                return IsFileExtensionAllowed(site, fileExtension);
-            }
-            return false;
-        }
-
-        public bool IsUploadSizeAllowed(UploadType uploadType, Site site, int contentLength)
-        {
-            if (uploadType == UploadType.Image)
-            {
-                return IsImageSizeAllowed(site, contentLength);
-            }
-
-            if (uploadType == UploadType.Video)
-            {
-                return IsVideoSizeAllowed(site, contentLength);
-            }
-
-            if (uploadType == UploadType.Audio)
-            {
-                return IsAudioSizeAllowed(site, contentLength);
-            }
-
-            if (uploadType == UploadType.File)
-            {
-                return IsFileSizeAllowed(site, contentLength);
-            }
-            return false;
         }
 
         public string GetBinDirectoryPath(string relatedPath)

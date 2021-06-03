@@ -1,17 +1,16 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Enums;
-using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Templates
 {
     public partial class TemplatesEditorController
 	{
         [HttpPost, Route(RoutePreview)]
-        public async Task<ActionResult<PreviewResult>> Preview([FromBody] PreviewRequest request)
+        public async Task<ActionResult<PreviewResult>> ChangeMode([FromBody] PreviewRequest request)
         {
-            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, Types.SitePermissions.Templates))
+            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, MenuUtils.SitePermissions.Templates))
             {
                 return Unauthorized();
             }
@@ -20,8 +19,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
             if (site == null) return NotFound();
 
             var template = await _templateRepository.GetAsync(request.TemplateId);
-            await _parseManager.InitAsync(site, request.ChannelId, request.ContentId, template);
-            var parsedContent = await _parseManager.ParseTemplatePreviewAsync(request.Content);
+            await _parseManager.InitAsync(EditMode.Preview, site, request.ChannelId, request.ContentId, template);
+            var parsedContent = await _parseManager.ParseTemplateWithCodesHtmlAsync(request.Content);
 
             var baseUrl = string.Empty;
             if (template.TemplateType == TemplateType.IndexPageTemplate)

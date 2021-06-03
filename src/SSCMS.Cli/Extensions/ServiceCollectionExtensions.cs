@@ -17,6 +17,7 @@ namespace SSCMS.Cli.Extensions
 
         public static void AddCliJobs(this IServiceCollection services)
         {
+            services.AddScoped<IJobService, CreateJob>();
             services.AddScoped<IJobService, DataBackupJob>();
             services.AddScoped<IJobService, DataRestoreJob>();
             services.AddScoped<IJobService, DataSyncJob>();
@@ -34,6 +35,9 @@ namespace SSCMS.Cli.Extensions
             services.AddScoped<IJobService, RegisterJob>();
             services.AddScoped<IJobService, RunJob>();
             services.AddScoped<IJobService, StatusJob>();
+            services.AddScoped<IJobService, ThemePackageJob>();
+            services.AddScoped<IJobService, ThemePublishJob>();
+            services.AddScoped<IJobService, ThemeUnPublishJob>();
             services.AddScoped<IJobService, UpdateJob>();
         }
     }

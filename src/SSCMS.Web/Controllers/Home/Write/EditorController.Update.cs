@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Models;
@@ -14,8 +13,8 @@ namespace SSCMS.Web.Controllers.Home.Write
         public async Task<ActionResult<BoolResult>> Update([FromBody] SaveRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Edit))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, MenuUtils.ContentPermissions.Edit))
             {
                 return Unauthorized();
             }
@@ -58,14 +57,6 @@ namespace SSCMS.Web.Controllers.Home.Write
             }
 
             await _contentRepository.UpdateAsync(site, channel, content);
-
-            if (request.Translations != null && request.Translations.Count > 0)
-            {
-                foreach (var translation in request.Translations)
-                {
-                    await ContentUtility.TranslateAsync(_pathManager, _databaseManager, _pluginManager, site, content.ChannelId, content.Id, translation.TransSiteId, translation.TransChannelId, translation.TransType, _createManager, _authManager.AdminId);
-                }
-            }
 
             await _createManager.CreateContentAsync(request.SiteId, channel.Id, content.Id);
             await _createManager.TriggerContentChangedEventAsync(request.SiteId, channel.Id);

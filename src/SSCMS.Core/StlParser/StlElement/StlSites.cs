@@ -2,9 +2,11 @@
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
+using SSCMS.Core.StlParser.Enums;
+using SSCMS.Core.StlParser.Mocks;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Mock;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Models;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Enums;
 using SSCMS.Models;
@@ -14,7 +16,7 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "站点列表", Description = "通过 stl:sites 标签在模板中显示站点列表")]
-    public class StlSites
+    public static class StlSites
     {
         public const string ElementName = "stl:sites";
 
@@ -41,45 +43,14 @@ namespace SSCMS.Core.StlParser.StlElement
             return await ParseElementAsync(parseManager, listInfo, dataSource);
         }
 
-        private static TaxisType GetTaxisTypeByOrder(string orderValue)
-        {
-            var taxisType = TaxisType.OrderByTaxis;
-            if (!string.IsNullOrEmpty(orderValue))
-            {
-                if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderDefault))
-                {
-                    taxisType = TaxisType.OrderByTaxis;
-                }
-                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderBack))
-                {
-                    taxisType = TaxisType.OrderByTaxisDesc;
-                }
-                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderAddDate))
-                {
-                    taxisType = TaxisType.OrderByAddDateDesc;
-                }
-                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderAddDateBack))
-                {
-                    taxisType = TaxisType.OrderByAddDate;
-                }
-                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderRandom))
-                {
-                    taxisType = TaxisType.OrderByRandom;
-                }
-            }
-
-            return taxisType;
-        }
-
-        private static async Task<string> ParseElementAsync(IParseManager parseManager, ListInfo listInfo, List<KeyValuePair<int, Site>> sites)
+        private static async Task<string> ParseElementAsync(IParseManager parseManager, ListInfo listInfo, List<KeyValuePair<int, Site>> dataSource)
         {
             var pageInfo = parseManager.PageInfo;
-            var contextInfo = parseManager.ContextInfo;
 
-            if (sites == null || sites.Count == 0) return string.Empty;
+            if (dataSource == null || dataSource.Count == 0) return string.Empty;
 
             var builder = new StringBuilder();
-            if (listInfo.Layout == Layout.None)
+            if (listInfo.Layout == ListLayout.None)
             {
                 if (!string.IsNullOrEmpty(listInfo.HeaderTemplate))
                 {
@@ -88,6 +59,7 @@ namespace SSCMS.Core.StlParser.StlElement
 
                 var isAlternative = false;
                 var isSeparator = false;
+                var isSeparatorRepeat = false;
                 if (!string.IsNullOrEmpty(listInfo.AlternatingItemTemplate))
                 {
                     isAlternative = true;
@@ -96,19 +68,28 @@ namespace SSCMS.Core.StlParser.StlElement
                 {
                     isSeparator = true;
                 }
-
-                for (var i = 0; i < sites.Count; i++)
+                if (!string.IsNullOrEmpty(listInfo.SeparatorRepeatTemplate))
                 {
-                    var site = sites[i];
+                    isSeparatorRepeat = true;
+                }
+
+                for (var i = 0; i < dataSource.Count; i++)
+                {
+                    var site = dataSource[i];
 
                     pageInfo.SiteItems.Push(site);
-                    var templateString = isAlternative ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
+                    var templateString = isAlternative && i % 2 == 1 ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
                     var parsedString = await TemplateUtility.GetSitesTemplateStringAsync(templateString, string.Empty, parseManager, ParseType.Site);
                     builder.Append(parsedString);
 
-                    if (isSeparator && i != sites.Count - 1)
+                    if (isSeparator && i != dataSource.Count - 1)
                     {
                         builder.Append(listInfo.SeparatorTemplate);
+                    }
+
+                    if (isSeparatorRepeat && (i + 1) % listInfo.SeparatorRepeat == 0 && i != dataSource.Count - 1)
+                    {
+                        builder.Append(listInfo.SeparatorRepeatTemplate);
                     }
                 }
 
@@ -142,22 +123,22 @@ namespace SSCMS.Core.StlParser.StlElement
 
                 while (true)
                 {
-                    using var tr = table.AddRow(null);
+                    using var tr = table.AddRow();
                     for (var cell = 1; cell <= columns; cell++)
                     {
                         var cellHtml = string.Empty;
-                        if (itemIndex < sites.Count)
+                        if (itemIndex < dataSource.Count)
                         {
-                            var site = sites[itemIndex];
+                            var site = dataSource[itemIndex];
 
                             pageInfo.SiteItems.Push(site);
-                            var templateString = isAlternative ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
+                            var templateString = isAlternative && itemIndex % 2 == 1 ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
                             cellHtml = await TemplateUtility.GetSitesTemplateStringAsync(templateString, string.Empty, parseManager, ParseType.Site);
                         }
                         tr.AddCell(cellHtml, cellAttributes);
                         itemIndex++;
                     }
-                    if (itemIndex >= sites.Count) break;
+                    if (itemIndex >= dataSource.Count) break;
                 }
 
                 table.EndBody();
@@ -176,9 +157,39 @@ namespace SSCMS.Core.StlParser.StlElement
             return builder.ToString();
         }
 
-        private static List<Site> ParseEntity(List<KeyValuePair<int, Site>> dataSource)
+        private static List<Site> ParseEntity(IEnumerable<KeyValuePair<int, Site>> dataSource)
         {
             return dataSource.Select(x => x.Value).ToList();
+        }
+
+        private static TaxisType GetTaxisTypeByOrder(string orderValue)
+        {
+            var taxisType = TaxisType.OrderByTaxis;
+            if (!string.IsNullOrEmpty(orderValue))
+            {
+                if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderDefault))
+                {
+                    taxisType = TaxisType.OrderByTaxis;
+                }
+                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderBack))
+                {
+                    taxisType = TaxisType.OrderByTaxisDesc;
+                }
+                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderAddDate))
+                {
+                    taxisType = TaxisType.OrderByAddDateDesc;
+                }
+                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderAddDateBack))
+                {
+                    taxisType = TaxisType.OrderByAddDate;
+                }
+                else if (StringUtils.EqualsIgnoreCase(orderValue, StlParserUtility.OrderRandom))
+                {
+                    taxisType = TaxisType.OrderByRandom;
+                }
+            }
+
+            return taxisType;
         }
     }
 }

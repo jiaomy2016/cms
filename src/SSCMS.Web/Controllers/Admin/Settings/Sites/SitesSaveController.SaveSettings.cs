@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Utils;
 
@@ -12,7 +11,7 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Sites
         [HttpPost, Route(RouteSettings)]
         public async Task<ActionResult<SaveSettingsResult>> SaveSettings([FromBody] SaveRequest request)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsSites))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsSites))
             {
                 return Unauthorized();
             }
@@ -51,33 +50,6 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Sites
             }
 
             var files = DirectoryUtils.GetFileNames(sitePath);
-
-            //var fileSystems = FileUtility.GetFileSystemInfoExtendCollection(await _pathManager.GetSitePathAsync(site));
-            //foreach (FileSystemInfoExtend fileSystem in fileSystems)
-            //{
-            //    if (!fileSystem.IsDirectory) continue;
-
-            //    var isSiteDirectory = false;
-            //    if (site.Root)
-            //    {
-            //        foreach (var siteDir in siteDirList)
-            //        {
-            //            if (StringUtils.EqualsIgnoreCase(siteDir, fileSystem.Name))
-            //            {
-            //                isSiteDirectory = true;
-            //            }
-            //        }
-            //    }
-            //    if (!isSiteDirectory && !_pathManager.IsSystemDirectory(fileSystem.Name))
-            //    {
-            //        directories.Add(fileSystem.Name);
-            //    }
-            //}
-            //foreach (FileSystemInfoExtend fileSystem in fileSystems)
-            //{
-            //    if (fileSystem.IsDirectory) continue;
-            //    files.Add(fileSystem.Name);
-            //}
 
             return new SaveSettingsResult
             {

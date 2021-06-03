@@ -1,9 +1,10 @@
 ﻿using System.Collections.Specialized;
 using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
+using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -11,50 +12,59 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "显示图片", Description = "通过 stl:image 标签在模板中显示栏目或内容的图片")]
-    public class StlImage
-	{
-		private StlImage(){}
-		public const string ElementName = "stl:image";
+    public static class StlImage
+    {
+        public const string ElementName = "stl:image";
 
-		[StlAttribute(Title = "栏目索引")]
+        [StlAttribute(Title = "栏目索引")]
         private const string ChannelIndex = nameof(ChannelIndex);
-        
-		[StlAttribute(Title = "栏目名称")]
+
+        [StlAttribute(Title = "栏目索引")]
+        private const string Index = nameof(Index);
+
+        [StlAttribute(Title = "栏目名称")]
         private const string ChannelName = nameof(ChannelName);
-        
-		[StlAttribute(Title = "显示父栏目")]
+
+        [StlAttribute(Title = "显示父栏目")]
         private const string Parent = nameof(Parent);
-        
-		[StlAttribute(Title = "上级栏目的级别")]
+
+        [StlAttribute(Title = "上级栏目的级别")]
         private const string UpLevel = nameof(UpLevel);
-        
+
         [StlAttribute(Title = "从首页向下的栏目级别")]
         private const string TopLevel = nameof(TopLevel);
-        
+
+        [StlAttribute(Title = "所处上下文")]
+        private const string Context = nameof(Context);
+
         [StlAttribute(Title = "指定存储图片的字段")]
         private const string Type = nameof(Type);
 
-	    [StlAttribute(Title = "显示字段存储的第几幅图片，默认为 1")]
-	    private const string No = nameof(No);
+        [StlAttribute(Title = "显示字段存储的第几幅图片，默认为 1")]
+        private const string No = nameof(No);
+
+        [StlAttribute(Title = "是否清除 HTML 标签")]
+        private const string IsClearTags = nameof(IsClearTags);
 
         [StlAttribute(Title = "如果是引用内容，是否获取所引用内容的值")]
         private const string IsOriginal = nameof(IsOriginal);
-        
-		[StlAttribute(Title = "显示的图片地址")]
+
+        [StlAttribute(Title = "显示的图片地址")]
         private const string Src = nameof(Src);
-        
+
         [StlAttribute(Title = "当指定的图片不存在时显示的图片地址")]
         private const string AltSrc = nameof(AltSrc);
 
         public static async Task<object> ParseAsync(IParseManager parseManager)
-		{
-		    var isGetPicUrlFromAttribute = false;
+        {
+            var isGetPicUrlFromAttribute = false;
             var channelIndex = string.Empty;
             var channelName = string.Empty;
             var upLevel = 0;
             var topLevel = -1;
             var type = nameof(Content.ImageUrl);
-		    var no = 0;
+            var no = 0;
+            var isClearTags = false;
             var isOriginal = false;
             var src = string.Empty;
             var altSrc = string.Empty;
@@ -64,7 +74,7 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 var value = parseManager.ContextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
+                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex) || StringUtils.EqualsIgnoreCase(name, Index))
                 {
                     channelIndex = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
                     if (!string.IsNullOrEmpty(channelIndex))
@@ -104,6 +114,10 @@ namespace SSCMS.Core.StlParser.StlElement
                         isGetPicUrlFromAttribute = true;
                     }
                 }
+                else if (StringUtils.EqualsIgnoreCase(name, Context))
+                {
+                    parseManager.ContextInfo.ContextType = TranslateUtils.ToEnum(value, ParseType.Undefined);
+                }
                 else if (StringUtils.EqualsIgnoreCase(name, Type))
                 {
                     type = value;
@@ -111,6 +125,10 @@ namespace SSCMS.Core.StlParser.StlElement
                 else if (StringUtils.EqualsIgnoreCase(name, No))
                 {
                     no = TranslateUtils.ToInt(value);
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, IsClearTags))
+                {
+                    isClearTags = TranslateUtils.ToBool(value, true);
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, IsOriginal))
                 {
@@ -130,23 +148,23 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, attributes, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, type, no, isOriginal, src, altSrc);
-		}
+            return await ParseAsync(parseManager, attributes, isGetPicUrlFromAttribute, channelIndex, channelName, upLevel, topLevel, type, no, isOriginal, isClearTags, src, altSrc);
+        }
 
-        private static async Task<object> ParseImplAsync(IParseManager parseManager, NameValueCollection attributes, bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel, string type, int no, bool isOriginal, string src, string altSrc)
+        private static async Task<object> ParseAsync(IParseManager parseManager, NameValueCollection attributes,
+            bool isGetPicUrlFromAttribute, string channelIndex, string channelName, int upLevel, int topLevel,
+            string type, int no, bool isOriginal, bool isClearTags, string src, string altSrc)
         {
             var databaseManager = parseManager.DatabaseManager;
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
 
-            object parsedContent = null;
-
             var contentId = 0;
-            //判断是否图片地址由标签属性获得
             if (!isGetPicUrlFromAttribute)
             {
                 contentId = contextInfo.ContentId;
             }
+
             var contextType = contextInfo.ContextType;
 
             var picUrl = string.Empty;
@@ -161,7 +179,7 @@ namespace SSCMS.Core.StlParser.StlElement
                     contextType = contentId != 0 ? ParseType.Content : ParseType.Channel;
                 }
 
-                if (contextType == ParseType.Content)//获取内容图片
+                if (contextType == ParseType.Content)
                 {
                     var contentInfo = await parseManager.GetContentAsync();
 
@@ -170,13 +188,13 @@ namespace SSCMS.Core.StlParser.StlElement
                         if (contentInfo != null && contentInfo.ReferenceId > 0 && contentInfo.SourceId > 0)
                         {
                             var targetChannelId = contentInfo.SourceId;
-                            //var targetSiteId = databaseManager.ChannelRepository.GetSiteId(targetChannelId);
                             var targetSiteId = await databaseManager.ChannelRepository.GetSiteIdAsync(targetChannelId);
                             var targetSite = await databaseManager.SiteRepository.GetAsync(targetSiteId);
                             var targetNodeInfo = await databaseManager.ChannelRepository.GetAsync(targetChannelId);
 
-                            //var targetContentInfo = databaseManager.ContentRepository.GetContentInfo(tableStyle, tableName, contentInfo.ReferenceId);
-                            var targetContentInfo = await databaseManager.ContentRepository.GetAsync(targetSite, targetNodeInfo, contentInfo.ReferenceId);
+                            var targetContentInfo =
+                                await databaseManager.ContentRepository.GetAsync(targetSite, targetNodeInfo,
+                                    contentInfo.ReferenceId);
                             if (targetContentInfo != null && targetContentInfo.ChannelId > 0)
                             {
                                 contentInfo = targetContentInfo;
@@ -186,7 +204,9 @@ namespace SSCMS.Core.StlParser.StlElement
 
                     if (contentInfo == null)
                     {
-                        contentInfo = await databaseManager.ContentRepository.GetAsync(pageInfo.Site, contextInfo.ChannelId, contentId);
+                        contentInfo =
+                            await databaseManager.ContentRepository.GetAsync(pageInfo.Site, contextInfo.ChannelId,
+                                contentId);
                     }
 
                     if (contentInfo != null)
@@ -202,16 +222,26 @@ namespace SSCMS.Core.StlParser.StlElement
                         }
                     }
                 }
-                else if (contextType == ParseType.Channel)//获取栏目图片
+                else if (contextType == ParseType.Channel) //获取栏目图片
                 {
                     var dataManager = new StlDataManager(parseManager.DatabaseManager);
-                    var channelId = await dataManager.GetChannelIdByLevelAsync(pageInfo.SiteId, contextInfo.ChannelId, upLevel, topLevel);
+                    var channelId = await dataManager.GetChannelIdByLevelAsync(pageInfo.SiteId, contextInfo.ChannelId,
+                        upLevel, topLevel);
 
-                    channelId = await dataManager.GetChannelIdByChannelIdOrChannelIndexOrChannelNameAsync(pageInfo.SiteId, channelId, channelIndex, channelName);
+                    channelId = await dataManager.GetChannelIdByChannelIdOrChannelIndexOrChannelNameAsync(
+                        pageInfo.SiteId, channelId, channelIndex, channelName);
 
                     var channel = await databaseManager.ChannelRepository.GetAsync(channelId);
 
-                    picUrl = channel.ImageUrl;
+                    if (no <= 1)
+                    {
+                        picUrl = channel.Get<string>(type);
+                    }
+                    else
+                    {
+                        var extendName = ColumnsManager.GetExtendName(type, no - 1);
+                        picUrl = channel.Get<string>(extendName);
+                    }
                 }
                 else if (contextType == ParseType.Each)
                 {
@@ -224,25 +254,33 @@ namespace SSCMS.Core.StlParser.StlElement
                 picUrl = altSrc;
             }
 
-            if (!string.IsNullOrEmpty(picUrl))
+            if (string.IsNullOrEmpty(picUrl)) return string.Empty;
+
+            var extension = PathUtils.GetExtension(picUrl);
+            if (FileUtils.IsFlash(extension))
             {
-                var extension = PathUtils.GetExtension(picUrl);
-                if (FileUtils.IsFlash(extension))
-                {
-                    parsedContent = await StlPdf.ParseAsync(parseManager);
-                }
-                else if (FileUtils.IsPlayer(extension))
-                {
-                    parsedContent = await StlPlayer.ParseAsync(parseManager);
-                }
-                else
-                {
-                    attributes["src"] = await parseManager.PathManager.ParseSiteUrlAsync(pageInfo.Site, picUrl, pageInfo.IsLocal);
-                    parsedContent = $@"<img {TranslateUtils.ToAttributesString(attributes)}>";
-                }
+                return await StlPdf.ParseAsync(parseManager);
             }
 
-            return parsedContent;
+            if (FileUtils.IsPlayer(extension))
+            {
+                return await StlPlayer.ParseAsync(parseManager);
+            }
+
+            picUrl = await parseManager.PathManager.ParseSiteUrlAsync(pageInfo.Site, picUrl, pageInfo.IsLocal);
+            if (isClearTags || contextInfo.IsStlEntity)
+            {
+                return picUrl;
+            }
+
+            attributes["src"] = picUrl;
+
+            if (pageInfo.EditMode == EditMode.Visual)
+            {
+                VisualUtility.AddEditableToPage(pageInfo, contextInfo, attributes, string.Empty);
+            }
+
+            return $@"<img {TranslateUtils.ToAttributesString(attributes)}>";
         }
-	}
+    }
 }

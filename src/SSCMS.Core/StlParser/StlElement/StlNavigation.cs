@@ -2,8 +2,8 @@
 using System.Collections.Specialized;
 using System.Text;
 using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -11,9 +11,8 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "显示导航", Description = "通过 stl:navigation 标签在模板中显示链接导航")]
-    public class StlNavigation
+    public static class StlNavigation
     {
-        private StlNavigation() { }
         public const string ElementName = "stl:navigation";
 
         [StlAttribute(Title = "类型")]
@@ -83,10 +82,12 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, attributes, type, emptyText, tipText, wordNum, isKeyboard);
+            return parseManager.ContextInfo.IsStlEntity
+                ? await ParseEntityAsync(type, parseManager)
+                : await ParseElementAsync(parseManager, attributes, type, emptyText, tipText, wordNum, isKeyboard);
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, NameValueCollection attributes, string type, string emptyText, string tipText, int wordNum, bool isKeyboard)
+        private static async Task<string> ParseElementAsync(IParseManager parseManager, NameValueCollection attributes, string type, string emptyText, string tipText, int wordNum, bool isKeyboard)
         {
             var databaseManager = parseManager.DatabaseManager;
             var pageInfo = parseManager.PageInfo;
@@ -97,18 +98,17 @@ namespace SSCMS.Core.StlParser.StlElement
             var innerHtml = string.Empty;
             StlParserUtility.GetYesNo(contextInfo.InnerHtml, out var successTemplateString, out var failureTemplateString);
 
-            var contentInfo = await parseManager.GetContentAsync();
+            var content = await parseManager.GetContentAsync();
 
             if (string.IsNullOrEmpty(successTemplateString))
             {
-                var nodeInfo = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
+                var channel = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
 
                 if (StringUtils.EqualsIgnoreCase(type, TypePreviousChannel) || StringUtils.EqualsIgnoreCase(type, TypeNextChannel))
                 {
-                    var taxis = nodeInfo.Taxis;
+                    var taxis = channel.Taxis;
                     var isNextChannel = !StringUtils.EqualsIgnoreCase(type, TypePreviousChannel);
-                    //var siblingChannelId = databaseManager.ChannelRepository.GetIdByParentIdAndTaxis(node.ParentId, taxis, isNextChannel);
-                    var siblingChannelId = await databaseManager.ChannelRepository.GetIdByParentIdAndTaxisAsync(pageInfo.SiteId, nodeInfo.ParentId, taxis, isNextChannel);
+                    var siblingChannelId = await databaseManager.ChannelRepository.GetIdByParentIdAndTaxisAsync(pageInfo.SiteId, channel.ParentId, taxis, isNextChannel);
                     if (siblingChannelId != 0)
                     {
                         var siblingNodeInfo = await databaseManager.ChannelRepository.GetAsync(siblingChannelId);
@@ -140,7 +140,7 @@ namespace SSCMS.Core.StlParser.StlElement
                 {
                     if (contextInfo.ContentId != 0)
                     {
-                        var taxis = contentInfo.Taxis;
+                        var taxis = content.Taxis;
                         var isNextContent = !StringUtils.EqualsIgnoreCase(type, TypePreviousContent);
                         var tableName = await databaseManager.ChannelRepository.GetTableNameAsync(pageInfo.Site, contextInfo.ChannelId);
                         var siblingContentId = await databaseManager.ContentRepository.GetContentIdAsync(tableName, contextInfo.ChannelId, taxis, isNextContent);
@@ -195,17 +195,17 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 var context = parseManager.ContextInfo;
 
-                var nodeInfo = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
+                var channel = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
 
                 var isSuccess = false;
                 parseManager.ContextInfo = contextInfo.Clone();
 
                 if (StringUtils.EqualsIgnoreCase(type, TypePreviousChannel) || StringUtils.EqualsIgnoreCase(type, TypeNextChannel))
                 {
-                    var taxis = nodeInfo.Taxis;
+                    var taxis = channel.Taxis;
                     var isNextChannel = !StringUtils.EqualsIgnoreCase(type, TypePreviousChannel);
                     //var siblingChannelId = databaseManager.ChannelRepository.GetIdByParentIdAndTaxis(node.ParentId, taxis, isNextChannel);
-                    var siblingChannelId = await databaseManager.ChannelRepository.GetIdByParentIdAndTaxisAsync(pageInfo.SiteId, nodeInfo.ParentId, taxis, isNextChannel);
+                    var siblingChannelId = await databaseManager.ChannelRepository.GetIdByParentIdAndTaxisAsync(pageInfo.SiteId, channel.ParentId, taxis, isNextChannel);
                     if (siblingChannelId != 0)
                     {
                         isSuccess = true;
@@ -217,7 +217,7 @@ namespace SSCMS.Core.StlParser.StlElement
                 {
                     if (contextInfo.ContentId != 0)
                     {
-                        var taxis = contentInfo.Taxis;
+                        var taxis = content.Taxis;
                         var isNextContent = !StringUtils.EqualsIgnoreCase(type, TypePreviousContent);
                         var tableName = await databaseManager.ChannelRepository.GetTableNameAsync(pageInfo.Site, contextInfo.ChannelId);
                         var siblingContentId = await databaseManager.ContentRepository.GetContentIdAsync(tableName, contextInfo.ChannelId, taxis, isNextContent);
@@ -245,6 +245,59 @@ namespace SSCMS.Core.StlParser.StlElement
             }
 
             parsedContent = tipText + parsedContent;
+
+            return parsedContent;
+        }
+
+        private static async Task<string> ParseEntityAsync(string type, IParseManager parseManager)
+        {
+            var databaseManager = parseManager.DatabaseManager;
+            var pageInfo = parseManager.PageInfo;
+            var contextInfo = parseManager.ContextInfo;
+
+            var parsedContent = string.Empty;
+            try
+            {
+                var nodeInfo = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
+
+                if (StringUtils.EqualsIgnoreCase(TypePreviousChannel, type) || StringUtils.EqualsIgnoreCase(TypeNextChannel, type))
+                {
+                    var taxis = nodeInfo.Taxis;
+                    var isNextChannel = !StringUtils.EqualsIgnoreCase(type, TypePreviousChannel);
+                    //var siblingChannelId = databaseManager.ChannelRepository.GetIdByParentIdAndTaxis(node.ParentId, taxis, isNextChannel);
+                    var siblingChannelId = await databaseManager.ChannelRepository.GetIdByParentIdAndTaxisAsync(pageInfo.SiteId, nodeInfo.ParentId, taxis, isNextChannel);
+                    if (siblingChannelId != 0)
+                    {
+                        var siblingNodeInfo = await databaseManager.ChannelRepository.GetAsync(siblingChannelId);
+                        parsedContent = await parseManager.PathManager.GetChannelUrlAsync(pageInfo.Site, siblingNodeInfo, pageInfo.IsLocal);
+                    }
+                }
+                else if (StringUtils.EqualsIgnoreCase(TypePreviousContent, type) || StringUtils.EqualsIgnoreCase(TypeNextContent, type))
+                {
+                    if (contextInfo.ContentId != 0)
+                    {
+                        var contentInfo = await parseManager.GetContentAsync();
+                        var taxis = contentInfo.Taxis;
+                        var isNextContent = !StringUtils.EqualsIgnoreCase(type, TypePreviousContent);
+                        var tableName = await databaseManager.ChannelRepository.GetTableNameAsync(pageInfo.Site, contextInfo.ChannelId);
+                        var siblingContentId = await databaseManager.ContentRepository.GetContentIdAsync(tableName, contextInfo.ChannelId, taxis, isNextContent);
+                        if (siblingContentId != 0)
+                        {
+                            var siblingContentInfo = await databaseManager.ContentRepository.GetAsync(pageInfo.Site, contextInfo.ChannelId, siblingContentId);
+                            parsedContent = await parseManager.PathManager.GetContentUrlAsync(pageInfo.Site, siblingContentInfo, pageInfo.IsLocal);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            if (string.IsNullOrEmpty(parsedContent))
+            {
+                parsedContent = PageUtils.UnClickableUrl;
+            }
 
             return parsedContent;
         }

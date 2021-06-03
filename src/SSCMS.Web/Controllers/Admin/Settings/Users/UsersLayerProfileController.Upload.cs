@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Utils;
 
@@ -9,20 +10,21 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Users
 {
     public partial class UsersLayerProfileController
     {
+        [RequestSizeLimit(long.MaxValue)]
         [HttpPost, Route(RouteUpload)]
         public async Task<ActionResult<StringResult>> Upload([FromQuery] int userId, [FromForm] IFormFile file)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsUsers))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsUsers))
             {
                 return Unauthorized();
             }
 
-            if (file == null) return this.Error("请选择有效的文件上传");
+            if (file == null) return this.Error(Constants.ErrorUpload);
             var fileName = _pathManager.GetUploadFileName(file.FileName);
             var filePath = _pathManager.GetUserUploadPath(userId, fileName);
             if (!FileUtils.IsImage(PathUtils.GetExtension(fileName)))
             {
-                return this.Error("文件只能是图片格式，请选择有效的文件上传!");
+                return this.Error(Constants.ErrorImageExtensionAllowed);
             }
 
             await _pathManager.UploadAsync(file, filePath);

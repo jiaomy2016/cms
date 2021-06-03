@@ -16,7 +16,7 @@ var data = utils.init({
 var error = null;
 
 var methods = {
-  getConfig: function () {
+  apiGet: function () {
     var $this = this;
 
     $api.get($url).then(function (response) {
@@ -37,7 +37,7 @@ var methods = {
     location.href = utils.getSettingsUrl('sitesAdd', {
       type: 'submit',
       createType: 'local',
-      createTemplateId: row.directoryName
+      localDirectoryName: row.directoryName
     });
   },
 
@@ -94,8 +94,7 @@ var methods = {
       var res = response.data;
 
       utils.success('站点模板删除成功！');
-
-      $this.siteTemplateInfoList.splice($this.siteTemplateInfoList.indexOf(row.directoryName), 1);
+      $this.apiGet();
     }).catch(function (error) {
       utils.error(error);
     }).then(function () {
@@ -168,11 +167,11 @@ var methods = {
   },
 
   uploadBefore(file) {
-    var isZIP = file.type === 'application/x-zip-compressed';
-    if (!isZIP) {
-      utils.error('上传站点模板只能是 ZIP 格式!');
+    var isZip = file.name.indexOf('.zip', file.name.length - '.zip'.length) !== -1;
+    if (!isZip) {
+      utils.error('上传站点模板只能是 Zip 格式!');
     }
-    return isZIP;
+    return isZip;
   },
 
   uploadProgress: function() {
@@ -200,6 +199,6 @@ var $vue = new Vue({
   data: data,
   methods: methods,
   created: function () {
-    this.getConfig();
+    this.apiGet();
   }
 });

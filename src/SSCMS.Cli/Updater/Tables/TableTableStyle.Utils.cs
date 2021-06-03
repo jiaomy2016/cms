@@ -22,11 +22,10 @@ namespace SSCMS.Cli.Updater.Tables
 
         private List<TableColumn> NewColumns => _databaseManager.TableStyleRepository.TableColumns;
 
-        private static readonly Dictionary<string, string> ConvertKeyDict =
-            new Dictionary<string, string>
+        private static readonly Dictionary<string, string[]> ConvertKeyDict =
+            new Dictionary<string, string[]>
             {
-                {nameof(TableStyle.Id), nameof(TableStyleId)},
-                {nameof(TableStyle.TableName), nameof(TableName)}
+                {nameof(TableStyle.Id), new[] {nameof(TableStyleId)}}
             };
 
         private Dictionary<string, string> ConvertValueDict => new Dictionary<string, string>
@@ -35,14 +34,24 @@ namespace SSCMS.Cli.Updater.Tables
             {UpdateUtils.GetConvertValueDictKey(nameof(TableStyle.TableName), "siteserver_Node"), _databaseManager.ChannelRepository.TableName}
         };
 
-        private static Dictionary<string, object> Process(Dictionary<string, object> row)
+        private Dictionary<string, object> Process(Dictionary<string, object> row)
         {
-            if (row.TryGetValue("IsVisible", out var isVisible))
+            if (row.TryGetValue(nameof(IsVisible), out var contentObj))
             {
-                if (isVisible != null && StringUtils.EqualsIgnoreCase(isVisible.ToString(), "False"))
+                if (contentObj != null && StringUtils.EqualsIgnoreCase(contentObj.ToString(), "False"))
                 {
                     row[nameof(TableStyle.InputType)] = Enums.InputType.Hidden.GetValue();
                 }
+            }
+            if (row.TryGetValue(nameof(IsVisibleInList), out contentObj))
+            {
+                var value = TranslateUtils.ToBool(contentObj.ToString());
+                row[nameof(TableStyle.List)] = value;
+            }
+            if (row.TryGetValue(nameof(IsHorizontal), out contentObj))
+            {
+                var value = TranslateUtils.ToBool(contentObj.ToString());
+                row[nameof(TableStyle.Horizontal)] = value;
             }
 
             return row;

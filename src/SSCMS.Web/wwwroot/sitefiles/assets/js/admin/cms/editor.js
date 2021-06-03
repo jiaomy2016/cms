@@ -1,4 +1,7 @@
 ﻿var $url = '/cms/editor/editor';
+var $urlPreview = $url + '/actions/preview';
+var $urlCensor = $url + '/actions/censor';
+var $urlTags = $url + '/actions/tags';
 
 var data = utils.init({
   siteId: utils.getQueryInt('siteId'),
@@ -6,11 +9,12 @@ var data = utils.init({
   contentId: utils.getQueryInt('contentId'),
   page: utils.getQueryInt('page'),
   tabName: utils.getQueryString('tabName'),
+  reloadChannelId: utils.getQueryInt('reloadChannelId'),
   mainHeight: '',
   isSettings: true,
   sideType: 'first',
   collapseSettings: ['checkedLevel', 'addDate'],
-  collapseMore: ['translates'],
+  collapseMore: ['templateId', 'translates'],
 
   site: null,
   siteUrl: null,
@@ -18,13 +22,19 @@ var data = utils.init({
   groupNames: null,
   tagNames: null,
   checkedLevels: null,
+  isCensorTextEnabled: null,
   siteOptions: null,
   channelOptions: null,
   styles: null,
+  templates: null,
   form: null,
 
   translates: [],
-  isPreviewSaving: false
+  isPreviewSaving: false,
+
+  dialogCensor: false,
+  isCensorSave: false,
+  textResult: null
 });
 
 var methods = {
@@ -61,8 +71,8 @@ var methods = {
   },
 
   insertText: function(attributeName, no, text) {
-    var count = this.form[utils.getCountName(attributeName)];
-    if (count && count < no) {
+    var count = this.form[utils.getCountName(attributeName)] || 0;
+    if (count <= no) {
       this.form[utils.getCountName(attributeName)] = no;
     }
     this.form[utils.getExtendName(attributeName, no)] = text;
@@ -72,7 +82,7 @@ var methods = {
   insertEditor: function(attributeName, html) {
     if (!attributeName) attributeName = 'Body';
     if (!html) return;
-    UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
+    utils.getEditor(attributeName).execCommand('insertHTML', html);
   },
 
   addTranslation: function(targetSiteId, targetChannelId, translateType, summary) {
@@ -105,8 +115,7 @@ var methods = {
         channelId: $this.channelId,
         contentId: $this.contentId
       }
-    })
-    .then(function(response) {
+    }).then(function(response) {
       var res = response.data;
 
       $this.site = res.site;
@@ -115,11 +124,13 @@ var methods = {
       $this.groupNames = res.groupNames;
       $this.tagNames = res.tagNames;
       $this.checkedLevels = res.checkedLevels;
-      
+      $this.isCensorTextEnabled = res.isCensorTextEnabled;
+
       $this.siteOptions = res.siteOptions;
       $this.channelOptions = res.channelOptions;
 
       $this.styles = res.styles;
+      $this.templates = res.templates;
       $this.form = _.assign({}, res.content);
       if ($this.form.checked) {
         $this.form.checkedLevel = $this.site.checkContentLevel;
@@ -146,34 +157,42 @@ var methods = {
 
       for (var i = 0; i < $this.styles.length; i++) {
         var style = $this.styles[i];
-        if (style.inputType !== 'Image' && style.inputType !== 'File' && style.inputType !== 'Video') continue;
-        
-        $this.form[utils.getCountName(style.attributeName)] = utils.toInt($this.form[utils.getCountName(style.attributeName)]);
+        if (style.inputType === 'CheckBox' || style.inputType === 'SelectMultiple') {
+          var value = $this.form[utils.toCamelCase(style.attributeName)];
+          if (!Array.isArray(value)) {
+            if (!value) {
+              $this.form[utils.toCamelCase(style.attributeName)] = [];
+            } else {
+              $this.form[utils.toCamelCase(style.attributeName)] = utils.toArray(value);
+            }
+          }
+        } else if (style.inputType === 'Image' || style.inputType === 'File' || style.inputType === 'Video') {
+          $this.form[utils.getCountName(style.attributeName)] = utils.toInt($this.form[utils.getCountName(style.attributeName)]);
+        } else if (style.inputType === 'Text' || style.inputType === 'TextArea' || style.inputType === 'TextEditor') {
+          if ($this.contentId === 0) {
+            $this.form[utils.toCamelCase(style.attributeName)] = style.defaultValue;
+          }
+        }
       }
 
       setTimeout(function () {
         for (var i = 0; i < $this.styles.length; i++) {
           var style = $this.styles[i];
           if (style.inputType === 'TextEditor') {
-            var editor = UE.getEditor(style.attributeName, {
-              allowDivTransToP: false,
-              maximumWords: 99999999
-            });
+            var editor = utils.getEditor(style.attributeName);
             editor.styleIndex = i;
             editor.ready(function () {
-              editor.addListener("contentChange", function () {
+              this.addListener("contentChange", function () {
                 var style = $this.styles[this.styleIndex];
-                $this.form[_.lowerFirst(style.attributeName)] = this.getContent();
+                $this.form[utils.toCamelCase(style.attributeName)] = this.getContent();
               });
             });
           }
         }
       }, 100);
-    })
-    .catch(function(error) {
+    }).catch(function(error) {
       utils.error(error);
-    })
-    .then(function() {
+    }).then(function() {
       utils.loading($this, false);
     });
   },
@@ -191,12 +210,61 @@ var methods = {
     }).then(function(response) {
       var res = response.data;
 
-      $this.closeAndRedirect();
-    })
-    .catch(function(error) {
+      $this.closeAndRedirect(false);
+    }).catch(function(error) {
       utils.error(error);
-    })
-    .then(function() {
+    }).then(function() {
+      utils.loading($this, false);
+    });
+  },
+
+  apiCensor: function(isSave) {
+    this.isCensorSave = isSave;
+    var $this = this;
+
+    utils.loading(this, true);
+    $api.post($urlCensor, {
+      siteId: this.siteId,
+      channelId: this.channelId,
+      content: this.form
+    }).then(function(response) {
+      var res = response.data;
+
+      if (res.success) {
+        if (isSave) {
+          $this.btnCensorSaveClick();
+        } else {
+          utils.success('内容审查通过！');
+        }
+      } else {
+        $this.textResult = res.textResult;
+        $this.dialogCensor = true;
+      }
+    }).catch(function(error) {
+      utils.error(error);
+    }).then(function() {
+      utils.loading($this, false);
+    });
+  },
+
+  apiTags: function() {
+    var $this = this;
+
+    utils.loading(this, true);
+    $api.post($urlTags, {
+      siteId: this.siteId,
+      channelId: this.channelId,
+      content: this.form.body
+    }).then(function(response) {
+      var res = response.data;
+
+      if (res.tags && res.tags.length > 0) {
+        $this.form.tagNames = _.union($this.form.tagNames, res.tags);
+        utils.success('成功提取标签！');
+      }
+    }).catch(function(error) {
+      utils.error(error);
+    }).then(function() {
       utils.loading($this, false);
     });
   },
@@ -205,7 +273,7 @@ var methods = {
     var $this = this;
 
     utils.loading(this, true);
-    $api.post($url + '/actions/preview', {
+    $api.post($urlPreview, {
       siteId: this.siteId,
       channelId: this.channelId,
       contentId: this.contentId,
@@ -215,11 +283,9 @@ var methods = {
 
       $this.isPreviewSaving = false;
       window.open(res.url);
-    })
-    .catch(function(error) {
+    }).catch(function(error) {
       utils.error(error);
-    })
-    .then(function() {
+    }).then(function() {
       utils.loading($this, false);
     });
   },
@@ -237,23 +303,29 @@ var methods = {
     }).then(function(response) {
       var res = response.data;
 
-      $this.closeAndRedirect();
-    })
-    .catch(function(error) {
+      $this.closeAndRedirect(true);
+    }).catch(function(error) {
       utils.error(error);
-    })
-    .then(function() {
+    }).then(function() {
       utils.loading($this, false);
     });
+  },
+
+  btnCensorSaveClick: function() {
+    if (this.contentId === 0) {
+      this.apiInsert();
+    } else {
+      this.apiUpdate();
+    }
   },
 
   closeAndRedirect: function(isEdit) {
     var tabVue = utils.getTabVue(this.tabName);
     if (tabVue) {
       if (isEdit) {
-        tabVue.apiList(this.channelId, this.page, '内容保存成功！');
+        tabVue.apiList(this.reloadChannelId > 0 ? this.reloadChannelId : this.channelId, this.page, '内容编辑成功！');
       } else {
-        tabVue.apiList(this.channelId, this.page, '内容保存成功！', true);
+        tabVue.apiList(this.channelId, this.page, '内容新增成功！', true);
       }
     }
     utils.removeTab();
@@ -303,18 +375,40 @@ var methods = {
         editor.sync();
       });
     }
-    
+
     this.$refs.form.validate(function(valid) {
       if (valid) {
-        if ($this.contentId === 0) {
-          $this.apiInsert();
+        if ($this.site.isAutoCheckKeywords && $this.isCensorTextEnabled) {
+          $this.apiCensor(true);
         } else {
-          $this.apiUpdate();
+          $this.btnCensorSaveClick();
         }
       } else {
         utils.error('保存失败，请检查表单值是否正确');
       }
     });
+  },
+
+  btnCensorClick: function() {
+    if (UE) {
+      $.each(UE.instants, function (index, editor) {
+        editor.sync();
+      });
+    }
+
+    this.apiCensor(false);
+  },
+
+  btnTagsClick: function() {
+    if (UE) {
+      $.each(UE.instants, function (index, editor) {
+        editor.sync();
+      });
+    }
+
+    if (!this.form.body) return;
+
+    this.apiTags();
   },
 
   btnPreviewClick: function() {
@@ -327,7 +421,7 @@ var methods = {
         editor.sync();
       });
     }
-    
+
     this.$refs.form.validate(function(valid) {
       if (valid) {
         $this.apiPreview();

@@ -1,4 +1,4 @@
-﻿var $url = '/cms/templates/templatesEditor';
+﻿﻿var $url = '/cms/templates/templatesEditor';
 var $urlSettings = $url + '/actions/settings';
 var $urlPreview = $url + '/actions/preview';
 var $urlGetContents = $url + '/actions/getContents';
@@ -15,7 +15,10 @@ var data = utils.init({
   siteId: utils.getQueryInt("siteId"),
   templateId: utils.getQueryInt("templateId"),
   templateType: utils.getQueryString("templateType"),
+  accessToken: utils.getQueryString("accessToken"),
   createdFileFullNameTips: '以“~/”开头代表系统根目录，以“@/”开头代表站点根目录',
+  templateName: null,
+  relatedFile: null,
   channels: null,
   contents: null,
   content: null,
@@ -38,8 +41,7 @@ var data = utils.init({
     contentId: null
   },
   next: '',
-  editorHeight: 0,
-  isMore: false,
+  winHeight: 0,
   isPreview: false,
 });
 
@@ -57,6 +59,8 @@ var methods = {
     }).then(function (response) {
       var res = response.data;
 
+      $this.templateName = res.settings.templateName;
+      $this.relatedFile = res.settings.relatedFileName + res.settings.createdFileExtName;
       $this.settings = res.settings;
       $this.content = res.content;
       $this.channels = res.channels;
@@ -108,13 +112,19 @@ var methods = {
   },
 
   apiSettings: function () {
+    this.content = this.getEditorContent();
     var $this = this;
 
     utils.loading(this, true);
-    $api.post($urlSettings, this.settings).then(function (response) {
+    $api.post($urlSettings, {
+      settings: this.settings,
+      content: this.content
+    }).then(function (response) {
       var res = response.data;
 
       $this.panelSettings = false;
+      $this.templateName = res.settings.templateName;
+      $this.relatedFile = res.settings.relatedFileName + res.settings.createdFileExtName;
       $this.settings = res.settings;
       if ($this.next == 'submit') {
         $this.apiSubmit(false);
@@ -235,6 +245,7 @@ var methods = {
       this.contentEditor.getModel().setValue(val);
       this.contentEditor.focus();
     } else {
+      utils.loading(this, true);
       setTimeout(function () {
         require.config({ paths: { 'vs': utils.getAssetsUrl('lib/monaco-editor/min/vs') }});
         require(['vs/editor/editor.main'], function() {
@@ -243,13 +254,10 @@ var methods = {
               language: 'html'
           });
           $this.contentEditor.focus();
+          utils.loading($this, false);
         });
       }, 100);
     }
-  },
-
-  btnMoreClick: function() {
-    this.isMore = !this.isMore;
   },
 
   btnCodeClick: function() {
@@ -257,30 +265,27 @@ var methods = {
   },
 
   btnFormatClick: function() {
-    this.isMore = false;
     this.contentEditor.getAction('editor.action.formatDocument').run().then(function() {
       utils.success('模板代码格式化成功!');
     });
   },
 
   btnSettingsClick: function() {
-    this.isMore = false;
     this.panelSettings = true;
     this.next = '';
   },
 
   btnDataSourceClick: function() {
-    this.isMore = false;
     this.panelDataSource = true;
   },
 
   btnRestoreClick: function() {
-    this.isMore = false;
     utils.openLayer({
       title: '还原历史版本',
       url: utils.getCmsUrl('templatesEditorLayerRestore', {
         siteId: this.siteId,
-        templateId: this.templateId
+        templateId: this.templateId,
+        accessToken: this.accessToken
       }),
       full: true
     });
@@ -288,7 +293,6 @@ var methods = {
 
   btnCreateClick: function() {
     var $this = this;
-    this.isMore = false;
 
     utils.loading(this, true);
     $api.post($url + '/actions/create', {
@@ -299,7 +303,12 @@ var methods = {
 
       utils.openLayer({
         title: '生成进度查看',
-        url: utils.getCmsUrl('createStatus', {siteId: $this.siteId}),
+        url: utils.getCmsUrl('createStatus', {
+          siteId: $this.siteId,
+          accessToken: $this.accessToken
+        }),
+        width: '50%',
+        height: '50%'
       });
     }).catch(function (error) {
       utils.error(error);
@@ -368,7 +377,7 @@ var $vue = new Vue({
   data: data,
   methods: methods,
   created: function () {
-    this.editorHeight = $(window).height() + 'px';
+    this.winHeight = $(window).height();
     this.apiGet();
   }
 });

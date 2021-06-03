@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Datory;
 using SSCMS.Configuration;
 using SSCMS.Core.Context;
+using SSCMS.Core.StlParser.StlElement;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
 using SSCMS.Models;
@@ -33,14 +34,14 @@ namespace SSCMS.Core.Services
         public ParsePage PageInfo { get; set; }
         public ParseContext ContextInfo { get; set; }
 
-        public async Task InitAsync(Site site, int pageChannelId, int pageContentId, Template template)
+        public async Task InitAsync(EditMode editMode, Site site, int pageChannelId, int pageContentId, Template template)
         {
             var config = await DatabaseManager.ConfigRepository.GetAsync();
-            PageInfo = new ParsePage(PathManager, config, pageChannelId, pageContentId, site, template, new Dictionary<string, object>());
+            PageInfo = new ParsePage(PathManager, editMode, config, pageChannelId, pageContentId, site, template, new Dictionary<string, object>());
             ContextInfo = new ParseContext(PageInfo);
         }
 
-        public async Task ParseAsync(StringBuilder contentBuilder, string filePath, bool isDynamic)
+        public async Task ParseAsync(StringBuilder contentBuilder, string filePath, bool isPreview)
         {
             var context = new PluginParseContext(this);
 
@@ -119,7 +120,7 @@ namespace SSCMS.Core.Services
 
             if (FileUtils.IsHtml(PathUtils.GetExtension(filePath)))
             {
-                if (isDynamic)
+                if (isPreview)
                 {
                     var pageUrl = PageUtils.AddProtocolToUrl(
                         PathManager.ParseUrl(
@@ -225,6 +226,16 @@ namespace SSCMS.Core.Services
                     contentBuilder.Append(footCodesHtml + Constants.ReturnAndNewline);
                 }
             }
+        }
+
+        public async Task<string> GetDynamicScriptAsync(string dynamicApiUrl, Dynamic dynamic)
+        {
+            return await StlDynamic.GetScriptAsync(this, dynamicApiUrl, dynamic);
+        }
+
+        public async Task<string> ParseDynamicAsync(Dynamic dynamic, string template)
+        {
+            return await StlDynamic.ParseDynamicAsync(this, dynamic, template);
         }
 
         public async Task<string> AddStlErrorLogAsync(string elementName, string stlContent, Exception ex)

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using Datory;
 using Microsoft.Extensions.Configuration;
 
@@ -19,7 +18,6 @@ namespace SSCMS.Services
         bool IsProtectData { get; }
         bool IsDisablePlugins { get; }
         string SecurityKey { get; }
-        string ApiHost { get; }
         DatabaseType DatabaseType { get; }
         string DatabaseConnectionString { get; }
         IDatabase Database { get; }

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Utils;
 
@@ -13,14 +14,15 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         [HttpPost, Route(RouteUpload)]
         public async Task<ActionResult<StringResult>> Upload([FromQuery] int siteId, [FromForm] IFormFile file)
         {
-            if (!await _authManager.HasChannelPermissionsAsync(siteId, siteId, Types.ChannelPermissions.Add))
+            if (!await _authManager.HasSitePermissionsAsync(siteId,
+                    MenuUtils.SitePermissions.Channels))
             {
                 return Unauthorized();
             }
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = PathUtils.GetFileName(file.FileName);

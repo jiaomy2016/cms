@@ -85,12 +85,9 @@ var methods = {
       $this.form = $this.items[0];
 
       setTimeout(function () {
-        $this.editor = UE.getEditor('editor', {
-          allowDivTransToP: false,
-          maximumWords: 99999999
-        });
+        $this.editor = utils.getEditor('editor');
         $this.editor.ready(function () {
-          $this.editor.addListener("contentChange", function () {
+          this.addListener("contentChange", function () {
             $this.form.content = this.getContent();
           });
         });

@@ -1,54 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using SSCMS.Core.Utils;
 using SSCMS.Utils;
 
 namespace SSCMS.Core.Services
 {
-    public partial class CacheManager<TCacheValue>
+    public partial class CacheManager
     {
-        private static readonly Dictionary<string, FileSystemWatcher> _fileDependencies =
-            new Dictionary<string, FileSystemWatcher>(StringComparer.OrdinalIgnoreCase);
-
-        public TCacheValue Get(string key)
+        public T Get<T>(string key)
         {
-            return _cacheManager.Get(key);
+            return TranslateUtils.Get<T>(_cacheManager.Get(key));
         }
 
-        public TCacheValue GetByFilePath(string filePath)
+        public string GetByFilePath(string filePath)
         {
-            if (string.IsNullOrEmpty(filePath)) return default;
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return string.Empty;
 
             var cacheKey = CacheUtils.GetPathKey(filePath);
-            var value = _cacheManager.Get(cacheKey);
+            var value = _cacheManager.Get<string>(cacheKey);
 
-            if (!_fileDependencies.ContainsKey(cacheKey))
-            {
-                var directoryPath = DirectoryUtils.GetDirectoryPath(filePath);
-                var fileName = PathUtils.GetFileName(filePath);
-                var watcher = new FileSystemWatcher
-                {
-                    Filter = fileName,
-                    Path = directoryPath,
-                    EnableRaisingEvents = true
-                };
+            if (value != null) return value;
 
-                watcher.Changed += (sender, e) =>
-                {
-                    Remove(cacheKey);
-                };
-                watcher.Renamed += (sender, e) =>
-                {
-                    Remove(cacheKey);
-                };
-                watcher.Deleted += (sender, e) =>
-                {
-                    Remove(cacheKey);
-                };
-
-                _fileDependencies[cacheKey] = watcher;
-            }
+            value = FileUtils.ReadText(filePath);
+            AddOrUpdateSliding(cacheKey, value, 12 * 60);
 
             return value;
         }

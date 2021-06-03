@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using SSCMS.Enums;
 using SSCMS.Services;
@@ -153,7 +152,7 @@ namespace SSCMS.Core.StlParser.Utility
                 }
             }
             
-            return ETaxisTypeUtils.GetContentOrderByString(taxisType, orderByString);
+            return _databaseManager.GetContentOrderByString(taxisType, orderByString);
         }
     }
 }

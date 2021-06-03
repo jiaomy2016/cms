@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using SSCMS.Configuration;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
@@ -12,10 +12,9 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "获取值", Description = "通过 stl:value 标签在模板中获取值")]
-    public class StlValue
+    public static class StlValue
 	{
-		private StlValue(){}
-		public const string ElementName = "stl:value";
+        public const string ElementName = "stl:value";
 
 		[StlAttribute(Title = "类型")]
         private const string Type = nameof(Type);
@@ -143,10 +142,10 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, type, formatString, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBr, isLower, isUpper);
+            return await ParseAsync(parseManager, type, formatString, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBr, isLower, isUpper);
 		}
 
-        private static async Task<object> ParseImplAsync(IParseManager parseManager, string type, string formatString, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, bool isReturnToBr, bool isLower, bool isUpper)
+        private static async Task<object> ParseAsync(IParseManager parseManager, string type, string formatString, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, bool isReturnToBr, bool isLower, bool isUpper)
         {
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
@@ -165,7 +164,7 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 if (!pageInfo.BodyCodes.ContainsKey("datestring.js"))
                 {
-                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.DateString.Js);
+                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.DateString.Js);
 
                     pageInfo.BodyCodes.Add("datestring.js", $@"<script charset=""{Resources.DateString.Charset}"" src=""{jsUrl}"" type=""text/javascript""></script>");
                 }
@@ -176,7 +175,7 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 if (!pageInfo.BodyCodes.ContainsKey("datestring"))
                 {
-                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.DateString.Js);
+                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.DateString.Js);
 
                     pageInfo.BodyCodes.Add("datestring", $@"<script charset=""{Resources.DateString.Charset}"" src=""{jsUrl}"" type=""text/javascript""></script>");
                 }

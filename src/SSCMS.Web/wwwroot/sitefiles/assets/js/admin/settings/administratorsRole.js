@@ -39,12 +39,25 @@ var methods = {
     });
   },
 
+  btnAdminViewClick: function(userName) {
+    utils.openLayer({
+      title: '查看资料',
+      url: utils.getCommonUrl('adminLayerView', { userName: userName }),
+      full: true
+    });
+  },
+
   btnAddClick: function() {
-    utils.addTab('添加角色', utils.getSettingsUrl('administratorsRoleAdd'));
+    utils.addTab('添加角色', utils.getSettingsUrl('administratorsRoleAdd', {
+      tabName: utils.getTabName()
+    }));
   },
 
   btnEditClick: function(row) {
-    utils.addTab('编辑角色', utils.getSettingsUrl('administratorsRoleAdd', {roleId: row.id}));
+    utils.addTab('编辑角色', utils.getSettingsUrl('administratorsRoleAdd', {
+      roleId: row.id,
+      tabName: utils.getTabName()
+    }));
   },
 
   btnDeleteClick: function (item) {

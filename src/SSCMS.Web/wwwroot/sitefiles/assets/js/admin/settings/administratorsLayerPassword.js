@@ -1,10 +1,8 @@
 ﻿var $url = '/settings/administratorsLayerPassword';
-var $pageTypeAdmin = 'admin';
-var $pageTypeUser = 'user';
 
 var data = utils.init({
-  pageType: utils.getQueryString('pageType'),
-  userId: utils.getQueryInt('userId'),
+  userName: utils.getQueryString('userName'),
+  isEnforcePasswordChange: utils.getQueryBoolean('isEnforcePasswordChange'),
   administrator: null,
   form: {
     password: null,
@@ -18,15 +16,15 @@ var methods = {
 
     $api.get($url, {
       params: {
-        userId: this.userId
+        userName: this.userName
       }
     }).then(function (response) {
       var res = response.data;
 
       $this.administrator = res.administrator;
 
-      if (!$this.pageType && $this.userId === 0) {
-        this.$message({
+      if (!$this.userName) {
+        $this.$message({
           type: 'warning',
           message: '您的密码已过期，请更改登录密码',
           showClose: true,
@@ -45,7 +43,7 @@ var methods = {
 
     utils.loading(this, true);
     $api.post($url, {
-      userId: this.userId,
+      userName: this.userName,
       password: this.form.password
     }).then(function (response) {
       var res = response.data;
@@ -53,7 +51,11 @@ var methods = {
       utils.success('密码更改成功！');
 
       setTimeout(function () {
-        utils.closeLayer();
+        if ($this.isEnforcePasswordChange) {
+          window.top.location = utils.getIndexUrl();
+        } else {
+          utils.closeLayer();
+        }
       }, 1000);
     }).catch(function (error) {
       utils.error(error);

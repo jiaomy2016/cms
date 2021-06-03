@@ -3,8 +3,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Datory;
 using SSCMS.Configuration;
+using SSCMS.Core.Repositories;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Models;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Models;
 using SSCMS.Services;
@@ -13,9 +15,8 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "搜索", Description = "通过 stl:search 标签在模板中显示搜索结果")]
-    public class StlSearch
+    public static class StlSearch
     {
-        private StlSearch() { }
         public const string ElementName = "stl:search";
         public const string ElementName2 = "stl:searchOutput";
 
@@ -33,6 +34,9 @@ namespace SSCMS.Core.StlParser.StlElement
 
         [StlAttribute(Title = "栏目索引")]
         public const string ChannelIndex = nameof(ChannelIndex);
+
+        [StlAttribute(Title = "栏目索引")]
+        public const string Index = nameof(Index);
 
         [StlAttribute(Title = "栏目名称")]
         public const string ChannelName = nameof(ChannelName);
@@ -105,7 +109,7 @@ namespace SSCMS.Core.StlParser.StlElement
                 {
                     siteIds = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
                 }
-                else if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
+                else if (StringUtils.EqualsIgnoreCase(name, ChannelIndex) || StringUtils.EqualsIgnoreCase(name, Index))
                 {
                     channelIndex = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
                 }
@@ -156,24 +160,24 @@ namespace SSCMS.Core.StlParser.StlElement
             if (string.IsNullOrEmpty(loading))
             {
                 var filePath = parseManager.PathManager.GetSiteFilesPath(Resources.Search.LoadingTemplatePath);
-                loading = await parseManager.PathManager.GetContentByFilePathAsync(filePath);
+                loading = parseManager.PathManager.GetContentByFilePath(filePath);
             }
             if (string.IsNullOrEmpty(yes))
             {
                 var filePath = parseManager.PathManager.GetSiteFilesPath(Resources.Search.YesTemplatePath);
-                yes = await parseManager.PathManager.GetContentByFilePathAsync(filePath);
+                yes = parseManager.PathManager.GetContentByFilePath(filePath);
             }
             if (string.IsNullOrEmpty(no))
             {
                 var filePath = parseManager.PathManager.GetSiteFilesPath(Resources.Search.NoTemplatePath);
-                no = await parseManager.PathManager.GetContentByFilePathAsync(filePath);
+                no = parseManager.PathManager.GetContentByFilePath(filePath);
             }
 
             await pageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.StlClient);
             await pageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.Jquery);
             var elementId = StringUtils.GetElementId();
 
-            var apiUrl = GetSearchApiUrl(parseManager.SettingsManager);
+            var apiUrl = GetSearchApiUrl(pageInfo.Site, parseManager.PathManager);
             var apiParameters = GetSearchApiParameters(parseManager.SettingsManager, isAllSites, siteName, siteDir, siteIds, channelIndex, channelName, channelIds, type, word, dateAttribute, dateFrom, dateTo, since, pageNum, isHighlight, pageInfo.SiteId, elementId, yes);
 
             var builder = new StringBuilder();
@@ -263,37 +267,14 @@ function stlRedirect{elementId}(page)
             return builder.ToString();
         }
 
-        public class SearchRequest : Entity
+        public static string GetSearchApiUrl(Site site, IPathManager pathManager)
         {
-            public bool IsAllSites { get; set; }
-            public int SiteId { get; set; }
-            public string SiteName { get; set; }
-            public string SiteDir { get; set; }
-            public string SiteIds { get; set; }
-            public string ChannelIndex { get; set; }
-            public string ChannelName { get; set; }
-            public string ChannelIds { get; set; }
-            public string Type { get; set; }
-            public string Word { get; set; }
-            public string DateAttribute { get; set; }
-            public string DateFrom { get; set; }
-            public string DateTo { get; set; }
-            public string Since { get; set; }
-            public int PageNum { get; set; }
-            public bool IsHighlight { get; set; }
-            public string AjaxDivId { get; set; }
-            public string Template { get; set; }
-            public int Page { get; set; }
-        }
-
-        public static string GetSearchApiUrl(ISettingsManager settingsManager)
-        {
-            return PageUtils.Combine(settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsSearch);
+            return pathManager.GetApiHostUrl(site, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsSearch);
         }
 
         public static string GetSearchApiParameters(ISettingsManager settingsManager, bool isAllSites, string siteName, string siteDir, string siteIds, string channelIndex, string channelName, string channelIds, string type, string word, string dateAttribute, string dateFrom, string dateTo, string since, int pageNum, bool isHighlight, int siteId, string ajaxDivId, string template)
         {
-            return TranslateUtils.JsonSerialize(new SearchRequest
+            return TranslateUtils.JsonSerialize(new StlSearchRequest
             {
                 IsAllSites = isAllSites,
                 SiteName = siteName,
@@ -318,25 +299,30 @@ function stlRedirect{elementId}(page)
 
         public static List<string> GetSearchExcludeAttributeNames => new List<string>
         {
-            nameof(SearchRequest.IsAllSites),
-            nameof(SearchRequest.SiteName),
-            nameof(SearchRequest.SiteDir),
-            nameof(SearchRequest.SiteIds),
-            nameof(SearchRequest.ChannelIndex),
-            nameof(SearchRequest.ChannelName),
-            nameof(SearchRequest.ChannelIds),
-            nameof(SearchRequest.Type),
-            nameof(SearchRequest.Word),
-            nameof(SearchRequest.DateAttribute),
-            nameof(SearchRequest.DateFrom),
-            nameof(SearchRequest.DateTo),
-            nameof(SearchRequest.Since),
-            nameof(SearchRequest.PageNum),
-            nameof(SearchRequest.IsHighlight),
-            nameof(SearchRequest.SiteId),
-            nameof(SearchRequest.AjaxDivId),
-            nameof(SearchRequest.Template),
-            "ExtendValues"
+            nameof(Entity.Id),
+            nameof(Entity.Guid),
+            nameof(Entity.CreatedDate),
+            nameof(Entity.LastModifiedDate),
+            nameof(StlSearchRequest.IsAllSites),
+            nameof(StlSearchRequest.SiteId),
+            nameof(StlSearchRequest.SiteName),
+            nameof(StlSearchRequest.SiteDir),
+            nameof(StlSearchRequest.SiteIds),
+            nameof(StlSearchRequest.ChannelIndex),
+            nameof(StlSearchRequest.ChannelName),
+            nameof(StlSearchRequest.ChannelIds),
+            nameof(StlSearchRequest.Type),
+            nameof(StlSearchRequest.Word),
+            nameof(StlSearchRequest.DateAttribute),
+            nameof(StlSearchRequest.DateFrom),
+            nameof(StlSearchRequest.DateTo),
+            nameof(StlSearchRequest.Since),
+            nameof(StlSearchRequest.PageNum),
+            nameof(StlSearchRequest.IsHighlight),
+            nameof(StlSearchRequest.AjaxDivId),
+            nameof(StlSearchRequest.Template),
+            nameof(StlSearchRequest.Page),
+            ContentRepository.AttrExtendValues
         };
     }
 }

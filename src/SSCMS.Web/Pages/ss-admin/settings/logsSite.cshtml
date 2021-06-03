@@ -21,6 +21,7 @@
     <el-date-picker
       v-model="formInline.dateFrom"
       type="date"
+      value-format="yyyy-MM-ddTHH:mm:ss.000Z"
       placeholder="选择开始日期">
     </el-date-picker>
   </el-form-item>
@@ -28,6 +29,7 @@
     <el-date-picker
       v-model="formInline.dateTo"
       type="date"
+      value-format="yyyy-MM-ddTHH:mm:ss.000Z"
       placeholder="选择结束日期">
     </el-date-picker>
   </el-form-item>
@@ -55,7 +57,12 @@
   <el-table-column
     label="管理员">
     <template slot-scope="scope">
-      <a :href="utils.getSettingsUrl('administratorsView', {userName: scope.row.userName, returnUrl: location.href})">{{scope.row.userName}}</a>
+      <el-link
+        :underline="false"
+        v-on:click="btnAdminClick(scope.row.adminName)"
+        type="primary">
+        {{ scope.row.adminName }}
+      </el-link>
     </template>
   </el-table-column>
   <el-table-column

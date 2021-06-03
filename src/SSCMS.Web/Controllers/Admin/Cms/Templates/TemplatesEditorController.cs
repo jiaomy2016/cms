@@ -22,7 +22,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
         private const string RouteCreate = "cms/templates/templatesEditor/actions/create";
         private const string RouteSettings = "cms/templates/templatesEditor/actions/settings";
         private const string RoutePreview = "cms/templates/templatesEditor/actions/preview";
-        private const string RouteGetContents = "cms/templates/templatesEditor/actions/getContents";
+		private const string RouteGetContents = "cms/templates/templatesEditor/actions/getContents";
 
 		private readonly IAuthManager _authManager;
         private readonly IPathManager _pathManager;
@@ -84,6 +84,12 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
 			public TemplateType TemplateType { get; set; }
 		}
 
+        public class SettingsRequest
+        {
+			public SettingsForm Settings { get; set; }
+			public string Content { get; set; }
+		}
+
 		public class SettingsResult
         {
             public SettingsForm Settings { get; set; }
@@ -99,12 +105,12 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
         {
             public int TemplateId { get; set; }
             public int ChannelId { get; set; }
-			public int ContentId { get; set; }
-			public string Content { get; set; }
+            public int ContentId { get; set; }
+            public string Content { get; set; }
         }
 
         public class PreviewResult
-        {
+		{
             public string BaseUrl { get; set; }
             public string Html { get; set; }
         }

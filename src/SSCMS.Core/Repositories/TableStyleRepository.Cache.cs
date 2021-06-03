@@ -44,9 +44,7 @@ namespace SSCMS.Core.Repositories
                 {
                     var tableStyleAttributes = new List<string>
                     {
-                        nameof(User.DisplayName),
-                        nameof(User.Mobile),
-                        nameof(User.Email)
+                        nameof(User.DisplayName)
                     };
 
                     foreach (var columnName in tableStyleAttributes)
@@ -114,7 +112,10 @@ namespace SSCMS.Core.Repositories
         {
             var relatedIdentities = EmptyRelatedIdentities;
             var userTableName = _userRepository.TableName;
-            return await GetTableStylesAsync(userTableName, relatedIdentities);
+            var styles = await GetTableStylesAsync(userTableName, relatedIdentities);
+            return styles.Where(x =>
+                !StringUtils.EqualsIgnoreCase(x.AttributeName, nameof(User.Mobile)) &&
+                !StringUtils.EqualsIgnoreCase(x.AttributeName, nameof(User.Email))).ToList();
         }
 
         //relatedIdentities从大到小，最后是0
@@ -198,14 +199,20 @@ namespace SSCMS.Core.Repositories
             var list = new List<int>();
             if (channel != null)
             {
-                var channelIdCollection = "0," + channel.Id;
                 if (channel.ParentsCount > 0)
                 {
-                    channelIdCollection = "0," + channel.ParentsPath + "," + channel.Id;
+                    list.Add(channel.Id);
+                    if (channel.ParentsPath != null)
+                    {
+                        list.AddRange(channel.ParentsPath);
+                    }
+                    list.Add(0);
                 }
-
-                list = ListUtils.GetIntList(channelIdCollection);
-                list.Reverse();
+                else
+                {
+                    list.Add(channel.Id);
+                    list.Add(0);
+                }
             }
             else
             {
@@ -315,14 +322,6 @@ namespace SSCMS.Core.Repositories
             {
                 style.AttributeName = nameof(Content.Body);
                 style.DisplayName = "内容";
-                style.RuleValues = TranslateUtils.JsonSerialize(new List<InputStyleRule>
-                {
-                    new InputStyleRule
-                    {
-                        Type = ValidateType.Required,
-                        Message = "内容为必填项"
-                    }
-                });
                 style.InputType = InputType.TextEditor;
                 style.Taxis = 6;
             }
@@ -345,6 +344,9 @@ namespace SSCMS.Core.Repositories
                 style.DisplayName = "来源";
                 style.Taxis = 9;
             }
+
+            style.Items = TranslateUtils.JsonDeserialize<List<InputStyleItem>>(style.ItemValues);
+            style.Rules = TranslateUtils.JsonDeserialize<List<InputStyleRule>>(style.RuleValues);
 
             return style;
         }
@@ -411,6 +413,9 @@ namespace SSCMS.Core.Repositories
                 });
                 style.Taxis = 3;
             }
+
+            style.Items = TranslateUtils.JsonDeserialize<List<InputStyleItem>>(style.ItemValues);
+            style.Rules = TranslateUtils.JsonDeserialize<List<InputStyleRule>>(style.RuleValues);
 
             return style;
         }

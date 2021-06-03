@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using System.Threading.Tasks;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -8,9 +8,8 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "页面弹层", Description = "通过 stl:layer 标签在模板中显示弹层组件")]
-    public class StlLayer
+    public static class StlLayer
     {
-        private StlLayer() { }
         public const string ElementName = "stl:layer";
 
         [StlAttribute(Title = "触发函数名称")]
@@ -63,10 +62,18 @@ namespace SSCMS.Core.StlParser.StlElement
                 else if (StringUtils.EqualsIgnoreCase(name, Width))
                 {
                     width = value;
+                    if (!string.IsNullOrEmpty(width) && char.IsDigit(width[^1]))
+                    {
+                        width += "px";
+                    }
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, Height))
                 {
                     height = value;
+                    if (!string.IsNullOrEmpty(height) && char.IsDigit(height[^1]))
+                    {
+                        height += "px";
+                    }
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ShadeClose))
                 {
@@ -75,13 +82,17 @@ namespace SSCMS.Core.StlParser.StlElement
                 else if (StringUtils.EqualsIgnoreCase(name, Offset))
                 {
                     offset = value;
+                    if (!string.IsNullOrEmpty(offset) && char.IsDigit(offset[^1]))
+                    {
+                        offset += "px";
+                    }
                 }
             }
 
-            return await ParseImplAsync(parseManager, funcName, title, url, width, height, shadeClose, offset);
+            return await ParseAsync(parseManager, funcName, title, url, width, height, shadeClose, offset);
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, string funcName, string title,
+        private static async Task<string> ParseAsync(IParseManager parseManager, string funcName, string title,
             string url, string width, string height, bool shadeClose, string offset)
         {
             var pageInfo = parseManager.PageInfo;

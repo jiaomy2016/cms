@@ -3,7 +3,6 @@ using System.Net;
 using System.Threading.Tasks;
 using Datory;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Utilities
@@ -13,7 +12,7 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Utilities
         [HttpGet, Route(Route)]
         public async Task<ActionResult<GetResult>> Get()
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsUtilitiesParameters))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsUtilitiesParameters))
             {
                 return Unauthorized();
             }
@@ -32,12 +31,11 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Utilities
 
             var settings = new List<KeyValuePair<string, string>>
             {
-                new KeyValuePair<string, string>("API 地址", _settingsManager.ApiHost),
                 new KeyValuePair<string, string>("系统根目录地址", _settingsManager.ContentRootPath),
                 new KeyValuePair<string, string>("站点根目录地址", _settingsManager.WebRootPath),
                 new KeyValuePair<string, string>("最近升级时间", DateUtils.GetDateAndTimeString(config.UpdateDate)),
                 new KeyValuePair<string, string>("数据库类型", _settingsManager.Database.DatabaseType.GetValue()),
-                new KeyValuePair<string, string>("数据库名称", SqlUtils.GetDatabaseNameFormConnectionString(_settingsManager.Database.ConnectionString)),
+                new KeyValuePair<string, string>("数据库名称", _databaseManager.GetDatabaseNameFormConnectionString(_settingsManager.Database.ConnectionString)),
                 new KeyValuePair<string, string>("缓存类型", string.IsNullOrEmpty(_settingsManager.Redis.ConnectionString) ? "Memory" : "Redis")
             };
 

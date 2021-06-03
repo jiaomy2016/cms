@@ -1,34 +1,22 @@
 ﻿var $url = '/plugins/add';
 
 var data = utils.init({
-  version: null,
+  cmsVersion: null,
   packageIds: null,
   containerized: null,
   q: utils.getQueryString('q'),
   keyword: utils.getQueryString('q') || '',
-  plugins: null
+  extensionWithReleases: null
 });
 
 var methods = {
-  getIconUrl: function (iconUrl) {
-    return cloud.hostStorage + '/' + iconUrl;
-  },
-
-  getTagNames: function (pluginInfo) {
-    var tagNames = [];
-    if (pluginInfo.tags) {
-      tagNames = pluginInfo.tags.split(',');
-    }
-    return tagNames;
-  },
-
   apiGet: function () {
     var $this = this;
 
     $api.get($url).then(function (response) {
       var res = response.data;
 
-      $this.version = res.version;
+      $this.cmsVersion = res.cmsVersion;
       $this.packageIds = res.packageIds;
       $this.containerized = res.containerized;
 
@@ -41,10 +29,10 @@ var methods = {
         return;
       }
 
-      cloud.getPlugins($this.keyword).then(function (response) {
-        var plugins = response.data;
-  
-        $this.plugins = plugins;
+      cloud.getExtensions($this.cmsVersion, $this.keyword).then(function (response) {
+        var res = response.data;
+
+        $this.extensionWithReleases = res.extensionWithReleases;
       }).catch(function (error) {
         utils.error(error);
       }).then(function () {
@@ -55,12 +43,12 @@ var methods = {
     });
   },
 
-  getLatestVersion: function(plugin) {
-    return plugin.latestStableVersion;
+  getIconUrl: function (iconUrl) {
+    return cloud.hostStorage + '/' + _.trim(iconUrl, '/');
   },
 
-  getLatestPublished: function(plugin) {
-    return plugin.latestStablePublished;
+  isInstalled: function(extension) {
+    return this.packageIds.indexOf(extension.userName + '.' + extension.name) !== -1;
   },
 
   btnSearchClick: function () {
@@ -69,15 +57,18 @@ var methods = {
 
   btnUploadClick: function () {
     utils.openLayer({
-      title: '离线安装插件',
+      title: '离线安装/更新插件',
       url: utils.getPluginsUrl('addLayerUpload'),
       width: 550,
       height: 350
     });
   },
 
-  btnViewClick: function(plugin) {
-    utils.addTab('插件：' + plugin.pluginId, utils.getPluginsUrl('view', {pluginId: plugin.pluginId}));
+  btnViewClick: function(item) {
+    utils.addTab(item.extension.displayName, utils.getPluginsUrl('view', {
+      userName: item.extension.userName,
+      name: item.extension.name
+    }));
   }
 };
 

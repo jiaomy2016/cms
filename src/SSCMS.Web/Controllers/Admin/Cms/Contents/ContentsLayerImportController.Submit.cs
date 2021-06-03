@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Core.Utils.Serialization;
 using SSCMS.Dto;
@@ -16,8 +15,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         public async Task<ActionResult<BoolResult>> Submit([FromBody] SubmitRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, MenuUtils.ContentPermissions.Add))
             {
                 return Unauthorized();
             }
@@ -47,17 +46,17 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
                     contentIdList.AddRange(await importObject.ImportContentsByZipFileAsync(channelInfo, localFilePath, request.IsOverride, isChecked, request.CheckedLevel, adminId, 0, SourceManager.Default));
                 }
             }
-            else if (request.ImportType == "csv")
+            else if (request.ImportType == "excel")
             {
                 foreach (var fileName in request.FileNames)
                 {
                     var localFilePath = _pathManager.GetTemporaryFilesPath(fileName);
 
-                    if (!FileUtils.IsType(FileType.Csv, PathUtils.GetExtension(localFilePath)))
+                    if (!FileUtils.IsType(FileType.Xlsx, PathUtils.GetExtension(localFilePath)))
                         continue;
 
                     var importObject = new ImportObject(_pathManager, _databaseManager, caching, site, adminId);
-                    contentIdList.AddRange(await importObject.ImportContentsByCsvFileAsync(channelInfo, localFilePath, request.IsOverride, isChecked, request.CheckedLevel, adminId, 0, SourceManager.Default));
+                    contentIdList.AddRange(await importObject.ImportContentsByXlsxFileAsync(channelInfo, localFilePath, request.IsOverride, isChecked, request.CheckedLevel, adminId, 0, SourceManager.Default));
                 }
             }
             else if (request.ImportType == "txt")

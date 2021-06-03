@@ -17,13 +17,12 @@ namespace SSCMS.Cli.Jobs
         private string _email;
         private string _password;
         private bool _isHelp;
+        private readonly OptionSet _options;
 
         private readonly IApiService _apiService;
-        private readonly OptionSet _options;
 
         public RegisterJob(IApiService apiService)
         {
-            _apiService = apiService;
             _options = new OptionSet
             {
                 { "u|username=", "用户名",
@@ -39,6 +38,8 @@ namespace SSCMS.Cli.Jobs
                     v => _isHelp = v != null
                 }
             };
+
+            _apiService = apiService;
         }
 
         public void PrintUsage()
@@ -79,7 +80,7 @@ namespace SSCMS.Cli.Jobs
                 return;
             }
 
-            var (success, failureMessage) = _apiService.Register(_userName, _mobile, _email, _password);
+            var (success, failureMessage) = await _apiService.RegisterAsync(_userName, _mobile, _email, _password);
             if (success)
             {
                 await WriteUtils.PrintSuccessAsync("you have registered successfully, run sscms login to log in.");

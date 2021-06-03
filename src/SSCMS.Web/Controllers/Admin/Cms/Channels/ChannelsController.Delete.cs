@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 using SSCMS.Enums;
 using SSCMS.Utils;
 
@@ -12,7 +12,8 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         [HttpDelete, Route(Route)]
         public async Task<ActionResult<List<int>>> Delete([FromBody] DeleteRequest request)
         {
-            if (!await _authManager.HasChannelPermissionsAsync(request.SiteId, request.ChannelId, Types.ChannelPermissions.Delete))
+            if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
+                    MenuUtils.SitePermissions.Channels))
             {
                 return Unauthorized();
             }

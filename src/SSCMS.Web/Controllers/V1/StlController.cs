@@ -41,6 +41,32 @@ namespace SSCMS.Web.Controllers.V1
             public string SiteDir { get; set; }
             public int ChannelId { get; set; }
             public int ContentId { get; set; }
+
+            public void InitialParameters()
+            {
+                SiteId = InitialIntValue(nameof(SiteId));
+                SiteDir = InitialStringValue(nameof(SiteDir));
+                ChannelId = InitialIntValue(nameof(ChannelId));
+                ContentId = InitialIntValue(nameof(ContentId));
+            }
+
+            private string ToCamelName(string name) => name[0..1].ToLower() + name[1..];
+
+            private int InitialIntValue(string key) => System.Convert.ToInt32(InitialStringValue(key));
+
+            private string InitialStringValue(string key)
+            {
+                if (string.IsNullOrEmpty(key)) return null;
+                if (Remove(key, out string value))
+                {
+                    Remove(ToCamelName(key));
+                }
+                else
+                {
+                    Remove(ToCamelName(key), out value);
+                }
+                return value;
+            }
         }
 
         public class GetResult
@@ -106,7 +132,7 @@ namespace SSCMS.Web.Controllers.V1
                 };
 
                 var config = await configRepository.GetAsync();
-                PageInfo = new ParsePage(pathManager, config, request.ChannelId, request.ContentId, Site, templateInfo,
+                PageInfo = new ParsePage(pathManager, EditMode.Default, config, request.ChannelId, request.ContentId, Site, templateInfo,
                     new Dictionary<string, object>())
                 {
                     User = await Auth.GetUserAsync()

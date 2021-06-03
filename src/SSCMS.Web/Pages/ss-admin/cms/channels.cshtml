@@ -1,12 +1,13 @@
 ﻿@page
 @{ Layout = "_Layout"; }
 @section Styles{
-<style>
-  .commands {
-    text-align: right;
-    padding-right: 10px;
-  }
-</style>
+  <link rel="stylesheet" href="/sitefiles/assets/lib/ueditor/third-party/custom/custom.css">
+  <style>
+    .commands {
+      text-align: right;
+      padding-right: 10px;
+    }
+  </style>
 }
 
 <el-row>
@@ -128,7 +129,7 @@
   v-on:check-change="handleCheckChange"
 >
   <div class="el-table__body-wrapper is-scrolling-none" slot-scope="{ node, data }">
-    <table cellspacing="0" cellpadding="0" border="0" class="el-table__body" style="width: 100%;">
+    <table v-on:dblclick="btnEditClick(data)" v-on:click.ctrl.stop="btnCheckClick(data)" cellspacing="0" cellpadding="0" border="0" class="el-table__body" style="width: 100%;">
       <colgroup>
         <col>
         <col
@@ -146,6 +147,25 @@
                 <i class="el-icon-link"></i>
               </el-link>
               {{ data.label }} ({{ data.count }})
+
+              <!-- imageUrl -->
+              <el-popover
+                v-if="data.imageUrl"
+                width="400"
+                trigger="hover">
+                <el-image :src="data.imageUrl"></el-image>
+                <el-link slot="reference" :underline="false">
+                  <i class="el-icon-picture-outline"></i>
+                </el-link>
+              </el-popover>
+
+              <!-- linkUrl -->
+              <el-tooltip v-if="data.channel.linkUrl" effect="light" content="外部链接" placement="top">
+                <el-link :underline="false" :href="data.channel.linkUrl" target="_blank" v-on:click.stop.native title="外部链接">
+                  <i class="fa fa-external-link"></i>
+                </el-link>
+              </el-tooltip>
+
             </div>
           </td>
           <td 
@@ -168,12 +188,22 @@
                 </template>
               </template>
               <template v-else-if="column.attributeName === 'ChannelTemplateId'">
-                <el-link :underline="false" type="primary" size="small" v-on:click.stop.native="btnTemplateEditClick(true, data.channel.channelTemplateId)">
+                <el-link
+                  v-if="isTemplateEditable && data.channel.channelTemplateId > 0"
+                  :underline="false"
+                  :href="getTemplateEditorUrl(true, data.channel.channelTemplateId)"
+                  target="_blank"
+                  type="primary">
                   {{ getTemplate(true, data.channel.channelTemplateId).templateName }}
                 </el-link>
               </template>
               <template v-else-if="column.attributeName === 'ContentTemplateId'">
-                <el-link :underline="false" type="primary" size="small" v-on:click.stop.native="btnTemplateEditClick(false, data.channel.contentTemplateId)">
+                <el-link
+                  v-if="isTemplateEditable && data.channel.contentTemplateId > 0"
+                  :underline="false"
+                  :href="getTemplateEditorUrl(false, data.channel.contentTemplateId)"
+                  target="_blank"
+                  type="primary">
                   {{ getTemplate(false, data.channel.contentTemplateId).templateName }}
                 </el-link>
               </template>
@@ -239,6 +269,7 @@
   ref="appendPanel"
   :visible.sync="appendPanel"
   destroy-on-close
+  :wrapperClosable="false"
   direction="rtl"
   size="80%">
   <div class="drawer__content">
@@ -288,6 +319,7 @@
   ref="deletePanel"
   :visible.sync="deletePanel"
   destroy-on-close
+  :wrapperClosable="false"
   direction="rtl"
   size="80%">
   <div class="drawer__content">
@@ -329,6 +361,7 @@
   ref="importPanel"
   :visible.sync="importPanel"
   destroy-on-close
+  :wrapperClosable="false"
   direction="rtl"
   size="80%">
   <div class="drawer__content">
@@ -383,6 +416,7 @@
   title="编辑栏目"
   :visible.sync="editPanel"
   destroy-on-close
+  :wrapperClosable="false"
   direction="rtl"
   size="90%">
   <div class="drawer__content">
@@ -409,14 +443,28 @@
           <el-option label="<默认>" :value="0"></el-option>
           <el-option v-for="channelTemplate in channelTemplates" :key="channelTemplate.id" :label="channelTemplate.templateName" :value="channelTemplate.id"></el-option>
         </el-select>
-        <el-button v-if="isTemplateEditable" v-on:click.prevent="btnTemplateEditClick(true, form.channelTemplateId)">编辑</el-button>
+        <el-link
+          v-if="isTemplateEditable && form.channelTemplateId > 0"
+          :underline="false"
+          :href="getTemplateEditorUrl(true, form.channelTemplateId)"
+          target="_blank"
+          type="primary">
+          编辑
+        </el-link>
       </el-form-item>
       <el-form-item label="内容模板">
         <el-select v-model="form.contentTemplateId" placeholder="请选择内容模板">
           <el-option label="<默认>" :value="0"></el-option>
           <el-option v-for="contentTemplate in contentTemplates" :key="contentTemplate.id" :label="contentTemplate.templateName" :value="contentTemplate.id"></el-option>
         </el-select>
-        <el-button v-if="isTemplateEditable" v-on:click.prevent="btnTemplateEditClick(false, form.contentTemplateId)">编辑</el-button>
+        <el-link
+          v-if="isTemplateEditable && form.contentTemplateId > 0"
+          :underline="false"
+          :href="getTemplateEditorUrl(false, form.contentTemplateId)"
+          target="_blank"
+          type="primary">
+          编辑
+        </el-link>
       </el-form-item>
       <el-form-item label="外部链接">
         <el-input v-model="form.linkUrl" placeholder="设置后栏目链接将转向此地址"></el-input>
@@ -440,11 +488,11 @@
       </el-form-item>
       <el-form-item label="下级栏目页面命名规则">
         <el-input style="width: 70%" v-model="form.channelFilePathRule" placeholder="在此设置下级栏目页面命名规则"></el-input>
-        <el-button v-on:click.prevent="btnSetClick(form.channelId, true, form.channelFilePathRule)">构造</el-button>
+        <el-button v-on:click.prevent="btnSetClick(form.id, true, form.channelFilePathRule)">构造</el-button>
       </el-form-item>
       <el-form-item label="内容页面命名规则">
         <el-input style="width: 70%" v-model="form.contentFilePathRule" placeholder="在此设置栏目页面命名规则"></el-input>
-        <el-button v-on:click.prevent="btnSetClick(form.channelId, false, form.contentFilePathRule)">构造</el-button>
+        <el-button v-on:click.prevent="btnSetClick(form.id, false, form.contentFilePathRule)">构造</el-button>
       </el-form-item>
 
       <el-form-item label="栏目关键字">
@@ -452,32 +500,6 @@
       </el-form-item>
       <el-form-item label="栏目描述">
         <el-input type="textarea" v-model="form.description"></el-input>
-      </el-form-item>
-      <el-form-item label="栏目正文">
-        <div class="editor__toolbar">
-          <div id="form_Content1"></div>
-          <div class="w-e-toolbar">
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '导入Word', name: 'editorLayerWord', attributeName: 'form_Content'})">
-              <el-link title="导入Word" :underline="false"><i class="fa fa-wikipedia-w"></i></el-link>
-            </div>
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '插入图片', name: 'editorLayerImage', attributeName: 'form_Content'})">
-              <el-link title="插入图片" :underline="false"><i class="fa fa-image"></i></el-link>
-            </div>
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '插入附件', name: 'editorLayerFile', attributeName: 'form_Content'})">
-              <el-link title="插入附件" :underline="false"><i class="fa fa-file"></i></el-link>
-            </div>
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '插入视频', name: 'editorLayerVideo', attributeName: 'form_Content'})">
-              <el-link title="插入视频" :underline="false"><i class="fa fa-film"></i></el-link>
-            </div>
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '插入音频', name: 'editorLayerAudio', attributeName: 'form_Content'})">
-              <el-link title="插入音频" :underline="false"><i class="fa fa-music"></i></el-link>
-            </div>
-            <div class="w-e-menu" style="z-index:10000;" v-on:click="btnLayerClick({title: '插入图文', name: 'editorLayerText', attributeName: 'form_Content'})">
-              <el-link title="插入图文" :underline="false"><i class="fa fa-wpforms"></i></el-link>
-            </div>
-          </div>
-        </div>
-        <div id="form_Content2" class="editor__text"></div>
       </el-form-item>
 
       <el-divider></el-divider>
@@ -490,5 +512,7 @@
 </el-drawer>
 
 @section Scripts{
-<script src="/sitefiles/assets/lib/wangEditor/wangEditor.min.js" type="text/javascript"></script>
+<script src="/sitefiles/assets/lib/ueditor/editor_config.js" type="text/javascript" ></script>
+<script src="/sitefiles/assets/lib/ueditor/ueditor.all.js" type="text/javascript"></script>
+<script src="/sitefiles/assets/lib/ueditor/third-party/custom/custom.js" type="text/javascript" ></script>
 <script src="/sitefiles/assets/js/admin/cms/channels.js" type="text/javascript"></script> }

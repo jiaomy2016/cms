@@ -10,7 +10,7 @@ namespace SSCMS.Core.Services
     {
         public string GetRootUrl(params string[] paths)
         {
-            return PageUtils.Combine(_settingsManager.ApiHost, PageUtils.Combine(paths));
+            return PageUtils.Combine("/", PageUtils.Combine(paths));
         }
 
         public string GetRootUrlByPath(string physicalPath)
@@ -37,7 +37,7 @@ namespace SSCMS.Core.Services
 
             virtualUrl = virtualUrl.StartsWith("~") ? GetRootUrl(virtualUrl.Substring(1)) : virtualUrl;
             virtualUrl = virtualUrl.Replace(PathUtils.SeparatorChar, PageUtils.SeparatorChar);
-            virtualUrl = virtualUrl.Replace(PageUtils.DoubleSeparator, PageUtils.SingleSeparator);
+            virtualUrl = virtualUrl.Replace(PageUtils.DoubleSeparator, PageUtils.Separator);
             return virtualUrl;
         }
 
@@ -92,6 +92,13 @@ namespace SSCMS.Core.Services
         public string GetSiteFilesUrl(params string[] paths)
         {
             return GetRootUrl(DirectoryUtils.SiteFiles.DirectoryName, PageUtils.Combine(paths));
+        }
+
+        public string GetSiteFilesUrl(Site site, params string[] paths)
+        {
+            return site == null
+                ? GetSiteFilesUrl(paths)
+                : GetApiHostUrl(site, DirectoryUtils.SiteFiles.DirectoryName, PageUtils.Combine(paths));
         }
 
         public string GetAdministratorUploadUrl(int userId, params string[] paths)
@@ -181,52 +188,53 @@ namespace SSCMS.Core.Services
             return GetHomeUploadPath(userId.ToString(), relatedPath);
         }
 
-        public string GetApiUrl(params string[] paths)
+        public string GetDownloadApiUrl(Site site, int channelId, int contentId, string fileUrl)
         {
-            return PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, PathUtils.Combine(paths));
-        }
-
-        public string GetDownloadApiUrl(int siteId, int channelId, int contentId, string fileUrl)
-        {
-            return PageUtils.AddQueryString(PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsDownload), new NameValueCollection
+            var apiUrl = GetApiHostUrl(site, Constants.ApiPrefix);
+            return PageUtils.AddQueryString(PageUtils.Combine(apiUrl, Constants.ApiStlPrefix, Constants.RouteStlActionsDownload), new NameValueCollection
             {
-                {"siteId", siteId.ToString()},
+                {"siteId", site.Id.ToString()},
                 {"channelId", channelId.ToString()},
                 {"contentId", contentId.ToString()},
                 {"fileUrl", _settingsManager.Encrypt(fileUrl)}
             });
         }
 
-        public string GetDownloadApiUrl(int siteId, string fileUrl)
+        public string GetDownloadApiUrl(Site site, string fileUrl)
         {
-            return PageUtils.AddQueryString(PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsDownload), new NameValueCollection
+            var apiUrl = GetApiHostUrl(site, Constants.ApiPrefix);
+            return PageUtils.AddQueryString(PageUtils.Combine(apiUrl, Constants.ApiStlPrefix, Constants.RouteStlActionsDownload), new NameValueCollection
             {
-                {"siteId", siteId.ToString()},
+                {"siteId", site.Id.ToString()},
                 {"fileUrl", _settingsManager.Encrypt(fileUrl)}
             });
         }
 
-        public string GetDownloadApiUrl(bool isInner, string filePath)
+        public string GetDownloadApiUrl(string filePath)
         {
-            return PageUtils.AddQueryString(PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsDownload), new NameValueCollection
+            var apiUrl = PageUtils.GetLocalApiUrl(Constants.ApiStlPrefix, Constants.RouteStlActionsDownload);
+            return PageUtils.AddQueryString(apiUrl, new NameValueCollection
             {
                 {"filePath", _settingsManager.Encrypt(filePath)}
             });
         }
 
-        public string GetDynamicApiUrl()
+        public string GetDynamicApiUrl(Site site)
         {
-            return PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsDynamic);
+            var apiUrl = GetApiHostUrl(site, Constants.ApiPrefix);
+            return PageUtils.Combine(apiUrl, Constants.ApiStlPrefix, Constants.RouteStlActionsDynamic);
         }
 
-        public string GetIfApiUrl()
+        public string GetIfApiUrl(Site site)
         {
-            return PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlRouteActionsIf);
+            var apiUrl = GetApiHostUrl(site, Constants.ApiPrefix);
+            return PageUtils.Combine(apiUrl, Constants.ApiStlPrefix, Constants.RouteStlRouteActionsIf);
         }
 
-        public string GetPageContentsApiUrl()
+        public string GetPageContentsApiUrl(Site site)
         {
-            return PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsPageContents);
+            var apiUrl = GetApiHostUrl(site, Constants.ApiPrefix);
+            return PageUtils.Combine(apiUrl, Constants.ApiStlPrefix, Constants.RouteStlActionsPageContents);
         }
 
         public string GetPageContentsApiParameters(int siteId, int pageChannelId, int templateId, int totalNum, int pageCount,
@@ -247,7 +255,8 @@ namespace SSCMS.Core.Services
         public string GetTriggerApiUrl(int siteId, int channelId, int contentId,
             int fileTemplateId, bool isRedirect)
         {
-            return PageUtils.AddQueryString(PageUtils.Combine(_settingsManager.ApiHost, Constants.ApiPrefix, Constants.ApiStlPrefix, Constants.RouteStlActionsTrigger), new NameValueCollection
+            var apiUrl = PageUtils.GetLocalApiUrl(Constants.ApiStlPrefix);
+            return PageUtils.AddQueryString(PageUtils.Combine(apiUrl, Constants.RouteStlActionsTrigger), new NameValueCollection
             {
                 {"siteId", siteId.ToString()},
                 {"channelId", channelId.ToString()},

@@ -6,6 +6,7 @@ using SSCMS.Configuration;
 using SSCMS.Dto;
 using SSCMS.Enums;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Common.Material
 {
@@ -16,7 +17,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Material
         public async Task<ActionResult<UploadResult>> Upload([FromQuery] SiteRequest request, [FromForm] IFormFile file)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                Types.SitePermissions.MaterialImage))
+                MenuUtils.SitePermissions.MaterialImage))
             {
                 return Unauthorized();
             }
@@ -25,14 +26,19 @@ namespace SSCMS.Web.Controllers.Admin.Common.Material
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = Path.GetFileName(file.FileName);
 
-            if (!PathUtils.IsExtension(PathUtils.GetExtension(fileName), ".jpg", ".jpeg", ".bmp", ".gif", ".png", ".webp"))
+            var extName = PathUtils.GetExtension(fileName);
+            if (!_pathManager.IsImageExtensionAllowed(site, extName))
             {
-                return this.Error("文件只能是 Image 格式，请选择有效的文件上传!");
+                return this.Error(Constants.ErrorImageExtensionAllowed);
+            }
+            if (!_pathManager.IsImageSizeAllowed(site, file.Length))
+            {
+                return this.Error(Constants.ErrorImageSizeAllowed);
             }
 
             var virtualUrl = PathUtils.GetMaterialVirtualFilePath(UploadType.Image, _pathManager.GetUploadFileName(site, fileName));

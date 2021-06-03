@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
 using SSCMS.Enums;
 using SSCMS.Models;
+using SSCMS.Core.Utils;
+using SSCMS.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Templates
 {
@@ -13,7 +15,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
         [HttpGet, Route(Route)]
         public async Task<ActionResult<GetResult>> Get([FromQuery] TemplateRequest request)
         {
-            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, Types.SitePermissions.Templates))
+            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, MenuUtils.SitePermissions.Templates))
             {
                 return Unauthorized();
             }
@@ -35,7 +37,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
             }
 
             var settings = await GetSettingsAsync(template, site);
-            var content = string.Empty;
+            var content = Constants.Html5Empty;
             if (template.Id > 0)
             {
                 content = await _pathManager.GetTemplateContentAsync(site, template);
@@ -68,22 +70,25 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Templates
                     template.Id, channels);
                 if (templateChannelIds.Count > 0)
                 {
-                    channelId = templateChannelIds.First();
-                    var firstChannel = await _channelRepository.GetAsync(channelId);
-                    channelIds = firstChannel.ParentsPath;
-                    channelIds.Add(channelId);
-
-                    if (template.TemplateType == TemplateType.ContentTemplate)
+                    channelId = templateChannelIds.FirstOrDefault(x => x != request.SiteId);
+                    if (channelId > 0)
                     {
-                        var contentIds = await _contentRepository.GetContentIdsCheckedAsync(site, firstChannel);
-                        foreach (var id in contentIds.Take(30))
+                        var firstChannel = await _channelRepository.GetAsync(channelId);
+                        channelIds = ListUtils.GetIntList(firstChannel.ParentsPath);
+                        channelIds.Add(channelId);
+
+                        if (template.TemplateType == TemplateType.ContentTemplate)
                         {
-                            if (contentId == 0)
+                            var contentIds = await _contentRepository.GetContentIdsCheckedAsync(site, firstChannel);
+                            foreach (var id in contentIds.Take(30))
                             {
-                                contentId = id;
+                                if (contentId == 0)
+                                {
+                                    contentId = id;
+                                }
+                                var entity = await _contentRepository.GetAsync(site, channel, id);
+                                contents.Add(new KeyValuePair<int, string>(entity.Id, entity.Title));
                             }
-                            var entity = await _contentRepository.GetAsync(site, channel, id);
-                            contents.Add(new KeyValuePair<int, string>(entity.Id, entity.Title));
                         }
                     }
                 }

@@ -3,8 +3,8 @@ using System.Collections.Specialized;
 using System.Text;
 using System.Threading.Tasks;
 using SSCMS.Configuration;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Enums;
 using SSCMS.Services;
@@ -13,12 +13,12 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "滚动焦点图")]
-    public class StlFocusViewer
+    public static class StlFocusViewer
     {
-        private StlFocusViewer() { }
         public const string ElementName = "stl:focusViewer";
 
         public const string AttributeChannelIndex = "channelIndex";
+        public const string AttributeIndex = "index";
         public const string AttributeChannelName = "channelName";
         public const string AttributeScope = "scope";
         public const string AttributeGroup = "group";
@@ -48,7 +48,6 @@ namespace SSCMS.Core.StlParser.StlElement
         public const string ThemeStyle3 = "Style3";
         public const string ThemeStyle4 = "Style4";
 
-        //对“flash滚动焦点图”（stl:focusViewer）元素进行解析
         public static async Task<object> ParseAsync(IParseManager parseManager)
         {
             // 如果是实体标签则返回空
@@ -65,7 +64,7 @@ namespace SSCMS.Core.StlParser.StlElement
             var groupContent = string.Empty;
             var groupContentNot = string.Empty;
             var tags = string.Empty;
-            var orderByString = ETaxisTypeUtils.GetContentOrderByString(TaxisType.OrderByTaxisDesc);
+            var orderByString = parseManager.DatabaseManager.GetContentOrderByString(TaxisType.OrderByTaxisDesc);
             var startNum = 1;
             var totalNum = 0;
             var isShowText = true;
@@ -92,7 +91,7 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 var value = parseManager.ContextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, AttributeChannelIndex))
+                if (StringUtils.EqualsIgnoreCase(name, AttributeChannelIndex) || StringUtils.EqualsIgnoreCase(name, AttributeIndex))
                 {
                     channelIndex = value;
                 }
@@ -199,10 +198,10 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, attributes, channelIndex, channelName, scopeType, groupChannel, groupChannelNot, groupContent, groupContentNot, tags, orderByString, startNum, totalNum, isShowText, isTopText, titleWordNum, isTop, isTopExists, isRecommend, isRecommendExists, isHot, isHotExists, isColor, isColorExists, theme, imageWidth, imageHeight, textHeight, bgColor);
+            return await ParseAsync(parseManager, attributes, channelIndex, channelName, scopeType, groupChannel, groupChannelNot, groupContent, groupContentNot, tags, orderByString, startNum, totalNum, isShowText, isTopText, titleWordNum, isTop, isTopExists, isRecommend, isRecommendExists, isHot, isHotExists, isColor, isColorExists, theme, imageWidth, imageHeight, textHeight, bgColor);
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, NameValueCollection attributes, string channelIndex, string channelName, ScopeType scopeType, string groupChannel, string groupChannelNot, string groupContent, string groupContentNot, string tags, string orderByString, int startNum, int totalNum, bool isShowText, string isTopText, int titleWordNum, bool isTop, bool isTopExists, bool isRecommend, bool isRecommendExists, bool isHot, bool isHotExists, bool isColor, bool isColorExists, string theme, int imageWidth, int imageHeight, int textHeight, string bgColor)
+        private static async Task<string> ParseAsync(IParseManager parseManager, NameValueCollection attributes, string channelIndex, string channelName, ScopeType scopeType, string groupChannel, string groupChannelNot, string groupContent, string groupContentNot, string tags, string orderByString, int startNum, int totalNum, bool isShowText, string isTopText, int titleWordNum, bool isTop, bool isTopExists, bool isRecommend, bool isRecommendExists, bool isHot, bool isHotExists, bool isColor, bool isColorExists, string theme, int imageWidth, int imageHeight, int textHeight, string bgColor)
         {
             var databaseManager = parseManager.DatabaseManager;
             var pageInfo = parseManager.PageInfo;
@@ -274,7 +273,7 @@ namespace SSCMS.Core.StlParser.StlElement
                     paramBuilder.Append(
                         $@"so_{elementId}.addParam(""FlashVars"", ""bcastr_file=""+files_uniqueID+""&bcastr_link=""+links_uniqueID+""&bcastr_title=""+texts_uniqueID+""&AutoPlayTime=5&TitleBgPosition={isTopText}&TitleBgColor={bgColor}&BtnDefaultColor={bgColor}"");").Append(Constants.ReturnAndNewline);
 
-                    var bcastrUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.Flashes.Bcastr);
+                    var bcastrUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.Flashes.Bcastr);
 
                     string scriptHtml = $@"
 <div id=""flashcontent_{elementId}""></div>
@@ -326,7 +325,7 @@ so_{elementId}.write(""flashcontent_{elementId}"");
                     paramBuilder.Append(
                         $@"so_{elementId}.addParam(""flashvars"", ""pw={imageWidth}&ph={imageHeight}&Times=4000&sizes=14&umcolor=16777215&btnbg=12189697&txtcolor=16777215&urls=""+urls_uniqueID+""&imgs=""+imgs_uniqueID+""&titles=""+titles_uniqueID);").Append(Constants.ReturnAndNewline);
 
-                    var aliUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.Flashes.Ali);
+                    var aliUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.Flashes.Ali);
 
                     string scriptHtml = $@"
 <div id=""flashcontent_{elementId}""></div>
@@ -503,8 +502,8 @@ so_{elementId}.write(""flashcontent_{elementId}"");
                     attributes["id"] = elementId;
                     var divHtml = $@"<div {TranslateUtils.ToAttributesString(attributes)}>&nbsp;</div>";
 
-                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.BaiRongFlash.Js);
-                    var focusViewerUrl = parseManager.PathManager.GetSiteFilesUrl(Resources.Flashes.FocusViewer);
+                    var jsUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.BaiRongFlash.Js);
+                    var focusViewerUrl = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.Flashes.FocusViewer);
 
                     var scriptHtml = $@"
 <script type=""text/javascript"" src=""{jsUrl}""></script>

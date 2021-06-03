@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Datory.Utils;
+using SSCMS.Configuration;
 using SSCMS.Dto;
 
 namespace SSCMS.Utils
@@ -40,6 +42,14 @@ namespace SSCMS.Utils
             return list != null && list.Remove(value);
         }
 
+        public static bool RemoveIgnoreCase(List<string> list, string value)
+        {
+            if (list == null) return false;
+
+            var item = list.FirstOrDefault(x => StringUtils.EqualsIgnoreCase(x, value));
+            return list.Remove(item);
+        }
+
         public static List<T> Add<T>(List<T> list, T value)
         {
             if (list == null)
@@ -52,16 +62,13 @@ namespace SSCMS.Utils
 
         public static List<T> AddIfNotExists<T>(List<T> list, T value)
         {
-            if (list == null)
-            {
-                list = new List<T>();
-            }
+            var retVal = list == null ? new List<T>() : new List<T>(list);
 
-            if (!list.Contains(value))
+            if (!retVal.Contains(value))
             {
-                list.Add(value);
+                retVal.Add(value);
             }
-            return list;
+            return retVal;
         }
 
         public static int Count<T>(List<T> list)
@@ -77,6 +84,17 @@ namespace SSCMS.Utils
         public static List<string> GetStringList(IEnumerable<string> collection)
         {
             return Utilities.GetStringList(collection);
+        }
+
+        public static List<string> GetStringListByReturnAndNewline(string collection)
+        {
+            var list = new List<string>();
+            if (string.IsNullOrEmpty(collection)) return list;
+
+            var array = collection.Split(Constants.Newline);
+            list.AddRange(from item in array where !string.IsNullOrEmpty(item) select item.Trim());
+
+            return list;
         }
 
         public static List<int> GetIntList(string collection, char split = ',')
@@ -119,9 +137,51 @@ namespace SSCMS.Utils
             return Utilities.ToString(collection, separator);
         }
 
+        public static string ToStringByReturnAndNewline(List<string> collection)
+        {
+            return Utilities.ToString(collection, Constants.ReturnAndNewline);
+        }
+
         public static Dictionary<string, object> ToDictionary(string json)
         {
             return Utilities.ToDictionary(json);
+        }
+
+        public static object GetValueIgnoreCase(IDictionary<string, object> dict, string key)
+        {
+            var item = dict?.FirstOrDefault(x => StringUtils.EqualsIgnoreCase(x.Key, key));
+            return item?.Value;
+        }
+
+        public static List<string> ToList(object value)
+        {
+            if (value == null) return new List<string>();
+
+            if (value is List<string> list)
+            {
+                return list;
+            }
+
+            if (value is string str)
+            {
+                return GetStringList(str);
+            }
+
+            if (value is IEnumerable enumerable)
+            {
+                var retVal = new List<string>();
+                foreach (var item in enumerable)
+                {
+                    if (item != null)
+                    {
+                        retVal.Add(item.ToString());
+                    }
+                }
+
+                return retVal;
+            }
+
+            return new List<string>();
         }
     }
 }

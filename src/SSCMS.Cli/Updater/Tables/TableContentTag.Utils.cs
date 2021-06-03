@@ -6,7 +6,11 @@ namespace SSCMS.Cli.Updater.Tables
 {
     public partial class TableContentTag
     {
-        public const string OldTableName = "bairong_Tags";
+        public static readonly List<string> OldTableNames = new List<string>
+        {
+            "bairong_Tags",
+            "siteserver_Tag"
+        };
 
         public ConvertInfo Converter => new ConvertInfo
         {
@@ -20,11 +24,13 @@ namespace SSCMS.Cli.Updater.Tables
 
         private List<TableColumn> NewColumns => _databaseManager.ContentTagRepository.TableColumns;
 
-        private static readonly Dictionary<string, string> ConvertKeyDict =
-            new Dictionary<string, string>
+        private static readonly Dictionary<string, string[]> ConvertKeyDict =
+            new Dictionary<string, string[]>
             {
-                {nameof(ContentTag.Id), nameof(TagId)},
-                {nameof(ContentTag.SiteId), nameof(PublishmentSystemId)}
+                {nameof(ContentTag.Id), new[] {nameof(TagId)}},
+                {nameof(ContentTag.SiteId), new[] {nameof(PublishmentSystemId)}},
+                {nameof(ContentTag.ContentIds), new[] {nameof(ContentIdCollection)}},
+                {nameof(ContentTag.TagName), new[] {nameof(Tag)}}
             };
 
         private static readonly Dictionary<string, string> ConvertValueDict = null;

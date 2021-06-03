@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Logs
 {
@@ -10,7 +10,7 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Logs
         [HttpPost, Route(Route)]
         public async Task<ActionResult<SiteLogPageResult>> Get([FromBody] SearchRequest request)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsLogsSite))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsLogsSite))
             {
                 return Unauthorized();
             }
@@ -25,6 +25,8 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Logs
             var logTasks = siteLogs.Where(x => siteIdList.Contains(x.SiteId)).Select(async x =>
             {
                 var site = await _siteRepository.GetAsync(x.SiteId);
+                var administrator = await _administratorRepository.GetByUserIdAsync(x.AdminId);
+                var adminName = administrator == null ? string.Empty : administrator.UserName;
                 var log = new SiteLogResult
                 {
                     Id = x.Id,
@@ -37,6 +39,7 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Logs
                     Summary = x.Summary,
                     SiteName = site.SiteName,
                     CreatedDate = x.CreatedDate,
+                    AdminName = adminName,
                     WebUrl = await _pathManager.GetWebUrlAsync(site)
                 };
                 return log;

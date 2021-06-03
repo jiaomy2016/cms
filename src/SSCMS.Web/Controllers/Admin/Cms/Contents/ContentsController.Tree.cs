@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Contents
@@ -11,7 +10,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         public async Task<ActionResult<TreeResult>> Tree([FromBody]TreeRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents))
+                    MenuUtils.SitePermissions.Contents))
             {
                 return Unauthorized();
             }
@@ -21,7 +20,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
 
             var channel = await _channelRepository.GetAsync(request.SiteId);
 
-            var enabledChannelIds = await _authManager.GetChannelIdsAsync(site.Id);
+            var enabledChannelIds = await _authManager.GetContentPermissionsChannelIdsAsync(site.Id);
             var visibleChannelIds = await _authManager.GetVisibleChannelIdsAsync(enabledChannelIds);
 
             var root = await _channelRepository.GetCascadeAsync(site, channel, async summary =>

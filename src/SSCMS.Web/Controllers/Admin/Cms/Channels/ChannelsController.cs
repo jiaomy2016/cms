@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
 using SSCMS.Configuration;
-using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Enums;
 using SSCMS.Models;
@@ -29,7 +28,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         private const string RouteDrop = "cms/channels/channels/actions/drop";
         private const string RouteColumns = "cms/channels/channels/actions/columns";
 
-        private readonly ICacheManager<CacheUtils.Process> _cacheManager;
+        private readonly ICacheManager _cacheManager;
         private readonly IAuthManager _authManager;
         private readonly IPathManager _pathManager;
         private readonly ICreateManager _createManager;
@@ -42,7 +41,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         private readonly ITemplateRepository _templateRepository;
         private readonly ITableStyleRepository _tableStyleRepository;
 
-        public ChannelsController(ICacheManager<CacheUtils.Process> cacheManager, IAuthManager authManager, IPathManager pathManager, ICreateManager createManager, IDatabaseManager databaseManager, IPluginManager pluginManager, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IChannelGroupRepository channelGroupRepository, ITemplateRepository templateRepository, ITableStyleRepository tableStyleRepository)
+        public ChannelsController(ICacheManager cacheManager, IAuthManager authManager, IPathManager pathManager, ICreateManager createManager, IDatabaseManager databaseManager, IPluginManager pluginManager, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IChannelGroupRepository channelGroupRepository, ITemplateRepository templateRepository, ITableStyleRepository tableStyleRepository)
         {
             _cacheManager = cacheManager;
             _authManager = authManager;
@@ -56,6 +55,14 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
             _channelGroupRepository = channelGroupRepository;
             _templateRepository = templateRepository;
             _tableStyleRepository = tableStyleRepository;
+        }
+
+        public class ChannelColumn
+        {
+            public string AttributeName { get; set; }
+            public string DisplayName { get; set; }
+            public InputType InputType { get; set; }
+            public bool IsList { get; set; }
         }
 
         public class ColumnsRequest : ChannelRequest
@@ -145,11 +152,17 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         {
             var styles = new List<InputStyle>
             {
-                new InputStyle
+                new InputStyle()
                 {
-                    AttributeName = nameof(Site.ImageUrl),
+                    AttributeName = nameof(Channel.ImageUrl),
                     DisplayName = "栏目图片",
                     InputType = InputType.Image
+                },
+                new InputStyle()
+                {
+                    AttributeName = nameof(Channel.Content),
+                    DisplayName = "栏目正文",
+                    InputType = InputType.TextEditor
                 }
             };
             var tableStyles = await _tableStyleRepository.GetChannelStylesAsync(channel);

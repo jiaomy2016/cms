@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using SSCMS.Configuration;
 using SSCMS.Dto;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Settings
 {
@@ -14,7 +15,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Settings
         [HttpPost, Route(RouteUpload)]
         public async Task<ActionResult<UploadResult>> Upload([FromQuery] SiteRequest request, [FromForm] IFormFile file)
         {
-            if (!await _authManager.HasChannelPermissionsAsync(request.SiteId, request.SiteId, Types.SitePermissions.SettingsWaterMark))
+            if (!await _authManager.HasSitePermissionsAsync(request.SiteId, MenuUtils.SitePermissions.SettingsWaterMark))
             {
                 return Unauthorized();
             }
@@ -23,7 +24,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Settings
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = Path.GetFileName(file.FileName);
@@ -33,9 +34,13 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Settings
             var localFileName = _pathManager.GetUploadFileName(site, fileName);
             var filePath = PathUtils.Combine(localDirectoryPath, localFileName);
 
-            if (!FileUtils.IsImage(fileExtName))
+            if (!_pathManager.IsImageExtensionAllowed(site, fileExtName))
             {
-                return this.Error("请选择有效的图片文件上传");
+                return this.Error(Constants.ErrorImageExtensionAllowed);
+            }
+            if (!_pathManager.IsImageSizeAllowed(site, file.Length))
+            {
+                return this.Error(Constants.ErrorImageSizeAllowed);
             }
 
             await _pathManager.UploadAsync(file, filePath);

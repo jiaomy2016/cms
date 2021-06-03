@@ -5,6 +5,7 @@ using SSCMS.Configuration;
 using SSCMS.Core.Utils.Office;
 using SSCMS.Dto;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Material
 {
@@ -15,14 +16,14 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Material
         public async Task<ActionResult<BoolResult>> Create([FromQuery] CreateRequest request, [FromForm] IFormFile file)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                Types.SitePermissions.MaterialMessage))
+                MenuUtils.SitePermissions.MaterialMessage))
             {
                 return Unauthorized();
             }
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileTitle = PathUtils.GetFileNameWithoutExtension(file.FileName);

@@ -5,9 +5,7 @@ using Datory;
 using Mono.Options;
 using SSCMS.Cli.Abstractions;
 using SSCMS.Cli.Core;
-using SSCMS.Configuration;
 using SSCMS.Plugins;
-using SSCMS.Repositories;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -20,20 +18,15 @@ namespace SSCMS.Cli.Jobs
         private string _directory;
         private List<string> _includes;
         private List<string> _excludes;
-        private bool _dataOnly;
         private bool _isHelp;
 
         private readonly ISettingsManager _settingsManager;
-        private readonly IConfigRepository _configRepository;
-        private readonly IDatabaseManager _databaseManager;
         private readonly IDataRestoreService _restoreService;
         private readonly OptionSet _options;
 
-        public DataRestoreJob(ISettingsManager settingsManager, IConfigRepository configRepository, IDatabaseManager databaseManager, IDataRestoreService restoreService)
+        public DataRestoreJob(ISettingsManager settingsManager, IDataRestoreService restoreService)
         {
             _settingsManager = settingsManager;
-            _configRepository = configRepository;
-            _databaseManager = databaseManager;
             _restoreService = restoreService;
 
             _options = new OptionSet {
@@ -43,8 +36,6 @@ namespace SSCMS.Cli.Jobs
                     v => _includes = v == null ? null : ListUtils.GetStringList(v) },
                 { "excludes=", "Exclude table names, separated by commas",
                     v => _excludes = v == null ? null : ListUtils.GetStringList(v) },
-                { "data-only",  "Restore data only",
-                    v => _dataOnly = v != null },
                 { "h|help",  "Display help",
                     v => _isHelp = v != null }
             };
@@ -147,11 +138,18 @@ namespace SSCMS.Cli.Jobs
             await WriteUtils.PrintRowAsync("Restore table name", "Count");
             await WriteUtils.PrintRowLineAsync();
 
-            var errorLogFilePath = CliUtils.CreateErrorLogFile(CommandName, _settingsManager);
+            var errorLogFilePath = CliUtils.DeleteErrorLogFileIfExists(_settingsManager);
 
-            await _restoreService.RestoreAsync(_includes, _excludes, _dataOnly, tablesFilePath, treeInfo, errorLogFilePath);
+            var errorTableNames = await _restoreService.RestoreAsync(_includes, _excludes, tablesFilePath, treeInfo, errorLogFilePath);
 
-            await Console.Out.WriteLineAsync($"恭喜，成功从文件夹：{treeInfo.DirectoryPath} 恢复数据!");
+            if (errorTableNames.Count == 0)
+            {
+                await WriteUtils.PrintSuccessAsync("restore database successfully!");
+            }
+            else
+            {
+                await WriteUtils.PrintErrorAsync($"Database restore failed and the following table was not successfully restored: {ListUtils.ToString(errorTableNames)}");
+            }
         }
     }
 }

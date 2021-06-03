@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Datory;
@@ -247,6 +249,11 @@ namespace SSCMS.Utils
             return StringUtils.EqualsIgnoreCase(".zip", typeStr);
         }
 
+        public static bool IsTxt(string typeStr)
+        {
+            return StringUtils.EqualsIgnoreCase(".txt", typeStr);
+        }
+
         public static bool IsWord(string fileExtName)
         {
             var retVal = false;
@@ -342,11 +349,25 @@ namespace SSCMS.Utils
             {
                 download = true;
             }
-            else if (type == FileType.Pdf || type == FileType.Doc || type == FileType.Docx || type == FileType.Ppt || type == FileType.Pptx || type == FileType.Xls || type == FileType.Xlsx || type == FileType.Mdb)
+            else if (type == FileType.Pdf || type == FileType.Doc || type == FileType.Docx || type == FileType.Ppt || type == FileType.Pptx || type == FileType.Xls || type == FileType.Xlsx || type == FileType.Mdb || type == FileType.Mp3 || type == FileType.Mp4)
             {
                 download = true;
             }
             return download;
+        }
+
+        public static string ContentMd5(string filePath)
+        {
+            string output;
+            using (var md5 = MD5.Create())
+            {
+                using var stream = File.OpenRead(filePath);
+                var checksum = md5.ComputeHash(stream);
+                //output = BitConverter.ToString(checksum).Replace("-", string.Empty).ToLower();
+                output = Convert.ToBase64String(checksum);
+            }
+
+            return output;
         }
     }
 }

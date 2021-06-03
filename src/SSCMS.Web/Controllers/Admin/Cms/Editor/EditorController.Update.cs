@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Models;
@@ -11,11 +10,12 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Editor
     public partial class EditorController
     {
         [HttpPut, Route(Route)]
-        public async Task<ActionResult<BoolResult>> Update([FromBody] SaveRequest request)
+        public async Task<ActionResult<BoolResult>> Update([FromBody] SubmitRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Edit))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId,
+                    MenuUtils.ContentPermissions.Edit))
             {
                 return Unauthorized();
             }

@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Settings.Administrators
 {
@@ -9,14 +9,14 @@ namespace SSCMS.Web.Controllers.Admin.Settings.Administrators
         [HttpGet, Route(Route)]
         public async Task<ActionResult<GetResult>> Get([FromQuery] GetRequest request)
         {
-            var userId = request.UserId;
-            var adminId = _authManager.AdminId;
+            var userName = request.UserName;
+            var adminName = _authManager.AdminName;
 
-            if (userId == 0) userId = adminId;
-            var administrator = await _administratorRepository.GetByUserIdAsync(userId);
+            if (string.IsNullOrEmpty(userName)) userName = adminName;
+            var administrator = await _administratorRepository.GetByUserNameAsync(userName);
             if (administrator == null) return NotFound();
-            if (adminId != userId &&
-                !await _authManager.HasAppPermissionsAsync(Types.AppPermissions.SettingsAdministrators))
+            if (userName != adminName &&
+                !await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.SettingsAdministrators))
             {
                 return Unauthorized();
             }

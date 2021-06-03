@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Datory;
+using SSCMS.Enums;
 using SSCMS.Repositories;
 
 namespace SSCMS.Services
@@ -53,7 +55,7 @@ namespace SSCMS.Services
 
         string GetString(string connectionString, string sqlString);
 
-        IEnumerable<IDictionary<string, object>> GetRows(string connectionString, string sqlString);
+        IEnumerable<IDictionary<string, object>> GetRows(DatabaseType databaseType, string connectionString, string sqlString);
 
         int GetPageTotalCount(string sqlString);
 
@@ -65,11 +67,17 @@ namespace SSCMS.Services
 
         int GetCount(string tableName);
 
-        IEnumerable<dynamic> GetObjects(string tableName);
+        Task<List<IDictionary<string, object>>> GetObjectsAsync(string tableName);
 
-        IEnumerable<dynamic> GetPageObjects(string tableName, string identityColumnName, int offset, int limit);
+        Task<List<IDictionary<string, object>>> GetPageObjectsAsync(string tableName, string identityColumnName, int offset, int limit);
 
         string GetPageSqlString(string tableName, string columnNames, string whereSqlString, string orderSqlString,
             int offset, int limit);
+
+        string GetContentOrderByString(TaxisType taxisType);
+
+        string GetContentOrderByString(TaxisType taxisType, string orderByString);
+
+        string GetDatabaseNameFormConnectionString(string connectionString);
     }
 }

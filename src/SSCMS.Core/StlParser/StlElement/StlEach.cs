@@ -1,9 +1,11 @@
 ﻿using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
+using SSCMS.Core.StlParser.Enums;
+using SSCMS.Core.StlParser.Mocks;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Mock;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Models;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
 using SSCMS.Models;
@@ -12,7 +14,7 @@ using SSCMS.Services;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "列表项循环", Description = "通过 stl:each 标签在模板中遍历指定的列表项")]
-    public class StlEach
+    public static class StlEach
     {
         public const string ElementName = "stl:each";
 
@@ -28,12 +30,12 @@ namespace SSCMS.Core.StlParser.StlElement
 
         public static async Task<object> ParseAsync(IParseManager parseManager)
         {
-            var listInfo = await ListInfo.GetListInfoAsync(parseManager, ParseType.Content);
+            var listInfo = await ListInfo.GetListInfoAsync(parseManager, ParseType.Each);
 
-            return await ParseImplAsync(parseManager, listInfo);
+            return await ParseAsync(parseManager, listInfo);
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, ListInfo listInfo)
+        private static async Task<string> ParseAsync(IParseManager parseManager, ListInfo listInfo)
         {
             var pageInfo = parseManager.PageInfo;
 
@@ -96,15 +98,15 @@ namespace SSCMS.Core.StlParser.StlElement
 
             if (valueList.Count == 0) return string.Empty;
 
-            var eachList = new List<KeyValuePair<int, object>>();
+            var dataSource = new List<KeyValuePair<int, object>>();
             var index = 0;
-            foreach (string value in valueList)
+            foreach (var value in valueList)
             {
-                eachList.Add(new KeyValuePair<int, object>(index++, value));
+                dataSource.Add(new KeyValuePair<int, object>(index++, value));
             }
 
             var builder = new StringBuilder();
-            if (listInfo.Layout == Layout.None)
+            if (listInfo.Layout == ListLayout.None)
             {
                 if (!string.IsNullOrEmpty(listInfo.HeaderTemplate))
                 {
@@ -113,6 +115,7 @@ namespace SSCMS.Core.StlParser.StlElement
 
                 var isAlternative = false;
                 var isSeparator = false;
+                var isSeparatorRepeat = false;
                 if (!string.IsNullOrEmpty(listInfo.AlternatingItemTemplate))
                 {
                     isAlternative = true;
@@ -121,18 +124,27 @@ namespace SSCMS.Core.StlParser.StlElement
                 {
                     isSeparator = true;
                 }
-
-                for (var i = 0; i < eachList.Count; i++)
+                if (!string.IsNullOrEmpty(listInfo.SeparatorRepeatTemplate))
                 {
-                    var each = eachList[i];
+                    isSeparatorRepeat = true;
+                }
+
+                for (var i = 0; i < dataSource.Count; i++)
+                {
+                    var each = dataSource[i];
 
                     pageInfo.EachItems.Push(each);
-                    var templateString = isAlternative ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
+                    var templateString = isAlternative && i % 2 == 1 ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
                     builder.Append(await TemplateUtility.GetEachsTemplateStringAsync(templateString, listInfo.SelectedItems, listInfo.SelectedValues, string.Empty, parseManager, ParseType.Each));
 
-                    if (isSeparator && i != eachList.Count - 1)
+                    if (isSeparator && i != dataSource.Count - 1)
                     {
                         builder.Append(listInfo.SeparatorTemplate);
+                    }
+
+                    if (isSeparatorRepeat && (i + 1) % listInfo.SeparatorRepeat == 0 && i != dataSource.Count - 1)
+                    {
+                        builder.Append(listInfo.SeparatorRepeatTemplate);
                     }
                 }
 
@@ -170,18 +182,18 @@ namespace SSCMS.Core.StlParser.StlElement
                     for (var cell = 1; cell <= columns; cell++)
                     {
                         var cellHtml = string.Empty;
-                        if (itemIndex < eachList.Count)
+                        if (itemIndex < dataSource.Count)
                         {
-                            var each = eachList[itemIndex];
+                            var each = dataSource[itemIndex];
 
                             pageInfo.EachItems.Push(each);
-                            var templateString = isAlternative ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
+                            var templateString = isAlternative && itemIndex % 2 == 1 ? listInfo.AlternatingItemTemplate : listInfo.ItemTemplate;
                             cellHtml = await TemplateUtility.GetEachsTemplateStringAsync(templateString, listInfo.SelectedItems, listInfo.SelectedValues, string.Empty, parseManager, ParseType.Each);
                         }
                         tr.AddCell(cellHtml, cellAttributes);
                         itemIndex++;
                     }
-                    if (itemIndex >= eachList.Count) break;
+                    if (itemIndex >= dataSource.Count) break;
                 }
 
                 table.EndBody();

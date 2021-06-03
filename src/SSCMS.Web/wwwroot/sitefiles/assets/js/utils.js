@@ -1,29 +1,3 @@
-Object.defineProperty(Object.prototype, "getEntityValue", {
-  value: function (t) {
-    var e;
-    for (e in this) if (e.toLowerCase() == t.toLowerCase()) return this[e];
-  },
-});
-
-if (window.swal && swal.mixin) {
-  var alert = swal.mixin({
-    confirmButtonClass: "el-button el-button--primary",
-    cancelButtonClass: "el-button el-button--default",
-    buttonsStyling: false,
-  });
-}
-
-var PER_PAGE = 30;
-var DEFAULT_AVATAR_URL = '/sitefiles/assets/images/default_avatar.png';
-
-var $token = sessionStorage.getItem(ACCESS_TOKEN_NAME) || localStorage.getItem(ACCESS_TOKEN_NAME);
-var $api = axios.create({
-  baseURL: $apiUrl,
-  headers: {
-    Authorization: "Bearer " + $token,
-  },
-});
-
 var utils = {
   init: function (data) {
     return _.assign(
@@ -85,10 +59,65 @@ var utils = {
     });
   },
 
+  loadEditors: function (styles, form) {
+    setTimeout(function () {
+      for (var i = 0; i < styles.length; i++) {
+        var style = styles[i];
+        if (style.inputType === 'TextEditor') {
+          UE.delEditor(style.attributeName);
+          var editor = utils.getEditor(style.attributeName);
+          editor.attributeName = style.attributeName;
+          editor.ready(function () {
+            this.addListener("contentChange", function () {
+              form[this.attributeName] = this.getContent();
+            });
+          });
+        }
+      }
+    }, 100);
+  },
+
+  getEditor: function (attributeName) {
+    return UE.getEditor(attributeName, {
+      allowDivTransToP: false,
+      maximumWords: 99999999,
+      initialFrameWidth:null ,
+      autoHeightEnabled: false,
+      autoFloatEnabled: false,
+      zIndex: 2001,
+    });
+  },
+
+  toCamelCase: function (s) {
+    if (!s || s[0] !== s[0].toUpperCase()) {
+      return s;
+    }
+    var chars = s.split('');
+    var values = s.split('');
+    for (var i = 0; i < chars.length; i++) {
+      if (i == 1 && chars[i] !== chars[i].toUpperCase()) {
+        return values.join('');
+      }
+      var hasNext = (i + 1) < chars.length;
+      if (i > 0 && hasNext && chars[i + 1] !== chars[i + 1].toUpperCase()) {
+        return values.join('');
+      }
+      if (utils.isNumeric(chars[i])) {
+        return values.join('');
+      }
+      values[i] = _.toLower(chars[i]);
+    }
+    return values.join('');
+  },
+
   toInt: function (val) {
     if (!val) return 0;
     if (typeof val === 'number') return val;
     return parseInt(val, 10) || 0;
+  },
+
+  toArray: function (val) {
+    return (val || '').split(',');
   },
 
   formatDate: function(date) {
@@ -97,12 +126,16 @@ var utils = {
         day = '' + d.getDate(),
         year = d.getFullYear();
 
-    if (month.length < 2) 
+    if (month.length < 2)
         month = '0' + month;
-    if (day.length < 2) 
+    if (day.length < 2)
         day = '0' + day;
 
     return [year, month, day].join('-');
+  },
+
+  isNumeric: function(str) {
+      return /^\d+$/.test(str);
   },
 
   getQueryIntList: function (name) {
@@ -173,11 +206,11 @@ var utils = {
   },
 
   getCountName: function(attributeName) {
-    return _.camelCase(attributeName + "Count");
+    return utils.toCamelCase(attributeName + "Count");
   },
 
   getExtendName: function(attributeName, n) {
-    return _.camelCase(n ? attributeName + n : attributeName);
+    return utils.toCamelCase(n ? attributeName + n : attributeName);
   },
 
   pad: function(num) {
@@ -243,7 +276,7 @@ var utils = {
     var index = $this.tabs.findIndex(function(tab) {
       return tab.url == url;
     });
-    
+
     var tab = null;
     if (index === -1) {
       tab = {
@@ -265,7 +298,7 @@ var utils = {
     if (!name) {
       name = $this.tabName;
     }
-    
+
     if ($this.tabName === name) {
       $this.activeChildMenu = null;
       $this.tabs.forEach(function(tab, index) {
@@ -277,7 +310,7 @@ var utils = {
         }
       });
     }
-    
+
     $this.tabs = $this.tabs.filter(function(tab) {
       return tab.name !== name;
     });
@@ -381,31 +414,46 @@ var utils = {
     );
   },
 
-  notifySuccess: function (message) {
+  notifySuccess: function (message, position) {
     utils.getRootVue().$notify.success({
       title: '成功',
-      message: message
+      message: message,
+      position: position || 'top-right'
     });
   },
 
-  notifyWarning: function (message) {
+  notifyWarning: function (message, position) {
     utils.getRootVue().$notify.warning({
       title: '警告',
-      message: message
+      message: message,
+      position: position || 'top-right'
     });
   },
 
-  notifyInfo: function (message) {
+  notifyInfo: function (message, position) {
     utils.getRootVue().$notify.info({
       title: '提示',
-      message: message
+      message: message,
+      position: position || 'top-right'
     });
   },
 
-  notifyError: function (message) {
+  notifyError: function (error, position) {
+    if (!error) return;
+
+    var message = '';
+    if (error.response) {
+      message = utils.getErrorMessage(error);
+    } else if (typeof error === 'string') {
+      message = error;
+    } else {
+      message = error + '';
+    }
+
     utils.getRootVue().$notify.error({
       title: '错误',
-      message: message
+      message: message,
+      position: position || 'top-right'
     });
   },
 
@@ -420,10 +468,32 @@ var utils = {
   error: function (error, options) {
     if (!error) return;
 
-    if (error.response) {
+    if (typeof error === 'string') {
+      if (options && options.redirect) {
+        var uuid = utils.uuid();
+        sessionStorage.setItem(uuid, JSON.stringify({
+          message: error
+        }));
+
+        top.location.href = utils.getRootUrl("error", { uuid: uuid });
+      } else {
+        utils.getRootVue().$message({
+          type: "error",
+          message: error,
+          showIcon: true
+        });
+      }
+    } else if (error.response) {
       var message = utils.getErrorMessage(error);
 
-      if (error.response && error.response.status === 500 || options && options.redirect) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        var location = _.trimEnd(window.location.href, '/');
+        if (_.endsWith(location, '/ss-admin') || _.endsWith(location, '/home')) {
+          top.location.href = utils.getRootUrl('login');
+        } else {
+          top.location.href = utils.getRootUrl('login', {status: 401});
+        }
+      } else if (error.response && error.response.status === 500 || options && options.redirect) {
         var uuid = utils.uuid();
 
         if (typeof message === 'string') {
@@ -433,16 +503,25 @@ var utils = {
         } else {
           sessionStorage.setItem(uuid, message);
         }
-  
+
         if (options && options.redirect) {
-          location.href = utils.getRootUrl("error", { uuid: uuid })
+          top.location.href = utils.getRootUrl("error", { uuid: uuid })
           return;
         }
-  
+
         top.utils.openLayer({
           url: utils.getRootUrl("error", { uuid: uuid }),
         });
         return;
+      } else if (error.response && error.response.status === 400) {
+        if (options && options.redirect) {
+          var uuid = utils.uuid();
+          sessionStorage.setItem(uuid, JSON.stringify({
+            message: error
+          }));
+
+          top.location.href = utils.getRootUrl("error", { uuid: uuid });
+        }
       }
 
       utils.getRootVue().$message({
@@ -450,21 +529,6 @@ var utils = {
         message: message,
         showIcon: true
       });
-    } else if (typeof error === 'string') {
-      if (options && options.redirect) {
-        var uuid = utils.uuid();
-        sessionStorage.setItem(uuid, JSON.stringify({
-          message: error
-        }));
-  
-        location.href = utils.getRootUrl("error", { uuid: uuid });
-      } else {
-        utils.getRootVue().$message({
-          type: "error",
-          message: error,
-          showIcon: true
-        });
-      }
     } else if (typeof error === 'object') {
       utils.getRootVue().$message({
         type: "error",
@@ -501,21 +565,32 @@ var utils = {
     if (!config || !config.url) return false;
 
     if (!config.width) {
-      config.width = $(window).width() - 50;
+      config.width = ($(window).width() - 50) + 'px';
+    } else {
+      var width = config.width + '';
+      if (width.indexOf('%') == -1 && width.indexOf('px') == -1) {
+        config.width = width + 'px';
+      }
     }
     if (!config.height) {
-      config.height = $(window).height() - 50;
+      config.height = ($(window).height() - 50) + 'px';
+    } else {
+      var height = config.height + '';
+      if (height.indexOf('%') == -1 && height.indexOf('px') == -1) {
+        config.height = height + 'px';
+      }
     }
 
     var index = layer.open({
       type: 2,
       btn: null,
       title: config.title,
-      area: [config.width + "px", config.height + "px"],
+      area: [config.width, config.height],
       maxmin: !config.max,
       resize: !config.max,
       shadeClose: true,
       content: config.url,
+      success: config.success
     });
 
     if (config.max) {
@@ -539,6 +614,31 @@ var utils = {
     }
   },
 
+  validateMax: function (rule, value, callback) {
+    if (value && value.length > parseInt(rule.value)) {
+      callback(new Error(rule.message || '字段不能超过指定的长度'));
+    } else {
+      callback()
+    }
+  },
+
+  validateMin: function (rule, value, callback) {
+    if (value && value.length < parseInt(rule.value)) {
+      callback(new Error(rule.message || '字段不能低于指定的长度'));
+    } else {
+      callback()
+    }
+  },
+
+  validateIdCard: function (rule, value, callback) {
+    var reg = /(^\d{15}$)|(^\d{17}(\d|X|x)$)/;
+    if (!value || !reg.test(value)) {
+      callback(new Error(rule.message || '字段必须是身份证号码'));
+    } else {
+      callback()
+    }
+  },
+
   validateInt: function (rule, value, callback) {
     if (!value) {
       callback();
@@ -553,16 +653,13 @@ var utils = {
     var form =  _.assign({}, value);
     for (var i = 0; i < styles.length; i++) {
       var style = styles[i];
-      var name = _.lowerFirst(style.attributeName);
+      var name = utils.toCamelCase(style.attributeName);
       if (style.inputType === 'TextEditor') {
         setTimeout(function () {
-          var editor = UE.getEditor(style.attributeName, {
-            allowDivTransToP: false,
-            maximumWords: 99999999
-          });
+          var editor = utils.getEditor(style.attributeName);
           editor.attributeName = style.attributeName;
           editor.ready(function () {
-            editor.addListener("contentChange", function () {
+            this.addListener("contentChange", function () {
               $this.form[this.attributeName] = this.getContent();
             });
           });
@@ -607,7 +704,7 @@ var utils = {
       var array = [];
       for (var i = 0; i < rules.length; i++) {
         var rule = rules[i];
-        var ruleType = _.camelCase(rule.type);
+        var ruleType = utils.toCamelCase(rule.type);
 
         if (ruleType === "required") {
           array.push({
@@ -615,9 +712,9 @@ var utils = {
             message: rule.message || options.required,
           });
         } else if (ruleType === "email") {
-          array.push({ 
-            type: "email", 
-            message: rule.message || options.email 
+          array.push({
+            type: "email",
+            message: rule.message || options.email
           });
         } else if (ruleType === "mobile") {
           array.push({
@@ -625,13 +722,13 @@ var utils = {
             message: rule.message || options.mobile
           });
         } else if (ruleType === "url") {
-          array.push({ 
-            type: "url", 
+          array.push({
+            type: "url",
             message: rule.message || options.url
           });
         } else if (ruleType === "alpha") {
-          array.push({ 
-            type: "alpha", 
+          array.push({
+            type: "alpha",
             message: rule.message || options.alpha
           });
         } else if (ruleType === "alphaDash") {
@@ -680,9 +777,10 @@ var utils = {
             message: rule.message || options.excluded,
           });
         } else if (ruleType === "max") {
-          array.push({ 
-            type: "max", 
-            message: rule.message || options.max
+          array.push({
+            validator: utils.validateMax,
+            message: rule.message || options.mobile,
+            value: rule.value
           });
         } else if (ruleType === "maxValue") {
           array.push({
@@ -690,9 +788,10 @@ var utils = {
             message: rule.message || options.maxValue,
           });
         } else if (ruleType === "min") {
-          array.push({ 
-            type: "min", 
-            message: rule.message || options.min 
+          array.push({
+            validator: utils.validateMin,
+            message: rule.message || options.mobile,
+            value: rule.value
           });
         } else if (ruleType === "minValue") {
           array.push({
@@ -702,7 +801,7 @@ var utils = {
         } else if (ruleType === "regex" && rule.value) {
           var re = new RegExp(rule.value, "ig");
           var message = rule.message || options.regex;
-          array.push({ 
+          array.push({
             validator: function (rule, value, callback) {
               if (!value){
                 callback();
@@ -725,19 +824,46 @@ var utils = {
             message: rule.message || options.currency,
           });
         } else if (ruleType === "zip") {
-          array.push({ 
-            type: "zip", 
+          array.push({
+            type: "zip",
             message: rule.message || options.zip
           });
         } else if (ruleType === "idCard") {
           array.push({
-            type: "idCard",
+            validator: utils.validateIdCard,
             message: rule.message || options.idCard,
           });
         }
       }
+
       return array;
     }
     return null;
   }
 };
+
+Object.defineProperty(Object.prototype, "getEntityValue", {
+  value: function (t) {
+    var e;
+    for (e in this) if (e.toLowerCase() == t.toLowerCase()) return this[e];
+  },
+});
+
+if (window.swal && swal.mixin) {
+  var alert = swal.mixin({
+    confirmButtonClass: "el-button el-button--primary",
+    cancelButtonClass: "el-button el-button--default",
+    buttonsStyling: false,
+  });
+}
+
+var PER_PAGE = 30;
+var DEFAULT_AVATAR_URL = '/sitefiles/assets/images/default_avatar.png';
+
+var $token = sessionStorage.getItem(ACCESS_TOKEN_NAME) || localStorage.getItem(ACCESS_TOKEN_NAME) || utils.getQueryString('accessToken');
+var $api = axios.create({
+  baseURL: $apiUrl,
+  headers: {
+    Authorization: "Bearer " + $token,
+  },
+});

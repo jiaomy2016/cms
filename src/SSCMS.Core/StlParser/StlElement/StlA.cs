@@ -1,12 +1,14 @@
 ﻿using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
+using SSCMS.Enums;
 using SSCMS.Services;
 using SSCMS.Utils;
+using System.Collections.Specialized;
 
 namespace SSCMS.Core.StlParser.StlElement
 {
@@ -17,6 +19,9 @@ namespace SSCMS.Core.StlParser.StlElement
 
         [StlAttribute(Title = "栏目索引")]
         private const string ChannelIndex = nameof(ChannelIndex);
+
+        [StlAttribute(Title = "栏目索引")]
+        private const string Index = nameof(Index);
 
         [StlAttribute(Title = "栏目名称")]
         private const string ChannelName = nameof(ChannelName);
@@ -44,7 +49,7 @@ namespace SSCMS.Core.StlParser.StlElement
 
         public static async Task<object> ParseAsync(IParseManager parseManager)
         {
-            var attributes = new Dictionary<string, string>();
+            var attributes = new NameValueCollection();
             var channelIndex = string.Empty;
             var channelName = string.Empty;
             var upLevel = 0;
@@ -57,7 +62,7 @@ namespace SSCMS.Core.StlParser.StlElement
             foreach (var name in parseManager.ContextInfo.Attributes.AllKeys)
             {
                 var value = parseManager.ContextInfo.Attributes[name];
-                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex))
+                if (StringUtils.EqualsIgnoreCase(name, ChannelIndex) || StringUtils.EqualsIgnoreCase(name, Index))
                 {
                     channelIndex = await parseManager.ReplaceStlEntitiesForAttributeValueAsync(value);
                     if (!string.IsNullOrEmpty(channelIndex))
@@ -119,21 +124,19 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            var parsedContent = await ParseImplAsync(parseManager, channelIndex, channelName, upLevel, topLevel,
+            return await ParseAsync(parseManager, channelIndex, channelName, upLevel, topLevel,
                 removeTarget, href, queryString, host, attributes);
-
-            return parsedContent;
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, string channelIndex,
+        private static async Task<string> ParseAsync(IParseManager parseManager, string channelIndex,
             string channelName, int upLevel, int topLevel, bool removeTarget, string href, string queryString,
-            string host, Dictionary<string, string> attributes)
+            string host, NameValueCollection attributes)
         {
             var databaseManager = parseManager.DatabaseManager;
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
 
-            attributes.TryGetValue("id", out var htmlId);
+            var htmlId = attributes["id"];
 
             if (!string.IsNullOrEmpty(htmlId) && !string.IsNullOrEmpty(contextInfo.ContainerClientId))
             {
@@ -255,6 +258,11 @@ namespace SSCMS.Core.StlParser.StlElement
             if (contextInfo.IsStlEntity)
             {
                 return url;
+            }
+
+            if (pageInfo.EditMode == EditMode.Visual)
+            {
+                VisualUtility.AddEditableToPage(pageInfo, contextInfo, attributes, innerHtml);
             }
 
             return $@"<a {TranslateUtils.ToAttributesString(attributes)}>{innerHtml}</a>";

@@ -14,21 +14,32 @@ namespace SSCMS.Web.Controllers.Home
             var config = await _configRepository.GetAsync();
             if (config.IsHomeClosed) return this.Error("对不起，用户中心已被禁用！");
 
-            var menus = new List<Menu>();
             var user = await _authManager.GetUserAsync();
+            if (user == null)
+            {
+                return Unauthorized();
+            }
             var userMenus = await _userMenuRepository.GetUserMenusAsync();
+            var menus = new List<Menu>();
 
             foreach (var menuInfo1 in userMenus)
             {
-                var groupIds = menuInfo1.GroupIds ?? new List<int>();
-                if (menuInfo1.Disabled || menuInfo1.ParentId != 0 ||
-                    groupIds.Contains(user.GroupId)) continue;
+                if (menuInfo1.Disabled || menuInfo1.ParentId != 0) continue;
+                if (menuInfo1.IsGroup)
+                {
+                    if (!ListUtils.Contains(menuInfo1.GroupIds, user.GroupId)) continue;
+                }
                 var children = new List<Menu>();
                 foreach (var menuInfo2 in userMenus)
                 {
-                    var groupIds2 = menuInfo2.GroupIds ?? new List<int>();
-                    if (menuInfo2.Disabled || menuInfo2.ParentId != menuInfo1.Id ||
-                        groupIds2.Contains(user.GroupId)) continue;
+                    if (menuInfo2.Disabled || menuInfo2.ParentId != menuInfo1.Id) continue;
+                    if (menuInfo2.IsGroup)
+                    {
+                        if (!ListUtils.Contains(menuInfo2.GroupIds, user.GroupId))
+                        {
+                            continue;
+                        }
+                    }
 
                     children.Add(new Menu
                     {
@@ -39,6 +50,7 @@ namespace SSCMS.Web.Controllers.Home
                         Target = menuInfo2.Target
                     });
                 }
+
 
                 menus.Add(new Menu
                 {

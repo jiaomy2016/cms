@@ -54,6 +54,8 @@ namespace SSCMS.Services
         //得到栏目经过计算后的连接地址
         Task<string> GetChannelUrlAsync(Site site, Channel channel, bool isLocal);
 
+        Task<string> GetBaseUrlAsync(Site site, Template template, int channelId, int contentId);
+
         string RemoveDefaultFileName(Site site, string url);
 
         Task<string> GetInputChannelUrlAsync(Site site, Channel node, bool isLocal);
@@ -74,7 +76,7 @@ namespace SSCMS.Services
 
         Task<string> GetSitePathAsync(int siteId, params string[] paths);
 
-        Task<string> GetIndexPageFilePathAsync(Site site, string createFileFullName, bool root, int currentPageIndex);
+        Task<string> GetIndexPageFilePathAsync(Site site, string createFileFullName, bool root);
 
         string GetBackupFilePath(Site site, BackupType backupType);
 
@@ -113,31 +115,29 @@ namespace SSCMS.Services
 
         Task<string> GetContentFilePathRuleAsync(int siteId, int channelId);
 
-        Task<string> GetChannelPageFilePathAsync(Site site, int channelId, int currentPageIndex);
+        string GetPageFilePathAsync(string filePath, int currentPageIndex);
+
+        Task<string> GetChannelPageFilePathAsync(Site site, int channelId);
 
         Task<string> GetContentPageFilePathAsync(Site site, int channelId, int contentId, int currentPageIndex);
 
         Task<string> GetContentPageFilePathAsync(Site site, int channelId, Content content, int currentPageIndex);
 
-        bool IsImageExtensionAllowed(Site site, string fileExtention);
+        bool IsImageExtensionAllowed(Site site, string fileExtension);
 
         bool IsImageSizeAllowed(Site site, long contentLength);
 
-        bool IsVideoExtensionAllowed(Site site, string fileExtention);
+        bool IsVideoExtensionAllowed(Site site, string fileExtension);
 
-        bool IsVideoSizeAllowed(Site site, int contentLength);
+        bool IsVideoSizeAllowed(Site site, long contentLength);
 
         bool IsAudioExtensionAllowed(Site site, string fileExtension);
 
-        bool IsAudioSizeAllowed(Site site, int contentLength);
+        bool IsAudioSizeAllowed(Site site, long contentLength);
 
-        bool IsFileExtensionAllowed(Site site, string fileExtention);
+        bool IsFileExtensionAllowed(Site site, string fileExtension);
 
-        bool IsFileSizeAllowed(Site site, int contentLength);
-
-        bool IsUploadExtensionAllowed(UploadType uploadType, Site site, string fileExtention);
-
-        bool IsUploadSizeAllowed(UploadType uploadType, Site site, int contentLength);
+        bool IsFileSizeAllowed(Site site, long contentLength);
 
         string GetBinDirectoryPath(string relatedPath);
 

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Datory;
 using Microsoft.AspNetCore.Mvc;
@@ -33,16 +34,22 @@ namespace SSCMS.Web.Controllers.V1
 
         private readonly IAuthManager _authManager;
         private readonly ICreateManager _createManager;
+        private readonly IParseManager _parseManager;
+        private readonly IDatabaseManager _databaseManager;
+        private readonly IPathManager _pathManager;
         private readonly IAccessTokenRepository _accessTokenRepository;
         private readonly ISiteRepository _siteRepository;
         private readonly IChannelRepository _channelRepository;
         private readonly IContentRepository _contentRepository;
         private readonly IContentCheckRepository _contentCheckRepository;
 
-        public ContentsController(IAuthManager authManager, ICreateManager createManager, IAccessTokenRepository accessTokenRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IContentCheckRepository contentCheckRepository)
+        public ContentsController(IAuthManager authManager, ICreateManager createManager, IParseManager parseManager, IDatabaseManager databaseManager, IPathManager pathManager, IAccessTokenRepository accessTokenRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, IContentCheckRepository contentCheckRepository)
         {
             _authManager = authManager;
             _createManager = createManager;
+            _parseManager = parseManager;
+            _databaseManager = databaseManager;
+            _pathManager = pathManager;
             _accessTokenRepository = accessTokenRepository;
             _siteRepository = siteRepository;
             _channelRepository = channelRepository;
@@ -219,11 +226,6 @@ namespace SSCMS.Web.Controllers.V1
                     nameof(Models.Content.Id));
             }
 
-            var page = request.Page > 0 ? request.Page : 1;
-            var perPage = request.PerPage > 0 ? request.PerPage : 20;
-
-            query.ForPage(page, perPage);
-
             return query;
         }
 
@@ -238,7 +240,7 @@ namespace SSCMS.Web.Controllers.V1
         //        bool isAuth;
         //        if (sourceId == SourceManager.User)
         //        {
-        //            isAuth = request.IsUserLoggin && await request.UserPermissions.HasChannelPermissionsAsync(siteId, siteId, AuthTypes.ChannelPermissions.ContentView);
+        //            isAuth = request.IsUserLoggin && await request.UserPermissions.HasChannelPermissionsAsync(siteId, siteId, AuthMenuUtils.ChannelPermissions.ContentView);
         //        }
         //        else
         //        {
@@ -246,10 +248,10 @@ namespace SSCMS.Web.Controllers.V1
         //                         DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeContents) ||
         //                     request.IsUserLoggin &&
         //                     await request.UserPermissions.HasChannelPermissionsAsync(siteId, siteId,
-        //                         AuthTypes.ChannelPermissions.ContentView) ||
+        //                         AuthMenuUtils.ChannelPermissions.ContentView) ||
         //                     request.IsAdminLoggin &&
         //                     await request.AdminPermissions.HasChannelPermissionsAsync(siteId, siteId,
-        //                         AuthTypes.ChannelPermissions.ContentView);
+        //                         AuthMenuUtils.ChannelPermissions.ContentView);
         //        }
         //        if (!isAuth) return Unauthorized();
 
@@ -257,7 +259,7 @@ namespace SSCMS.Web.Controllers.V1
         //        if (site == null) return this.Error("无法确定内容对应的站点");
 
         //        if (!await request.AdminPermissionsImpl.HasChannelPermissionsAsync(siteId, siteId,
-        //            AuthTypes.ChannelPermissions.ContentView)) return Unauthorized();
+        //            AuthMenuUtils.ChannelPermissions.ContentView)) return Unauthorized();
 
         //        var tableName = site.TableName;
 
@@ -294,7 +296,7 @@ namespace SSCMS.Web.Controllers.V1
         //        bool isAuth;
         //        if (sourceId == SourceManager.User)
         //        {
-        //            isAuth = request.IsUserLoggin && await request.UserPermissions.HasChannelPermissionsAsync(siteId, channelId, AuthTypes.ChannelPermissions.ContentView);
+        //            isAuth = request.IsUserLoggin && await request.UserPermissions.HasChannelPermissionsAsync(siteId, channelId, AuthMenuUtils.ChannelPermissions.ContentView);
         //        }
         //        else
         //        {
@@ -302,10 +304,10 @@ namespace SSCMS.Web.Controllers.V1
         //                         DataProvider.AccessTokenRepository.IsScopeAsync(request.ApiToken, Constants.ScopeContents) ||
         //                     request.IsUserLoggin &&
         //                     await request.UserPermissions.HasChannelPermissionsAsync(siteId, channelId,
-        //                         AuthTypes.ChannelPermissions.ContentView) ||
+        //                         AuthMenuUtils.ChannelPermissions.ContentView) ||
         //                     request.IsAdminLoggin &&
         //                     await request.AdminPermissions.HasChannelPermissionsAsync(siteId, channelId,
-        //                         AuthTypes.ChannelPermissions.ContentView);
+        //                         AuthMenuUtils.ChannelPermissions.ContentView);
         //        }
         //        if (!isAuth) return Unauthorized();
 
@@ -316,7 +318,7 @@ namespace SSCMS.Web.Controllers.V1
         //        if (channelInfo == null) return this.Error("无法确定内容对应的栏目");
 
         //        if (!await request.AdminPermissionsImpl.HasChannelPermissionsAsync(siteId, channelId,
-        //            AuthTypes.ChannelPermissions.ContentView)) return Unauthorized();
+        //            AuthMenuUtils.ChannelPermissions.ContentView)) return Unauthorized();
 
         //        var tableName = await _channelRepository.GetTableNameAsync(site, channelInfo);
 
@@ -354,7 +356,7 @@ namespace SSCMS.Web.Controllers.V1
         //    bool isAuth;
         //    if (sourceId == SourceManager.User)
         //    {
-        //        isAuth = req.IsUserLoggin && await req.UserPermissions.HasChannelPermissionsAsync(siteId, siteId, AuthTypes.ChannelPermissions.ContentView);
+        //        isAuth = req.IsUserLoggin && await req.UserPermissions.HasChannelPermissionsAsync(siteId, siteId, AuthMenuUtils.ChannelPermissions.ContentView);
         //    }
         //    else
         //    {
@@ -362,10 +364,10 @@ namespace SSCMS.Web.Controllers.V1
         //                     DataProvider.AccessTokenRepository.IsScopeAsync(req.ApiToken, Constants.ScopeContents) ||
         //                 req.IsUserLoggin &&
         //                 await req.UserPermissions.HasChannelPermissionsAsync(siteId, siteId,
-        //                     AuthTypes.ChannelPermissions.ContentView) ||
+        //                     AuthMenuUtils.ChannelPermissions.ContentView) ||
         //                 req.IsAdminLoggin &&
         //                 await req.AdminPermissions.HasChannelPermissionsAsync(siteId, siteId,
-        //                     AuthTypes.ChannelPermissions.ContentView);
+        //                     AuthMenuUtils.ChannelPermissions.ContentView);
         //    }
         //    if (!isAuth) return Request.Unauthorized<QueryResult>();
 
@@ -373,7 +375,7 @@ namespace SSCMS.Web.Controllers.V1
         //    if (site == null) return Request.BadRequest<QueryResult>("无法确定内容对应的站点");
 
         //    if (!await req.AdminPermissionsImpl.HasChannelPermissionsAsync(siteId, siteId,
-        //        AuthTypes.ChannelPermissions.ContentView)) return Request.Unauthorized<QueryResult>();
+        //        AuthMenuUtils.ChannelPermissions.ContentView)) return Request.Unauthorized<QueryResult>();
 
         //    var tableName = site.TableName;
         //    var query = GetQuery(siteId, null, request);

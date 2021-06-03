@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Parse;
-using SSCMS.Core.StlParser.Model;
 using SSCMS.Models;
 using SSCMS.Services;
 using SSCMS.Utils;
@@ -8,11 +8,11 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "播放音频", Description = "通过 stl:audio 标签在模板中显示并播放音频文件")]
-    public class StlAudio
+    public static class StlAudio
 	{
-        private StlAudio() { }
 		public const string ElementName = "stl:audio";
-        public const string EditorPlaceHolder = @"src=""../assets/editor-images/audio.png""";
+        public const string EditorPlaceHolder1 = @"src=""/sitefiles/assets/images/audio-clip.png""";
+        public const string EditorPlaceHolder2 = @"src=""@sitefiles/assets/images/audio-clip.png""";
 
         [StlAttribute(Title = "指定存储音频地址的内容字段，默认为VideoUrl")]
         private const string Type = nameof(Type);
@@ -63,10 +63,10 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
             }
 
-            return await ParseImplAsync(parseManager, type, playUrl, isAutoPlay, isPreLoad, isLoop);
+            return await ParseAsync(parseManager, type, playUrl, isAutoPlay, isPreLoad, isLoop);
 		}
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, string type, string playUrl, bool isAutoPlay, bool isPreLoad, bool isLoop)
+        private static async Task<string> ParseAsync(IParseManager parseManager, string type, string playUrl, bool isAutoPlay, bool isPreLoad, bool isLoop)
         {
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
@@ -106,7 +106,7 @@ namespace SSCMS.Core.StlParser.StlElement
             await pageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.Jquery);
             await pageInfo.AddPageHeadCodeIfNotExistsAsync(ParsePage.Const.JsAcMediaElement);
 
-            var url = parseManager.PathManager.GetSiteFilesUrl(Resources.MediaElement.Swf);
+            var url = parseManager.PathManager.GetSiteFilesUrl(pageInfo.Site, Resources.MediaElement.Swf);
 
             return $@"
 <audio class=""mejs__player"" src=""{playUrl}"" {(isAutoPlay ? "autoplay" : string.Empty)} {(isPreLoad ? string.Empty : @"preload=""none""")} {(isLoop ? "loop" : string.Empty)}>

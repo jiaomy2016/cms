@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Utils;
 
@@ -11,7 +11,7 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
         [HttpPost, Route(RouteActionsDownload)]
         public async Task<ActionResult<BoolResult>> Download([FromBody] DownloadRequest request)
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.PluginsAdd))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.PluginsAdd))
             {
                 return Unauthorized();
             }
@@ -27,9 +27,12 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
                 }
             }
 
-            _pluginManager.Install(request.PluginId, request.Version);
+            var userName = request.PluginId.Split('.')[0];
+            var name = request.PluginId.Split('.')[1];
 
-            await _authManager.AddAdminLogAsync("安装插件", $"插件:{request.PluginId}");
+            _pluginManager.Install(userName, name, request.Version);
+
+            await _authManager.AddAdminLogAsync("安装插件", $"插件:{userName}.{name}");
 
             return new BoolResult
             {

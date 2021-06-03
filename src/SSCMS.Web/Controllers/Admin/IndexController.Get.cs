@@ -39,25 +39,8 @@ namespace SSCMS.Web.Controllers.Admin
                     return this.Error("系统启动失败，请检查 SS CMS 容器运行环境变量设置");
                 }
             }
-
-            var allowed = true;
-            if (!string.IsNullOrEmpty(_settingsManager.AdminRestrictionHost))
-            {
-                var currentHost = PageUtils.RemoveProtocolFromUrl(PageUtils.GetHost(Request));
-                if (!StringUtils.StartsWithIgnoreCase(currentHost, PageUtils.RemoveProtocolFromUrl(_settingsManager.AdminRestrictionHost)))
-                {
-                    allowed = false;
-                }
-            }
-
-            if (!allowed)
-            {
-                var ipAddress = PageUtils.GetIpAddress(Request);
-                allowed = PageUtils.IsAllowed(ipAddress,
-                    new List<string>(_settingsManager.AdminRestrictionBlockList),
-                    new List<string>(_settingsManager.AdminRestrictionAllowList));
-            }
-
+            
+            var allowed = PageUtils.IsVisitAllowed(_settingsManager, Request);
             if (!allowed)
             {
                 return this.Error($"访问已被禁止，IP地址：{PageUtils.GetIpAddress(Request)}，请与网站管理员联系开通访问权限");
@@ -73,12 +56,11 @@ namespace SSCMS.Web.Controllers.Admin
                 };
             }
 
-            if (!_authManager.IsAdmin)
+            var admin = await _authManager.GetAdminAsync();
+            if (admin == null)
             {
                 return Unauthorized();
             }
-
-            var admin = await _authManager.GetAdminAsync();
             var cacheKey = Constants.GetSessionIdCacheKey(admin.Id);
             var sessionId = await _dbCacheRepository.GetValueAsync(cacheKey);
             if (string.IsNullOrEmpty(request.SessionId) || sessionId != request.SessionId)
@@ -200,20 +182,20 @@ namespace SSCMS.Web.Controllers.Admin
 
                         switchMenus.Add(new Menu
                         {
+                            Id = "site_switch_select",
+                            IconClass = "ion-android-funnel",
+                            Link = _pathManager.GetAdminUrl(SitesLayerSelectController.Route),
+                            Target = "_layer",
+                            //Text = _local["Select site"]
+                            Text = "选择站点"
+                        });
+                        switchMenus.Add(new Menu
+                        {
                             Id = "site_switch_all",
                             IconClass = "ion-clock",
                             //Text = _local["Recently site"],
                             Text = "最近访问",
                             Children = allSiteMenus.ToArray()
-                        });
-                        switchMenus.Add(new Menu
-                        {
-                            Id = "site_switch_select",
-                            IconClass = "ion-checkmark",
-                            Link = _pathManager.GetAdminUrl(SitesLayerSelectController.Route),
-                            Target = "_layer",
-                            //Text = _local["Select site"]
-                            Text = "选择站点"
                         });
 
                         menus.Add(new Menu
@@ -246,7 +228,7 @@ namespace SSCMS.Web.Controllers.Admin
             return new GetResult
             {
                 Value = true,
-                Version = _settingsManager.Version,
+                CmsVersion = _settingsManager.Version,
                 OSArchitecture = _settingsManager.OSArchitecture,
                 AdminLogoUrl = config.AdminLogoUrl,
                 AdminTitle = config.AdminTitle,

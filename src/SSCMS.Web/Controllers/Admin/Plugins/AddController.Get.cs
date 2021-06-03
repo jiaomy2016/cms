@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Plugins
 {
@@ -10,7 +10,7 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
         [HttpGet, Route(Route)]
         public async Task<ActionResult<GetResult>> Get()
         {
-            if (!await _authManager.HasAppPermissionsAsync(Types.AppPermissions.PluginsAdd))
+            if (!await _authManager.HasAppPermissionsAsync(MenuUtils.AppPermissions.PluginsAdd))
             {
                 return Unauthorized();
             }
@@ -19,7 +19,7 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
 
             return new GetResult
             {
-                Version = _settingsManager.Version,
+                CmsVersion = _settingsManager.Version,
                 PackageIds = packageIds,
                 Containerized = _settingsManager.Containerized
             };

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using SSCMS.Configuration;
 using SSCMS.Dto;
 using SSCMS.Models;
 using SSCMS.Services;
@@ -14,7 +13,7 @@ namespace SSCMS.Core.Utils
 	        public const int CaoGao = -99;//草稿
 	        public const int DaiShen = 0;//待审核
 
-            public const int Pass1 = 1;//初审通过
+          public const int Pass1 = 1;//初审通过
 	        public const int Pass2 = 2;//二审通过
 	        public const int Pass3 = 3;//三审通过
 	        public const int Pass4 = 4;//四审通过
@@ -652,11 +651,11 @@ namespace SSCMS.Core.Utils
 
             var isChecked = false;
             var checkedLevel = 0;
-			if (await authManager.HasContentPermissionsAsync(site.Id, channelId, Types.ContentPermissions.CheckLevel5))
+			if (await authManager.HasContentPermissionsAsync(site.Id, channelId, MenuUtils.ContentPermissions.CheckLevel5))
 			{
 				isChecked = true;
 			}
-			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, Types.ContentPermissions.CheckLevel4))
+			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, MenuUtils.ContentPermissions.CheckLevel4))
 			{
 				if (site.CheckContentLevel <= 4)
 				{
@@ -667,7 +666,7 @@ namespace SSCMS.Core.Utils
 					checkedLevel = 4;
 				}
 			}
-			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, Types.ContentPermissions.CheckLevel3))
+			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, MenuUtils.ContentPermissions.CheckLevel3))
 			{
 				if (site.CheckContentLevel <= 3)
 				{
@@ -678,7 +677,7 @@ namespace SSCMS.Core.Utils
 					checkedLevel = 3;
 				}
 			}
-			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, Types.ContentPermissions.CheckLevel2))
+			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, MenuUtils.ContentPermissions.CheckLevel2))
 			{
 				if (site.CheckContentLevel <= 2)
 				{
@@ -689,7 +688,7 @@ namespace SSCMS.Core.Utils
 					checkedLevel = 2;
 				}
 			}
-			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, Types.ContentPermissions.CheckLevel1))
+			else if (await authManager.HasContentPermissionsAsync(site.Id, channelId, MenuUtils.ContentPermissions.CheckLevel1))
 			{
 				if (site.CheckContentLevel <= 1)
 				{

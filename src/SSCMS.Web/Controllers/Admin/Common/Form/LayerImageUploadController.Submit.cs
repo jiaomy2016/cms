@@ -29,7 +29,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Form
                 var virtualUrl = await _pathManager.GetVirtualUrlByPhysicalPathAsync(site, filePath);
                 var imageUrl = await _pathManager.ParseSiteUrlAsync(site, virtualUrl, true);
 
-                if (request.IsLibrary)
+                if (request.IsMaterial)
                 {
                     var materialFileName = PathUtils.GetMaterialFileName(fileName);
                     var virtualDirectoryPath = PathUtils.GetMaterialVirtualDirectoryPath(UploadType.Image);
@@ -93,7 +93,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Form
             var options = TranslateUtils.JsonDeserialize(site.Get<string>(nameof(LayerImageUploadController)), new Options
             {
                 IsEditor = true,
-                IsLibrary = true,
+                IsMaterial= true,
                 IsThumb = false,
                 ThumbWidth = 1024,
                 ThumbHeight = 1024,
@@ -101,7 +101,7 @@ namespace SSCMS.Web.Controllers.Admin.Common.Form
             });
 
             options.IsEditor = request.IsEditor;
-            options.IsLibrary = request.IsLibrary;
+            options.IsMaterial = request.IsMaterial;
             options.IsThumb = request.IsThumb;
             options.ThumbWidth = request.ThumbWidth;
             options.ThumbHeight = request.ThumbHeight;

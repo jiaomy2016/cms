@@ -1,8 +1,7 @@
 ﻿using System.Text;
 using System.Threading.Tasks;
-using Datory;
 using SSCMS.Configuration;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
@@ -13,9 +12,8 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "获取内容值", Description = "通过 stl:content 标签在模板中显示指定内容的属性值")]
-    public class StlContent
+    public static class StlContent
     {
-        private StlContent() { }
         public const string ElementName = "stl:content";
 
         [StlAttribute(Title = "显示的类型")]
@@ -173,7 +171,7 @@ namespace SSCMS.Core.StlParser.StlElement
                 return content.ToDictionary();
             }
 
-            var parsedContent = await ParseImplAsync(parseManager, leftText, rightText, formatString, no, separator, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBrStr, isLower, isUpper, isOriginal, type, content, contentId);
+            var parsedContent = await ParseAsync(parseManager, leftText, rightText, formatString, no, separator, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBrStr, isLower, isUpper, isOriginal, type, content, contentId);
 
             var innerBuilder = new StringBuilder(parsedContent);
             await parseManager.ParseInnerContentAsync(innerBuilder);
@@ -187,7 +185,7 @@ namespace SSCMS.Core.StlParser.StlElement
             return parsedContent;
         }
 
-        private static async Task<string> ParseImplAsync(IParseManager parseManager, string leftText, string rightText, string formatString, string no, string separator, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, string isReturnToBrStr, bool isLower, bool isUpper, bool isOriginal, string type, Content content, int contentId)
+        private static async Task<string> ParseAsync(IParseManager parseManager, string leftText, string rightText, string formatString, string no, string separator, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, string isReturnToBrStr, bool isLower, bool isUpper, bool isOriginal, string type, Content content, int contentId)
         {
             var pageInfo = parseManager.PageInfo;
             var contextInfo = parseManager.ContextInfo;
@@ -217,16 +215,16 @@ namespace SSCMS.Core.StlParser.StlElement
 
             if (isOriginal)
             {
-                if (content.ReferenceId > 0 && content.SourceId > 0 && TranslateType.Reference.GetValue() == content.Get<string>(ColumnsManager.TranslateContentType))
+                if (content.ReferenceId > 0 && content.SourceId > 0)
                 {
                     var targetChannelId = content.SourceId;
                     //var targetSiteId = databaseManager.ChannelRepository.GetSiteId(targetChannelId);
-                    var targetSiteId = await databaseManager.ChannelRepository.GetSiteIdAsync(targetChannelId);
-                    var targetSite = await databaseManager.SiteRepository.GetAsync(targetSiteId);
-                    var targetNodeInfo = await databaseManager.ChannelRepository.GetAsync(targetChannelId);
+                    //var targetSiteId = await databaseManager.ChannelRepository.GetSiteIdAsync(targetChannelId);
+                    //var targetSite = await databaseManager.SiteRepository.GetAsync(targetSiteId);
+                    var targetChannel = await databaseManager.ChannelRepository.GetAsync(targetChannelId);
 
                     //var targetContentInfo = databaseManager.ContentRepository.GetContentInfo(tableStyle, tableName, content.ReferenceId);
-                    var targetContentInfo = await databaseManager.ContentRepository.GetAsync(targetSite, targetNodeInfo, content.ReferenceId);
+                    var targetContentInfo = await databaseManager.ContentRepository.GetAsync(pageInfo.Site, targetChannel, content.ReferenceId);
                     if (targetContentInfo != null && targetContentInfo.ChannelId > 0)
                     {
                         //标题可以使用自己的
@@ -278,7 +276,7 @@ namespace SSCMS.Core.StlParser.StlElement
                     parsedContent = InputTypeUtils.ParseString(InputType.Text, content.SubTitle, replace, to, startIndex, length, wordNum, ellipsis, isClearTags, isReturnToBr, isLower, isUpper, formatString);
                     if (pageInfo.Site.IsContentSubTitleBreakLine)
                     {
-                        parsedContent = parsedContent.Replace("  ", !contextInfo.IsInnerElement ? "<br />" : string.Empty);
+                        parsedContent = parsedContent?.Replace("  ", !contextInfo.IsInnerElement ? "<br />" : string.Empty);
                     }
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, nameof(Content.Summary)))
@@ -581,7 +579,15 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, nameof(ColumnsManager.NavigationUrl)))
                 {
-                    parsedContent = await parseManager.PathManager.GetContentUrlAsync(pageInfo.Site, content, pageInfo.IsLocal);
+                    if (contextInfo.Content != null)
+                    {
+                        parsedContent = await parseManager.PathManager.GetContentUrlAsync(pageInfo.Site, contextInfo.Content, pageInfo.IsLocal);
+                    }
+                    else
+                    {
+                        var channelInfo = await databaseManager.ChannelRepository.GetAsync(contextInfo.ChannelId);
+                        parsedContent = await parseManager.PathManager.GetContentUrlAsync(pageInfo.Site, channelInfo, contextInfo.ContentId, pageInfo.IsLocal);
+                    }
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, nameof(Content.TagNames)))
                 {

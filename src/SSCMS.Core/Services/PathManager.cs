@@ -12,7 +12,7 @@ namespace SSCMS.Core.Services
 {
     public partial class PathManager : IPathManager
     {
-        private readonly ICacheManager<string> _cacheManager;
+        private readonly ICacheManager _cacheManager;
         private readonly ISettingsManager _settingsManager;
         private readonly IPluginManager _pluginManager;
         private readonly IDatabaseManager _databaseManager;
@@ -24,7 +24,7 @@ namespace SSCMS.Core.Services
         private readonly IContentRepository _contentRepository;
         private readonly ITableStyleRepository _tableStyleRepository;
 
-        public PathManager(ICacheManager<string> cacheManager, ISettingsManager settingsManager, IPluginManager pluginManager, IDatabaseManager databaseManager, ISpecialRepository specialRepository, ITemplateLogRepository templateLogRepository, ITemplateRepository templateRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, ITableStyleRepository tableStyleRepository)
+        public PathManager(ICacheManager cacheManager, ISettingsManager settingsManager, IPluginManager pluginManager, IDatabaseManager databaseManager, ISpecialRepository specialRepository, ITemplateLogRepository templateLogRepository, ITemplateRepository templateRepository, ISiteRepository siteRepository, IChannelRepository channelRepository, IContentRepository contentRepository, ITableStyleRepository tableStyleRepository)
         {
             _cacheManager = cacheManager;
             _settingsManager = settingsManager;
@@ -51,7 +51,18 @@ namespace SSCMS.Core.Services
 
         public string GetHomeUrl(params string[] paths)
         {
-            return PageUtils.Combine($"/{Constants.HomeDirectory}", PageUtils.Combine(paths), "/");
+            return PageUtils.Combine($"/{Constants.HomeDirectory}", PageUtils.Combine(paths), PageUtils.Separator);
+        }
+
+        //public string GetApiUrl(Site site, params string[] paths)
+        //{
+        //    return GetApiHostUrl(site, Constants.ApiPrefix, PageUtils.Combine(paths));
+        //}
+
+        public string GetApiHostUrl(Site site, params string[] paths)
+        {
+            var url = site.IsSeparatedApi ? site.SeparatedApiUrl : PageUtils.Separator;
+            return PageUtils.Combine(url, PageUtils.Combine(paths));
         }
 
         public string GetUploadFileName(string fileName)
@@ -74,6 +85,7 @@ namespace SSCMS.Core.Services
 
         public async Task UploadAsync(IFormFile file, string filePath)
         {
+            FileUtils.DeleteFileIfExists(filePath);
             DirectoryUtils.CreateDirectoryIfNotExists(filePath);
             await using var stream = new FileStream(filePath, FileMode.Create);
             await file.CopyToAsync(stream);
@@ -81,6 +93,7 @@ namespace SSCMS.Core.Services
 
         public async Task UploadAsync(byte[] bytes, string filePath)
         {
+            FileUtils.DeleteFileIfExists(filePath);
             DirectoryUtils.CreateDirectoryIfNotExists(filePath);
             await using var stream = new FileStream(filePath, FileMode.Create);
             await stream.WriteAsync(bytes);

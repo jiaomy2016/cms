@@ -18,7 +18,7 @@ namespace SSCMS.Cli.Jobs
         private const string Folder = "update";
 
         private string _directory;
-        private bool _contentSplit;
+        private bool _splitContents;
         private bool _isHelp;
 
         private readonly ISettingsManager _settingsManager;
@@ -35,8 +35,8 @@ namespace SSCMS.Cli.Jobs
             _options = new OptionSet {
                 { "d|directory=", "Backup folder name",
                     v => _directory = v },
-                { "content-split",  "Split content table by site",
-                    v => _contentSplit = v != null },
+                { "split-contents",  "Split content table by site",
+                    v => _splitContents = v != null },
                 { "h|help",  "Display help",
                     v => _isHelp = v != null }
             };
@@ -89,18 +89,14 @@ namespace SSCMS.Cli.Jobs
             await WriteUtils.PrintRowLineAsync();
 
             var siteIdList = new List<int>();
-            var tableNameListForContent = new List<string>();
-            var tableNameListForGovPublic = new List<string>();
-            var tableNameListForGovInteract = new List<string>();
-            var tableNameListForJob = new List<string>();
+            var tableNames = new List<string>();
 
-            UpdateUtils.LoadSites(oldTreeInfo, siteIdList,
-                tableNameListForContent, tableNameListForGovPublic, tableNameListForGovInteract, tableNameListForJob);
+            UpdateUtils.LoadSites(_settingsManager, oldTreeInfo, siteIdList, tableNames);
 
             var table = new TableContentConverter(_settingsManager);
 
             var splitSiteTableDict = new Dictionary<int, TableInfo>();
-            if (_contentSplit)
+            if (_splitContents)
             {
                 var converter = table.GetSplitConverter();
                 foreach (var siteId in siteIdList)
@@ -114,27 +110,43 @@ namespace SSCMS.Cli.Jobs
                 }
             }
 
+            var errorLogFilePath = CliUtils.DeleteErrorLogFileIfExists(_settingsManager);
+            var errorTableNames = new List<string>();
+
             foreach (var oldTableName in oldTableNames)
             {
-                var oldMetadataFilePath = oldTreeInfo.GetTableMetadataFilePath(oldTableName);
-
-                if (!FileUtils.IsFileExists(oldMetadataFilePath)) continue;
-
-                var oldTableInfo = TranslateUtils.JsonDeserialize<TableInfo>(await FileUtils.ReadTextAsync(oldMetadataFilePath, Encoding.UTF8));
-
-                if (ListUtils.ContainsIgnoreCase(tableNameListForContent, oldTableName))
+                try
                 {
-                    if (_contentSplit)
-                    {
-                        var converter = table.GetConverter(oldTableName, oldTableInfo.Columns);
+                    var oldMetadataFilePath = oldTreeInfo.GetTableMetadataFilePath(oldTableName);
 
-                        await _updateService.UpdateSplitContentsTableInfoAsync(splitSiteTableDict, siteIdList, oldTableName,
-                            oldTableInfo, converter);
+                    if (!FileUtils.IsFileExists(oldMetadataFilePath)) continue;
+
+                    var oldTableInfo = TranslateUtils.JsonDeserialize<TableInfo>(await FileUtils.ReadTextAsync(oldMetadataFilePath, Encoding.UTF8));
+
+                    if (ListUtils.ContainsIgnoreCase(tableNames, oldTableName))
+                    {
+                        if (_splitContents)
+                        {
+                            var converter = table.GetConverter(oldTableName, oldTableInfo.Columns);
+
+                            await _updateService.UpdateSplitContentsTableInfoAsync(splitSiteTableDict, siteIdList, oldTableName,
+                                oldTableInfo, converter);
+                        }
+                        else
+                        {
+                            var converter = table.GetConverter(oldTableName, oldTableInfo.Columns);
+                            var tuple = await _updateService.GetNewTableInfoAsync(oldTableName, oldTableInfo, converter);
+                            if (tuple != null)
+                            {
+                                newTableNames.Add(tuple.Item1);
+
+                                await FileUtils.WriteTextAsync(newTreeInfo.GetTableMetadataFilePath(tuple.Item1), TranslateUtils.JsonSerialize(tuple.Item2));
+                            }
+                        }
                     }
                     else
                     {
-                        var converter = table.GetConverter(oldTableName, oldTableInfo.Columns);
-                        var tuple = await _updateService.GetNewTableInfoAsync(oldTableName, oldTableInfo, converter);
+                        var tuple = await _updateService.UpdateTableInfoAsync(oldTableName, oldTableInfo);
                         if (tuple != null)
                         {
                             newTableNames.Add(tuple.Item1);
@@ -143,24 +155,24 @@ namespace SSCMS.Cli.Jobs
                         }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    var tuple = await _updateService.UpdateTableInfoAsync(oldTableName, oldTableInfo, tableNameListForGovPublic, tableNameListForGovInteract, tableNameListForJob);
-                    if (tuple != null)
+                    errorTableNames.Add(oldTableName);
+                    await CliUtils.AppendErrorLogAsync(errorLogFilePath, new TextLogInfo
                     {
-                        newTableNames.Add(tuple.Item1);
-
-                        await FileUtils.WriteTextAsync(newTreeInfo.GetTableMetadataFilePath(tuple.Item1), TranslateUtils.JsonSerialize(tuple.Item2));
-                    }
+                        Exception = ex,
+                        DateTime = DateTime.Now,
+                        Detail = oldTableName
+                    });
                 }
             }
 
-            if (_contentSplit)
+            if (_splitContents)
             {
                 foreach (var siteId in siteIdList)
                 {
                     var siteTableInfo = splitSiteTableDict[siteId];
-                    var siteTableName = await _databaseManager.ContentRepository.GetNewContentTableNameAsync();
+                    var siteTableName = UpdateUtils.GetSplitContentTableName(siteId);
                     newTableNames.Add(siteTableName);
 
                     await FileUtils.WriteTextAsync(newTreeInfo.GetTableMetadataFilePath(siteTableName), TranslateUtils.JsonSerialize(siteTableInfo));
@@ -172,7 +184,14 @@ namespace SSCMS.Cli.Jobs
             await FileUtils.WriteTextAsync(newTreeInfo.TablesFilePath, TranslateUtils.JsonSerialize(newTableNames));
 
             await WriteUtils.PrintRowLineAsync();
-            await WriteUtils.PrintSuccessAsync("Update the backup data to the new version successfully!");
+            if (errorTableNames.Count == 0)
+            {
+                await WriteUtils.PrintSuccessAsync("Update the backup data to the new version successfully!");
+            }
+            else
+            {
+                await WriteUtils.PrintErrorAsync($"Database update failed and the following table was not successfully update: {ListUtils.ToString(errorTableNames)}");
+            }
         }
     }
 }

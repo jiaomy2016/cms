@@ -181,6 +181,16 @@ namespace SSCMS.Core.Services
             return database.GetConnection();
         }
 
+        private IDbConnection GetConnection(DatabaseType databaseType, string connectionString = null)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                connectionString = _settingsManager.Database.ConnectionString;
+            }
+            var database = new Database(databaseType, connectionString);
+            return database.GetConnection();
+        }
+
         public async Task DeleteDbLogAsync()
         {
             if (_settingsManager.Database.DatabaseType == DatabaseType.MySql)
@@ -267,7 +277,7 @@ namespace SSCMS.Core.Services
             return value;
         }
 
-        public IEnumerable<IDictionary<string, object>> GetRows(string connectionString, string sqlString)
+        public IEnumerable<IDictionary<string, object>> GetRows(DatabaseType databaseType, string connectionString, string sqlString)
         {
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -278,7 +288,7 @@ namespace SSCMS.Core.Services
 
             IEnumerable<IDictionary<string, object>> rows;
 
-            using (var connection = GetConnection(connectionString))
+            using (var connection = GetConnection(databaseType, connectionString))
             {
                 rows = connection.Query(sqlString).Cast<IDictionary<string, object>>();
             }
@@ -302,7 +312,7 @@ namespace SSCMS.Core.Services
 
         public string GetStlPageSqlString(string sqlString, string orderString, int totalCount, int itemsPerPage, int currentPageIndex)
         {
-            var retVal = string.Empty;
+            string retVal;
 
             var temp = StringUtils.ToLower(sqlString);
             var pos = temp.LastIndexOf("order by", StringComparison.Ordinal);
@@ -325,21 +335,12 @@ namespace SSCMS.Core.Services
             if (currentPageIndex == pageCount - 1)
                 recsToRetrieve = recordsInLastPage;
 
-            orderString = orderString.ToUpper();
+            orderString = StringUtils.ToUpper(orderString);
             var orderStringReverse = orderString.Replace(" DESC", " DESC2");
             orderStringReverse = orderStringReverse.Replace(" ASC", " DESC");
             orderStringReverse = orderStringReverse.Replace(" DESC2", " ASC");
 
-            if (_settingsManager.Database.DatabaseType == DatabaseType.MySql)
-            {
-                retVal = $@"
-SELECT * FROM (
-    SELECT * FROM (
-        SELECT * FROM ({sqlString}) AS t0 {orderString} LIMIT {itemsPerPage * (currentPageIndex + 1)}
-    ) AS t1 {orderStringReverse} LIMIT {recsToRetrieve}
-) AS t2 {orderString}";
-            }
-            else if (_settingsManager.Database.DatabaseType == DatabaseType.SqlServer)
+            if (_settingsManager.Database.DatabaseType == DatabaseType.SqlServer)
             {
                 retVal = $@"
 SELECT * FROM (
@@ -349,6 +350,15 @@ SELECT * FROM (
 ) AS t2 {orderString}";
             }
             else if (_settingsManager.Database.DatabaseType == DatabaseType.PostgreSql)
+            {
+                retVal = $@"
+SELECT * FROM (
+    SELECT * FROM (
+        SELECT * FROM ({sqlString}) AS t0 {orderString} LIMIT {itemsPerPage * (currentPageIndex + 1)}
+    ) AS t1 {orderStringReverse} LIMIT {recsToRetrieve}
+) AS t2 {orderString}";
+            }
+            else
             {
                 retVal = $@"
 SELECT * FROM (
@@ -401,7 +411,7 @@ SELECT * FROM (
                 whereString = joinString + " " + whereString;
             }
 
-            return SqlUtils.ToTopSqlString(_settingsManager.Database.DatabaseType, tableName, columns, whereString, orderByString, totalNum);
+            return DatabaseUtils.ToTopSqlString(_settingsManager.Database, tableName, columns, whereString, orderByString, totalNum);
         }
 
         public int GetCount(string tableName)
@@ -410,34 +420,36 @@ SELECT * FROM (
 
             using (var conn = _settingsManager.Database.GetConnection())
             {
-                count = conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM {SqlUtils.GetQuotedIdentifier(_settingsManager.Database.DatabaseType, tableName)}");
+                count = conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM {Quote(tableName)}");
             }
             return count;
 
             //return GetIntResult();
         }
 
-        public IEnumerable<dynamic> GetObjects(string tableName)
+        public async Task<List<IDictionary<string, object>>> GetObjectsAsync(string tableName)
         {
-            IEnumerable<dynamic> objects;
+            List<IDictionary<string, object>> objects;
             var sqlString = $"select * from {tableName}";
 
-            using (var connection = _settingsManager.Database.GetConnection())
+            await using (var connection = _settingsManager.Database.GetConnection())
             {
-                objects = connection.Query(sqlString, null, null, false).ToList();
+                objects = (from row in await connection.QueryAsync(sqlString)
+                    select (IDictionary<string, object>) row).AsList();
             }
 
             return objects;
         }
 
-        public IEnumerable<dynamic> GetPageObjects(string tableName, string identityColumnName, int offset, int limit)
+        public async Task<List<IDictionary<string, object>>> GetPageObjectsAsync(string tableName, string identityColumnName, int offset, int limit)
         {
-            IEnumerable<dynamic> objects;
+            List<IDictionary<string, object>> objects;
             var sqlString = GetPageSqlString(tableName, "*", string.Empty, $"ORDER BY {identityColumnName} ASC", offset, limit);
 
-            using (var connection = _settingsManager.Database.GetConnection())
+            await using (var connection = _settingsManager.Database.GetConnection())
             {
-                objects = connection.Query(sqlString, null, null, false).ToList();
+                objects = (from row in await connection.QueryAsync(sqlString)
+                    select (IDictionary<string, object>)row).AsList();
             }
 
             return objects;
@@ -526,6 +538,37 @@ SELECT * FROM (
                     : $@"SELECT {columnNames} FROM {tableName} {whereSqlString} {orderSqlString} LIMIT {limit} OFFSET {offset}";
             }
 
+            return retVal;
+        }
+
+        public string GetDatabaseNameFormConnectionString(string connectionString)
+        {
+            var name = GetValueFromConnectionString(connectionString, "Database");
+            if (string.IsNullOrEmpty(name))
+            {
+                name = GetValueFromConnectionString(connectionString, "Initial Catalog");
+            }
+            return name;
+        }
+
+        private string GetValueFromConnectionString(string connectionString, string attribute)
+        {
+            var retVal = string.Empty;
+            if (!string.IsNullOrEmpty(connectionString) && !string.IsNullOrEmpty(attribute))
+            {
+                var pairs = connectionString.Split(';');
+                foreach (var pair in pairs)
+                {
+                    if (pair.IndexOf("=", StringComparison.Ordinal) != -1)
+                    {
+                        if (StringUtils.EqualsIgnoreCase(attribute, pair.Trim().Split('=')[0]))
+                        {
+                            retVal = pair.Trim().Split('=')[1];
+                            break;
+                        }
+                    }
+                }
+            }
             return retVal;
         }
     }

@@ -43,8 +43,8 @@ var methods = {
   },
 
   insertText: function(attributeName, no, text) {
-    var count = this.form[utils.getCountName(attributeName)];
-    if (count && count < no) {
+    var count = this.form[utils.getCountName(attributeName)] || 0;
+    if (count <= no) {
       this.form[utils.getCountName(attributeName)] = no;
     }
     this.form[utils.getExtendName(attributeName, no)] = text;
@@ -54,9 +54,9 @@ var methods = {
   insertEditor: function(attributeName, html) {
     if (!attributeName) attributeName = 'Body';
     if (!html) return;
-    UE.getEditor(attributeName, {allowDivTransToP: false, maximumWords:99999999}).execCommand('insertHTML', html);
+    utils.getEditor(attributeName).execCommand('insertHTML', html);
   },
-  
+
   apiGet: function () {
     var $this = this;
 
@@ -94,13 +94,10 @@ var methods = {
       for (var i = 0; i < $this.styles.length; i++) {
         var style = $this.styles[i];
         if (style.inputType === 'TextEditor') {
-          var editor = UE.getEditor(style.attributeName, {
-            allowDivTransToP: false,
-            maximumWords: 99999999
-          });
+          var editor = utils.getEditor(style.attributeName);
           editor.attributeName = style.attributeName;
           editor.ready(function () {
-            editor.addListener("contentChange", function () {
+            this.addListener("contentChange", function () {
               $this.form[this.attributeName] = this.getContent();
             });
           });

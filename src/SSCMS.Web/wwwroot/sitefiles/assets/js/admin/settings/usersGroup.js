@@ -63,11 +63,11 @@ var methods = {
     });
   },
 
-  getAdminUrl: function(adminName) {
-    return utils.getSettingsUrl('administratorsView', {
-      pageType: 'admin',
-      userName: adminName,
-      returnUrl: location.href
+  btnAdminClick: function(adminName) {
+    utils.openLayer({
+      title: "管理员查看",
+      url: utils.getCommonUrl('adminLayerView', {userName: adminName}),
+      full: true
     });
   },
 

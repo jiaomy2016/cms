@@ -1,6 +1,5 @@
-﻿using System.IO;
-using System.Linq;
-using RestSharp;
+﻿using System.Linq;
+using SSCMS.Core.Utils;
 using SSCMS.Services;
 using SSCMS.Utils;
 
@@ -8,24 +7,24 @@ namespace SSCMS.Core.Plugins
 {
     public static class CloudUtils
     {
+#if DEBUG
+        public const string CloudApiHost = "http://localhost:6060";
+#else
+        public const string CloudApiHost = "https://api.sscms.com";
+#endif
+
         public static class Www
         {
-            public const string Host = "https://sscms.com";
+            private const string Host = "https://sscms.com";
 
-            public static string GetPluginUrl(string pluginId)
+            public static string GetPluginUrl(string userName, string name)
             {
-                return PageUtils.Combine(Host, $"/plugins/plugin.html?id={pluginId}");
+                return PageUtils.Combine(Host, $"/plugins/plugin.html?userName={userName}&name={name}");
             }
-        }
 
-        public static class Api
-        {
-            private const string Host = "https://api.sscms.com";
-            // private const string Host = "http://localhost:81";
-
-            public static string GetCliUrl(string relatedUrl)
+            public static string GetThemeUrl(string userName, string name)
             {
-                return PageUtils.Combine(Host, "v7/cli", relatedUrl);
+                return PageUtils.Combine(Host, $"/templates/template.html?userName={userName}&name={name}");
             }
         }
 
@@ -33,30 +32,24 @@ namespace SSCMS.Core.Plugins
         {
             private const string Host = "https://dl.sscms.com";
 
-            public static string GetTemplateDownloadUrl(string name)
+            public static string GetThemesDownloadUrl(string userName, string name)
             {
-                return $"{Host}/templates/T_{name}.zip";
+                return $"{Host}/themes/{userName}/T_{name}.zip";
             }
 
-            public static string GetCmsDownloadName(string osArchitecture, string version)
+            private static string GetCmsDownloadName(string osArchitecture, string version)
             {
                 return $"sscms-{version}-{osArchitecture}";
             }
 
-            public static string GetCmsDownloadUrl(string osArchitecture, string version)
+            private static string GetCmsDownloadUrl(string osArchitecture, string version)
             {
                 return $"{Host}/cms/{version}/{GetCmsDownloadName(osArchitecture, version)}.zip";
             }
 
-            public static string GetPluginsDownloadUrl(string pluginId, string version)
+            private static string GetExtensionsDownloadUrl(string userName, string name, string version)
             {
-                var publisher = StringUtils.GetFirstOfStringCollection(pluginId, '.');
-                return $"{Host}/plugins/{publisher}/{GetPluginsDownloadName(pluginId, version)}.zip";
-            }
-
-            public static string GetPluginsDownloadName(string pluginId, string version)
-            {
-                return $"{pluginId}.{version}";
+                return $"{Host}/extensions/{userName}/{name}/{userName}.{name}.{version}.zip";
             }
 
             public static string DownloadCms(IPathManager pathManager, string osArchitecture, string version)
@@ -64,11 +57,6 @@ namespace SSCMS.Core.Plugins
                 var packagesPath = pathManager.GetPackagesPath();
                 var name = GetCmsDownloadName(osArchitecture, version);
                 var directoryPath = PathUtils.Combine(packagesPath, name);
-
-                //if (IsCmsDownload(pathManager, osArchitecture, version))
-                //{
-                //    return directoryPath;
-                //}
 
                 var directoryNames = DirectoryUtils.GetDirectoryNames(packagesPath);
                 foreach (var directoryName in directoryNames.Where(directoryName => StringUtils.StartsWithIgnoreCase(directoryName, "sscms-")))
@@ -79,23 +67,26 @@ namespace SSCMS.Core.Plugins
                 DirectoryUtils.CreateDirectoryIfNotExists(directoryPath);
 
                 var filePath = PathUtils.Combine(packagesPath, $"{GetCmsDownloadName(osArchitecture, version)}.zip");
-                FileUtils.WriteText(filePath, string.Empty);
-                using (var writer = File.OpenWrite(filePath))
-                {
-                    var client = new RestClient(GetCmsDownloadUrl(osArchitecture, version));
-                    var request = new RestRequest
-                    {
-                        ResponseWriter = responseStream =>
-                        {
-                            using (responseStream)
-                            {
-                                responseStream.CopyTo(writer);
-                            }
-                        }
-                    };
 
-                    client.DownloadData(request);
-                }
+                var url = GetCmsDownloadUrl(osArchitecture, version);
+                RestUtils.Download(url, filePath);
+                //FileUtils.WriteText(filePath, string.Empty);
+                //using (var writer = File.OpenWrite(filePath))
+                //{
+                //    var client = new RestClient(GetCmsDownloadUrl(osArchitecture, version));
+                //    var request = new RestRequest
+                //    {
+                //        ResponseWriter = responseStream =>
+                //        {
+                //            using (responseStream)
+                //            {
+                //                responseStream.CopyTo(writer);
+                //            }
+                //        }
+                //    };
+
+                //    client.DownloadData(request);
+                //}
 
                 pathManager.ExtractZip(filePath, directoryPath);
 
@@ -104,33 +95,11 @@ namespace SSCMS.Core.Plugins
                 return directoryPath;
             }
 
-            public static bool IsCmsDownload(IPathManager pathManager, string osArchitecture, string version)
+            public static string DownloadExtension(string packagesPath, string userName, string name, string version)
             {
-                var packagesPath = pathManager.GetPackagesPath();
-                var name = GetCmsDownloadName(osArchitecture, version);
+                var fileName = $"{userName}.{name}.{version}";
 
-                var directoryPath = PathUtils.Combine(packagesPath, name);
-
-                if (!DirectoryUtils.IsDirectoryExists(directoryPath))
-                {
-                    return false;
-                }
-
-                if (!FileUtils.IsFileExists(PathUtils.Combine(directoryPath, $"{name}.zip")))
-                {
-                    return false;
-                }
-
-                var fileNames = DirectoryUtils.GetFileNames(directoryPath);
-
-                return fileNames.Count > 1;
-            }
-
-            public static string DownloadPlugin(string packagesPath, string pluginId, string version)
-            {
-                var name = GetPluginsDownloadName(pluginId, version);
-
-                var directoryPath = PathUtils.Combine(packagesPath, name);
+                var directoryPath = PathUtils.Combine(packagesPath, fileName);
                 var filePath = PathUtils.Combine(directoryPath, name + ".zip");
                 if (FileUtils.IsFileExists(filePath))
                 {
@@ -140,25 +109,28 @@ namespace SSCMS.Core.Plugins
                 DirectoryUtils.CreateDirectoryIfNotExists(directoryPath);
 
                 var directoryNames = DirectoryUtils.GetDirectoryNames(packagesPath);
-                foreach (var directoryName in directoryNames.Where(directoryName => StringUtils.StartsWithIgnoreCase(directoryName, $"{pluginId}.")))
+                foreach (var directoryName in directoryNames.Where(directoryName => StringUtils.StartsWithIgnoreCase(directoryName, $"{userName}.{name}.")))
                 {
                     DirectoryUtils.DeleteDirectoryIfExists(PathUtils.Combine(packagesPath, directoryName));
                 }
 
-                FileUtils.WriteText(filePath, string.Empty);
-                using (var writer = File.OpenWrite(filePath))
-                {
-                    var client = new RestClient(GetPluginsDownloadUrl(pluginId, version));
-                    var request = new RestRequest();
-                    request.ResponseWriter = responseStream =>
-                    {
-                        using (responseStream)
-                        {
-                            responseStream.CopyTo(writer);
-                        }
-                    };
-                    client.DownloadData(request);
-                }
+                var url = GetExtensionsDownloadUrl(userName, name, version);
+                RestUtils.Download(url, filePath);
+
+                //FileUtils.WriteText(filePath, string.Empty);
+                //using (var writer = File.OpenWrite(filePath))
+                //{
+                //    var client = new RestClient(GetExtensionsDownloadUrl(userName, name, version));
+                //    var request = new RestRequest();
+                //    request.ResponseWriter = responseStream =>
+                //    {
+                //        using (responseStream)
+                //        {
+                //            responseStream.CopyTo(writer);
+                //        }
+                //    };
+                //    client.DownloadData(request);
+                //}
 
                 //var repo = PackageRepositoryFactory.Default.CreateRepository(WebConfigUtils.IsNightlyUpdate
                 //? MyGetPackageSource

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NSwag.Annotations;
 using SSCMS.Configuration;
+using SSCMS.Plugins;
 using SSCMS.Services;
 
 namespace SSCMS.Web.Controllers.Admin.Plugins
@@ -39,7 +40,7 @@ namespace SSCMS.Web.Controllers.Admin.Plugins
 
         public class GetResult
         {
-            public string Version { get; set; }
+            public string CmsVersion { get; set; }
             public Dictionary<string, string> PluginPathDict { get; set; }
         }
 

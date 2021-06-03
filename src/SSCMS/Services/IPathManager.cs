@@ -7,6 +7,7 @@ namespace SSCMS.Services
     public partial interface IPathManager
     {
         string ContentRootPath { get; }
+
         string WebRootPath { get; }
 
         string GetContentRootPath(params string[] paths);
@@ -14,6 +15,8 @@ namespace SSCMS.Services
         string GetAdminUrl(params string[] paths);
 
         string GetHomeUrl(params string[] paths);
+
+        string GetApiHostUrl(Site site, params string[] paths);
 
         string GetUploadFileName(string fileName);
 

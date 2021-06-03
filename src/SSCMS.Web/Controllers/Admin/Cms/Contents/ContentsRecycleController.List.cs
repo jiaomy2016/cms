@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
 using SSCMS.Models;
@@ -15,7 +14,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
         public async Task<ActionResult<ListResult>> List([FromBody] ListRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.ContentsRecycle))
+                    MenuUtils.SitePermissions.ContentsRecycle))
             {
                 return Unauthorized();
             }
@@ -28,7 +27,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Contents
             var columns = await columnsManager.GetContentListColumnsAsync(site, channel, ColumnsManager.PageType.RecycleContents);
 
             var pageContents = new List<Content>();
-            var (total, pageSummaries) = await _contentRepository.RecycleSearch(site, request.Page, request.ChannelId, request.StartDate, request.EndDate, request.Items, request.IsCheckedLevels, request.CheckedLevels, request.IsTop, request.IsRecommend, request.IsHot, request.IsColor, request.GroupNames, request.TagNames);
+            var (total, pageSummaries) = await _contentRepository.RecycleSearchAsync(site, request.Page, request.ChannelId, request.StartDate, request.EndDate, request.Items, request.IsCheckedLevels, request.CheckedLevels, request.IsTop, request.IsRecommend, request.IsHot, request.IsColor, request.GroupNames, request.TagNames);
 
             if (total > 0)
             {

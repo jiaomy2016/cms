@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using SSCMS.Configuration;
-using SSCMS.Core.StlParser.Model;
+using SSCMS.Core.StlParser.Attributes;
 using SSCMS.Core.StlParser.Utility;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
@@ -11,10 +11,15 @@ using SSCMS.Utils;
 namespace SSCMS.Core.StlParser.StlElement
 {
     [StlElement(Title = "数据库值", Description = "通过 stl:sqlContent 标签在模板中显示数据库值")]
-    public class StlSqlContent
+    public static class StlSqlContent
 	{
-        private StlSqlContent() { }
         public const string ElementName = "stl:sqlContent";
+
+        [StlAttribute(Title = "数据库类型名称")]
+        public const string DatabaseTypeName = nameof(DatabaseTypeName);
+
+        [StlAttribute(Title = "数据库类型")]
+        public const string DatabaseType = nameof(DatabaseType);
 
         [StlAttribute(Title = "数据库链接字符串名称")]
         private const string ConnectionStringName = nameof(ConnectionStringName);
@@ -68,8 +73,9 @@ namespace SSCMS.Core.StlParser.StlElement
         private const string IsUpper = nameof(IsUpper);
 
         public static async Task<object> ParseAsync(IParseManager parseManager)
-		{
-		    var connectionString = string.Empty;
+        {
+            var databaseType = parseManager.SettingsManager.DatabaseType;
+		    var connectionString = parseManager.SettingsManager.DatabaseConnectionString;
             var queryString = string.Empty;
 
             var leftText = string.Empty;
@@ -91,15 +97,28 @@ namespace SSCMS.Core.StlParser.StlElement
             {
                 var value = parseManager.ContextInfo.Attributes[name];
 
-                if (StringUtils.EqualsIgnoreCase(name, ConnectionString))
+                if (StringUtils.EqualsIgnoreCase(name, DatabaseType))
+                {
+                    databaseType = TranslateUtils.ToEnum(value, Datory.DatabaseType.MySql);
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, DatabaseTypeName))
+                {
+                    value = parseManager.SettingsManager.Configuration[value];
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        databaseType = TranslateUtils.ToEnum(value, Datory.DatabaseType.MySql);
+                    }
+                }
+                else if (StringUtils.EqualsIgnoreCase(name, ConnectionString))
                 {
                     connectionString = value;
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, ConnectionStringName))
                 {
-                    if (string.IsNullOrEmpty(connectionString))
+                    var connection = parseManager.SettingsManager.Configuration[value];
+                    if (!string.IsNullOrEmpty(connection))
                     {
-                        connectionString = parseManager.SettingsManager.Database.ConnectionString;
+                        connectionString = connection;
                     }
                 }
                 else if (StringUtils.EqualsIgnoreCase(name, QueryString))
@@ -173,7 +192,7 @@ namespace SSCMS.Core.StlParser.StlElement
 		        }
 		        else if (!string.IsNullOrEmpty(queryString))
 		        {
-		            var rows = parseManager.DatabaseManager.GetRows(connectionString, queryString);
+		            var rows = parseManager.DatabaseManager.GetRows(databaseType, connectionString, queryString);
                     if (rows != null && rows.Any())
 		            {
 		                dataItem = rows.First();
@@ -183,10 +202,10 @@ namespace SSCMS.Core.StlParser.StlElement
 		        return dataItem;
 		    }
 
-            return ParseImpl(parseManager, connectionString, queryString, leftText, rightText, formatString, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBr, isLower, isUpper, type);
+            return Parse(parseManager, connectionString, queryString, leftText, rightText, formatString, startIndex, length, wordNum, ellipsis, replace, to, isClearTags, isReturnToBr, isLower, isUpper, type);
 		}
 
-        private static string ParseImpl(IParseManager parseManager, string connectionString, string queryString, string leftText, string rightText, string formatString, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, bool isReturnToBr, bool isLower, bool isUpper, string type)
+        private static string Parse(IParseManager parseManager, string connectionString, string queryString, string leftText, string rightText, string formatString, int startIndex, int length, int wordNum, string ellipsis, string replace, string to, bool isClearTags, bool isReturnToBr, bool isLower, bool isUpper, string type)
         {
             var contextInfo = parseManager.ContextInfo;
 
@@ -219,7 +238,8 @@ namespace SSCMS.Core.StlParser.StlElement
                 }
                 else
                 {
-                    if (contextInfo.ItemContainer.SqlItem.Value.TryGetValue(type, out var value))
+                    var value = ListUtils.GetValueIgnoreCase(contextInfo.ItemContainer.SqlItem.Value, type);
+                    if (value != null)
                     {
                         parsedContent = string.Format(formatString, value);
                     }

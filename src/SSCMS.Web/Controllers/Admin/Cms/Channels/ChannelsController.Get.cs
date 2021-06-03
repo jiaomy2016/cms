@@ -1,9 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Datory;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
-using SSCMS.Dto;
 using SSCMS.Core.Utils;
 using SSCMS.Enums;
 using SSCMS.Utils;
@@ -16,7 +13,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
         public async Task<ActionResult<ChannelResult>> Get(int siteId, int channelId)
         {
             if (!await _authManager.HasSitePermissionsAsync(siteId,
-                    Types.SitePermissions.Channels))
+                    MenuUtils.SitePermissions.Channels))
             {
                 return Unauthorized();
             }
@@ -49,15 +46,23 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Channels
                         string.Empty));
                     entity.Set(style.AttributeName, list);
                 }
+                else if (style.InputType == InputType.TextEditor)
+                {
+                    var value = channel.Get(style.AttributeName, string.Empty);
+                    value = await _pathManager.DecodeTextEditorAsync(site, value, true);
+                    value = UEditorUtils.TranslateToHtml(value);
+
+                    entity.Set(style.AttributeName, value);
+                }
                 else
                 {
                     entity.Set(style.AttributeName, channel.Get(style.AttributeName));
                 }
             }
 
-            var filePath = string.IsNullOrEmpty(channel.FilePath) ? await _pathManager.GetInputChannelUrlAsync(site, channel, false) : channel.FilePath;
-            var channelFilePathRule = string.IsNullOrEmpty(channel.ChannelFilePathRule) ? await _pathManager.GetChannelFilePathRuleAsync(site, channelId) : channel.ChannelFilePathRule;
-            var contentFilePathRule = string.IsNullOrEmpty(channel.ContentFilePathRule) ? await _pathManager.GetContentFilePathRuleAsync(site, channelId) : channel.ContentFilePathRule;
+            var filePath = channel.FilePath;
+            var channelFilePathRule = channel.ChannelFilePathRule;
+            var contentFilePathRule = channel.ContentFilePathRule;
 
             return new ChannelResult
             {

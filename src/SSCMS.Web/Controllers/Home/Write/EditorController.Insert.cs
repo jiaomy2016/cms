@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SSCMS.Configuration;
 using SSCMS.Core.Utils;
 using SSCMS.Dto;
 
@@ -12,8 +11,8 @@ namespace SSCMS.Web.Controllers.Home.Write
         public async Task<ActionResult<BoolResult>> Insert([FromBody] SaveRequest request)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.Contents) ||
-                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, Types.ContentPermissions.Add))
+                    MenuUtils.SitePermissions.Contents) ||
+                !await _authManager.HasContentPermissionsAsync(request.SiteId, request.ChannelId, MenuUtils.ContentPermissions.Add))
             {
                 return Unauthorized();
             }
@@ -29,6 +28,7 @@ namespace SSCMS.Web.Controllers.Home.Write
             content.ChannelId = channel.Id;
             content.AdminId = _authManager.AdminId;
             content.LastEditAdminId = _authManager.AdminId;
+            content.UserId = _authManager.UserId;
 
             content.Checked = request.Content.CheckedLevel >= site.CheckContentLevel;
             if (content.Checked)
@@ -37,14 +37,6 @@ namespace SSCMS.Web.Controllers.Home.Write
             }
 
             await _contentRepository.InsertAsync(site, channel, content);
-
-            if (request.Translations != null && request.Translations.Count > 0)
-            {
-                foreach (var translation in request.Translations)
-                {
-                    await ContentUtility.TranslateAsync(_pathManager, _databaseManager, _pluginManager, site, content.ChannelId, content.Id, translation.TransSiteId, translation.TransChannelId, translation.TransType, _createManager, _authManager.AdminId);
-                }
-            }
 
             await _createManager.CreateContentAsync(request.SiteId, channel.Id, content.Id);
             await _createManager.TriggerContentChangedEventAsync(request.SiteId, channel.Id);

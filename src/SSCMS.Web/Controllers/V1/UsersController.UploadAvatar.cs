@@ -13,7 +13,7 @@ namespace SSCMS.Web.Controllers.V1
         [OpenApiOperation("上传用户头像 API", "上传用户头像，使用POST发起请求，请求地址为/api/v1/users/{id}/avatar")]
         [RequestSizeLimit(long.MaxValue)]
         [HttpPost, Route(RouteUserAvatar)]
-        public async Task<ActionResult<User>> UploadAvatar([FromQuery] int id, [FromForm] IFormFile file)
+        public async Task<ActionResult<User>> UploadAvatar([FromRoute] int id, [FromForm] IFormFile file)
         {
             if (!await _accessTokenRepository.IsScopeAsync(_authManager.ApiToken, Constants.ScopeUsers))
             {
@@ -25,7 +25,7 @@ namespace SSCMS.Web.Controllers.V1
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = PathUtils.GetFileName(file.FileName);
@@ -35,7 +35,7 @@ namespace SSCMS.Web.Controllers.V1
 
             if (!FileUtils.IsImage(PathUtils.GetExtension(fileName)))
             {
-                return this.Error("文件只能是 Image 格式，请选择有效的文件上传");
+                return this.Error(Constants.ErrorImageExtensionAllowed);
             }
 
             await _pathManager.UploadAsync(file, filePath);

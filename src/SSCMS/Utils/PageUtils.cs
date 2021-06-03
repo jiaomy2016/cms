@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.AspNetCore.Http;
+using SSCMS.Configuration;
+using SSCMS.Services;
 
 namespace SSCMS.Utils
 {
@@ -13,7 +15,7 @@ namespace SSCMS.Utils
     {
         public const char SeparatorChar = '/';
         public const string DoubleSeparator = "//";
-        public const string SingleSeparator = "/";
+        public const string Separator = "/";
         public const string UnClickableUrl = "javascript:;";
 
         public static string AddProtocolToUrl(string url)
@@ -98,26 +100,27 @@ namespace SSCMS.Utils
             return string.IsNullOrEmpty(host) ? string.Empty : host.Trim().ToLower();
         }
 
-
-        //public static string HttpContextRootDomain
-        //{
-        //    get
-        //    {
-        //        var url = HttpContext.Current.Request.Url;
-
-        //        if (url.HostNameType != UriHostNameType.Dns) return url.Host;
-
-        //        var match = Regex.Match(url.Host, "([^.]+\\.[^.]{1,3}(\\.[^.]{1,3})?)$");
-        //        return match.Groups[1].Success ? match.Groups[1].Value : null;
-        //    }
-        //}
-
         public static NameValueCollection GetQueryString(string url)
         {
             if (string.IsNullOrEmpty(url) || url.IndexOf("?", StringComparison.Ordinal) == -1) return new NameValueCollection();
 
             var querystring = url.Substring(url.IndexOf("?", StringComparison.Ordinal) + 1);
             return TranslateUtils.ToNameValueCollection(querystring);
+        }
+
+        public static NameValueCollection GetQueryStringFilterSqlAndXss(string url)
+        {
+            if (string.IsNullOrEmpty(url) || url.IndexOf("?", StringComparison.Ordinal) == -1) return new NameValueCollection();
+
+            var attributes = new NameValueCollection();
+
+            var querystring = url.Substring(url.IndexOf("?", StringComparison.Ordinal) + 1);
+            var originals = TranslateUtils.ToNameValueCollection(querystring);
+            foreach (string key in originals.Keys)
+            {
+                attributes[key] = AttackUtils.FilterSqlAndXss(originals[key]);
+            }
+            return attributes;
         }
 
         public static string Combine(params string[] urls)
@@ -364,33 +367,47 @@ namespace SSCMS.Utils
             return result;
         }
 
-        public static bool IsAllowed(string ipAddress, List<string> blockList, List<string> allowList)
+        public static bool IsVisitAllowed(ISettingsManager settingsManager, HttpRequest request)
         {
             var isAllowed = true;
 
-            if (blockList != null && blockList.Count > 0)
+            if (!string.IsNullOrEmpty(settingsManager.AdminRestrictionHost))
             {
-                var list = new IpList();
-                foreach (var restriction in blockList)
-                {
-                    AddRestrictionToIpList(list, restriction);
-                }
-                if (list.CheckNumber(ipAddress))
+                var currentHost = RemoveProtocolFromUrl(GetHost(request));
+                if (!StringUtils.StartsWithIgnoreCase(currentHost, RemoveProtocolFromUrl(settingsManager.AdminRestrictionHost)))
                 {
                     isAllowed = false;
                 }
             }
-            else if (allowList != null && allowList.Count > 0)
+
+            if (isAllowed)
             {
-                isAllowed = false;
-                var list = new IpList();
-                foreach (var restriction in allowList)
+                var userIp = GetIpAddress(request);
+
+                if (settingsManager.AdminRestrictionBlockList != null && settingsManager.AdminRestrictionBlockList.Length > 0)
                 {
-                    AddRestrictionToIpList(list, restriction);
+                    var list = new IpList();
+                    foreach (var restriction in settingsManager.AdminRestrictionBlockList)
+                    {
+                        AddRestrictionToIpList(list, restriction);
+                    }
+                    if (list.CheckNumber(userIp))
+                    {
+                        isAllowed = false;
+                    }
                 }
-                if (list.CheckNumber(ipAddress))
+                else if (settingsManager.AdminRestrictionAllowList != null && settingsManager.AdminRestrictionAllowList.Length > 0)
                 {
-                    isAllowed = true;
+                    isAllowed = false;
+                    var list = new IpList();
+                    foreach (var restriction in settingsManager.AdminRestrictionAllowList)
+                    {
+                        AddRestrictionToIpList(list, restriction);
+                    }
+                    if (list.CheckNumber(userIp))
+                    {
+                        isAllowed = true;
+                    }
                 }
             }
 
@@ -436,6 +453,11 @@ namespace SSCMS.Utils
             {
                 list.Add(restriction);
             }
+        }
+
+        public static string GetLocalApiUrl(params string[] paths)
+        {
+            return Combine(Constants.ApiPrefix, Combine(paths));
         }
 
         private class IpList
@@ -515,15 +537,6 @@ namespace SSCMS.Utils
                 if (_usedList.Contains((int)level - 1)) return;
                 _usedList.Add((int)level - 1);
                 _usedList.Sort();
-            }
-
-            /// <summary>
-            /// Adds IP numbers using a mask for range where the mask specifies the number of
-            /// fixed bits, ex. 192.168.1.0/24 which will add 192.168.1.0 - 192.168.1.255
-            /// </summary>
-            public void Add(string ipNumber, int maskLevel)
-            {
-                Add(parseIP(ipNumber), (uint)_maskList.GetKey(_maskList.IndexOfValue(maskLevel)));
             }
 
             /// <summary>
@@ -628,19 +641,6 @@ namespace SSCMS.Utils
             }
 
             /// <summary>
-            /// Clears all lists of IP numbers
-            /// </summary>
-            public void Clear()
-            {
-                foreach (var i in _usedList)
-                {
-                    _ipRangeList[i].Clear();
-                }
-
-                _usedList.Clear();
-            }
-
-            /// <summary>
             /// Generates a list of all IP ranges in printable format
             /// </summary>
             public override string ToString()
@@ -698,15 +698,6 @@ namespace SSCMS.Utils
                 }
 
                 return found;
-            }
-
-            /// <summary>
-            /// Clears the list
-            /// </summary>
-            public void Clear()
-            {
-                _ipNumList.Clear();
-                _isSorted = false;
             }
 
             /// <summary>

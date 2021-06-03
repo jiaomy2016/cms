@@ -65,6 +65,10 @@ var methods = {
     });
   },
 
+  getDocsUrl: function (url) {
+    return cloud.getDocsUrl(url);
+  },
+
   getItemScopes: function (item) {
     if (!item.scopes) return '';
     var itemScopes = item.scopes;
@@ -76,6 +80,14 @@ var methods = {
     }
 
     return list.join(',');
+  },
+
+  btnAdminViewClick: function(row) {
+    utils.openLayer({
+      title: '查看资料',
+      url: utils.getCommonUrl('adminLayerView', {adminId: row.id}),
+      full: true
+    });
   },
 
   btnSubmitClick: function () {

@@ -58,7 +58,7 @@ namespace SSCMS.Cli.Jobs
                 return;
             }
 
-            var (status, failureMessage) = _apiService.GetStatus();
+            var (status, failureMessage) = await _apiService.GetStatusAsync();
             if (status == null)
             {
                 await WriteUtils.PrintErrorAsync(failureMessage);
@@ -129,11 +129,11 @@ namespace SSCMS.Cli.Jobs
             await Console.Out.WriteLineAsync($"Publishing {packageId} ({fileSize})...");
 
             bool success;
-            (success, failureMessage) = _apiService.PluginsPublish(plugin.Publisher, zipPath);
+            (success, failureMessage) = await _apiService.PluginPublishAsync(plugin.Publisher, zipPath);
             if (success)
             {
                 
-                await WriteUtils.PrintSuccessAsync($"Published {packageId}, your plugin will live at {CloudUtils.Www.GetPluginUrl(plugin.PluginId)} (might take a few minutes for it to show up).");
+                await WriteUtils.PrintSuccessAsync($"Published {packageId}, your plugin will live at {CloudUtils.Www.GetPluginUrl(plugin.Publisher, plugin.Name)}.");
             }
             else
             {

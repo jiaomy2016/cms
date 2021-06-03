@@ -7,6 +7,7 @@ var data = utils.init({
   dialogVisible: false,
   form: {
     siteId: utils.getQueryInt('siteId'),
+    isMaterial: true,
     isThumb: false,
     thumbWidth: 500,
     thumbHeight: 500,
@@ -27,13 +28,33 @@ var methods = {
     }
   },
 
-  btnSubmitClick: function () {
+  apiGet: function() {
     var $this = this;
 
-    if (this.form.filePaths.length === 0) {
-      utils.error('请选择需要插入的图片文件！');
-      return false;
-    }
+    utils.loading(this, true);
+    $api.get($url, {
+      params: {
+        siteId: this.form.siteId
+      }
+    }).then(function(response) {
+      var res = response.data;
+
+      $this.form.isMaterial = res.isMaterial;
+      $this.form.isThumb = res.isThumb;
+      $this.form.thumbWidth = res.thumbWidth;
+      $this.form.thumbHeight = res.thumbHeight;
+      $this.form.isLinkToOriginal = res.isLinkToOriginal;
+    })
+    .catch(function(error) {
+      utils.error(error);
+    })
+    .then(function() {
+      utils.loading($this, false);
+    });
+  },
+
+  apiSubmit: function() {
+    var $this = this;
 
     utils.loading(this, true);
     $api.post($url, this.form).then(function(response) {
@@ -56,23 +77,20 @@ var methods = {
     });
   },
 
+  btnSubmitClick: function () {
+    if (this.form.filePaths.length === 0) {
+      utils.error('请选择需要插入的图片文件！');
+      return false;
+    }
+
+    this.apiSubmit();
+  },
+
   btnCancelClick: function () {
     utils.closeLayer();
   },
 
   uploadBefore(file) {
-    var re = /(\.jpg|\.jpeg|\.bmp|\.gif|\.png|\.webp)$/i;
-    if(!re.exec(file.name))
-    {
-      utils.error('文件只能是图片格式，请选择有效的文件上传!');
-      return false;
-    }
-
-    var isLt10M = file.size / 1024 / 1024 < 10;
-    if (!isLt10M) {
-      utils.error('上传图片大小不能超过 10MB!');
-      return false;
-    }
     return true;
   },
 
@@ -109,6 +127,6 @@ var $vue = new Vue({
   methods: methods,
   created: function () {
     this.uploadUrl = $apiUrl + $url + '/actions/upload?siteId=' + this.form.siteId;
-    utils.loading(this, false);
+    this.apiGet();
   }
 });

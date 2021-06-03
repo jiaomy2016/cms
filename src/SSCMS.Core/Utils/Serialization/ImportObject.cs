@@ -113,8 +113,14 @@ namespace SSCMS.Core.Utils.Serialization
 
             pathManager.ExtractZip(zipFilePath, styleDirectoryPath);
 
-            await TableStyleIe.SingleImportTableStyleAsync(databaseManager, tableName, styleDirectoryPath, relatedIdentities);
+            await ImportTableStyleByDirectoryAsync(databaseManager, tableName, relatedIdentities, styleDirectoryPath);
+
             return styleDirectoryPath;
+        }
+
+        public static async Task ImportTableStyleByDirectoryAsync(IDatabaseManager databaseManager, string tableName, List<int> relatedIdentities, string styleDirectoryPath)
+        {
+            await TableStyleIe.SingleImportTableStyleAsync(databaseManager, tableName, styleDirectoryPath, relatedIdentities);
         }
 
         public async Task ImportConfigurationAsync(string configurationFilePath, string guid)
@@ -231,10 +237,10 @@ namespace SSCMS.Core.Utils.Serialization
             return await ImportContentsAsync(channel, siteContentDirectoryPath, isOverride, taxis, isChecked, checkedLevel, adminId, userId, sourceId);
         }
 
-        public async Task<List<int>> ImportContentsByCsvFileAsync(Channel channel, string csvFilePath, bool isOverride, bool isChecked, int checkedLevel, int adminId, int userId, int sourceId)
+        public async Task<List<int>> ImportContentsByXlsxFileAsync(Channel channel, string filePath, bool isOverride, bool isChecked, int checkedLevel, int adminId, int userId, int sourceId)
         {
             var excelObject = new ExcelObject(_databaseManager, _pathManager);
-            var contentInfoList = await excelObject.GetContentsByCsvFileAsync(csvFilePath, _site, channel);
+            var contentInfoList = await excelObject.GetContentsByFileAsync(filePath, _site, channel);
             contentInfoList.Reverse();
 
             foreach (var contentInfo in contentInfoList)

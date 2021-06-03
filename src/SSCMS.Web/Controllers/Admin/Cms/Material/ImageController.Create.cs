@@ -6,6 +6,7 @@ using SSCMS.Configuration;
 using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Material
 {
@@ -16,14 +17,14 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Material
         public async Task<ActionResult<MaterialImage>> Create([FromQuery] CreateRequest request, [FromForm] IFormFile file)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                Types.SitePermissions.MaterialImage))
+                MenuUtils.SitePermissions.MaterialImage))
             {
                 return Unauthorized();
             }
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = Path.GetFileName(file.FileName);
@@ -31,7 +32,11 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Material
             var site = await _siteRepository.GetAsync(request.SiteId);
             if (!_pathManager.IsImageExtensionAllowed(site, extName))
             {
-                return this.Error("此图片格式已被禁止上传，请转换格式后上传!");
+                return this.Error(Constants.ErrorImageExtensionAllowed);
+            }
+            if (!_pathManager.IsImageSizeAllowed(site, file.Length))
+            {
+                return this.Error(Constants.ErrorImageSizeAllowed);
             }
 
             var materialFileName = PathUtils.GetMaterialFileName(fileName);

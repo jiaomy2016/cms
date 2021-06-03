@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using SSCMS.Core.Utils;
 using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Utils;
@@ -26,11 +25,17 @@ namespace SSCMS.Core.Services
             return filePath;
         }
 
+        public async Task<string> GetTemplateContentAsync(Site site, Template template)
+        {
+            var filePath = await GetTemplateFilePathAsync(site, template);
+            return GetContentByFilePath(filePath);
+        }
+
         public async Task WriteContentToTemplateFileAsync(Site site, Template template, string content, int adminId)
         {
             if (content == null) content = string.Empty;
             var filePath = await GetTemplateFilePathAsync(site, template);
-            FileUtils.WriteText(filePath, content);
+            await FileUtils.WriteTextAsync(filePath, content);
 
             if (template.Id > 0)
             {
@@ -47,38 +52,22 @@ namespace SSCMS.Core.Services
             }
         }
 
-        public async Task<string> GetTemplateContentAsync(Site site, Template template)
-        {
-            var filePath = await GetTemplateFilePathAsync(site, template);
-            return await GetContentByFilePathAsync(filePath);
-        }
-
         public async Task<string> GetIncludeContentAsync(Site site, string file)
         {
             var filePath = await ParseSitePathAsync(site, AddVirtualToPath(file));
-            return await GetContentByFilePathAsync(filePath);
+            return GetContentByFilePath(filePath);
         }
 
-        public async Task<string> GetContentByFilePathAsync(string filePath)
+        public async Task WriteContentToIncludeFileAsync(Site site, string file, string content)
         {
-            try
-            {
-                var content = _cacheManager.GetByFilePath(filePath);
-                if (content != null) return content;
+            if (content == null) content = string.Empty;
+            var filePath = await GetSitePathAsync(site, file);
+            await FileUtils.WriteTextAsync(filePath, content);
+        }
 
-                if (FileUtils.IsFileExists(filePath))
-                {
-                    content = await FileUtils.ReadTextAsync(filePath);
-                    var cacheKey = CacheUtils.GetPathKey(filePath);
-                    _cacheManager.AddOrUpdateSliding(cacheKey, content, 12 * 60);
-                }
-
-                return content;
-            }
-            catch
-            {
-                return string.Empty;
-            }
+        public string GetContentByFilePath(string filePath)
+        {
+            return _cacheManager.GetByFilePath(filePath);
         }
     }
 }

@@ -78,6 +78,7 @@ namespace SSCMS.Core.Plugins
         public string Name => Configuration[nameof(Name)];
         public string Version => Configuration[nameof(Version)];
         public string Publisher => Configuration[nameof(Publisher)];
+        public decimal Price => TranslateUtils.ToDecimal(Configuration[nameof(Price)]);
         public string Repository => Configuration[nameof(Repository)];
         public string DisplayName => Configuration[nameof(DisplayName)];
         public string Description => Configuration[nameof(Description)];
@@ -91,7 +92,7 @@ namespace SSCMS.Core.Plugins
         public string Homepage => Configuration[nameof(Homepage)];
         public string Output => Configuration[nameof(Output)];
         public string Main => Configuration[nameof(Main)];
-        public bool ApplyToSites => Configuration.GetValue(nameof(ApplyToSites), true);
+        public bool ApplyToSites => Configuration.GetValue(nameof(ApplyToSites), false);
         public bool ApplyToChannels => Configuration.GetValue(nameof(ApplyToChannels), false);
 
         public bool Disabled => Configuration.GetValue<bool>(nameof(Disabled));

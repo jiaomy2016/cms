@@ -3,15 +3,20 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ApplicationIcon>logo.ico</ApplicationIcon>
-    <Version>7.0.4</Version>
+    <Version>7.0.11</Version>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <AssemblyName>SSCMS.Cli</AssemblyName>
+    <StartupObject>SSCMS.Cli.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="3.0.0" />
     <PackageReference Include="Mono.Options" Version="6.6.0.161" />
-    <PackageReference Include="Quartz" Version="3.2.2" />
+    <PackageReference Include="Quartz" Version="3.2.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="3.4.0" />
+    <PackageReference Include="YamlDotNet" Version="8.1.2" />
   </ItemGroup>
 
   <ItemGroup>

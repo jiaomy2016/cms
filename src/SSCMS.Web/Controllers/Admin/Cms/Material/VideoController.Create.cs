@@ -6,6 +6,7 @@ using SSCMS.Configuration;
 using SSCMS.Enums;
 using SSCMS.Models;
 using SSCMS.Utils;
+using SSCMS.Core.Utils;
 
 namespace SSCMS.Web.Controllers.Admin.Cms.Material
 {
@@ -16,7 +17,7 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Material
         public async Task<ActionResult<MaterialVideo>> Create([FromQuery] CreateRequest request, [FromForm] IFormFile file)
         {
             if (!await _authManager.HasSitePermissionsAsync(request.SiteId,
-                    Types.SitePermissions.MaterialVideo))
+                    MenuUtils.SitePermissions.MaterialVideo))
             {
                 return Unauthorized();
             }
@@ -25,15 +26,19 @@ namespace SSCMS.Web.Controllers.Admin.Cms.Material
 
             if (file == null)
             {
-                return this.Error("请选择有效的文件上传");
+                return this.Error(Constants.ErrorUpload);
             }
 
             var fileName = Path.GetFileName(file.FileName);
 
             var fileType = PathUtils.GetExtension(fileName);
-            if (!_pathManager.IsUploadExtensionAllowed(UploadType.Video, site, fileType))
+            if (!_pathManager.IsVideoExtensionAllowed(site, fileType))
             {
-                return this.Error("文件只能是视频格式，请选择有效的文件上传!");
+                return this.Error(Constants.ErrorVideoExtensionAllowed);
+            }
+            if (!_pathManager.IsVideoSizeAllowed(site, file.Length))
+            {
+                return this.Error(Constants.ErrorVideoSizeAllowed);
             }
 
             var materialVideoName = PathUtils.GetMaterialFileName(fileName);

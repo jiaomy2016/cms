@@ -16,9 +16,6 @@ namespace SSCMS.Repositories
 
         Task<int> GetFirstContentIdAsync(Site site, IChannelSummary channel);
 
-        List<(int AdminId, int AddCount, int UpdateCount)> GetDataSetOfAdminExcludeRecycle(string tableName,
-            int siteId, DateTime begin, DateTime end);
-
         Task<int> GetCountOfContentUpdateAsync(string tableName, int siteId, int channelId, ScopeType scope,
             DateTime begin, DateTime end, int adminId);
 
@@ -31,7 +28,7 @@ namespace SSCMS.Repositories
 
         Task<int> GetCountAsync(string tableName, Query query);
 
-        Task<string> GetWhereStringByStlSearchAsync(IDatabaseManager databaseManager, bool isAllSites, string siteName, string siteDir, string siteIds,
+        Task<Query> GetQueryByStlSearchAsync(IDatabaseManager databaseManager, bool isAllSites, string siteName, string siteDir, string siteIds,
             string channelIndex, string channelName, string channelIds, string type, string word, string dateAttribute,
             string dateFrom, string dateTo, string since, int siteId, List<string> excludeAttributes,
             NameValueCollection form);
